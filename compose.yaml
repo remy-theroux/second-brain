@@ -1,0 +1,52 @@
+name: second-brain
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-second_brain}
+      POSTGRES_USER: ${POSTGRES_USER:-second_brain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-second_brain}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-second_brain} -d ${POSTGRES_DB:-second_brain}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  adminer:
+    image: adminer:5
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-second_brain}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-second_brain}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-second_brain}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      # Source montée pour le hot reload (Gradle --continuous + DevTools).
+      - ./:/workspace
+      # Cache Gradle isolé dans un volume nommé (pas écrit sur l'hôte).
+      - gradle-cache:/workspace/.gradle-cache
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  gradle-cache:

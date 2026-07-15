@@ -1,0 +1,15 @@
+# Image de développement : build continu + hot reload.
+# Le code source est monté en volume (voir compose.yaml) ; Gradle recompile en
+# continu et Spring Boot DevTools redémarre le contexte à chaud.
+FROM eclipse-temurin:25-jdk
+
+WORKDIR /workspace
+
+# Le cache Gradle est monté en volume nommé pour accélérer les rebuilds.
+ENV GRADLE_USER_HOME=/workspace/.gradle-cache
+
+EXPOSE 8080 5005
+
+# Deux processus : compilation continue (build/classes) + bootRun (DevTools
+# surveille build/classes et redémarre à chaud). Voir le script pour le détail.
+CMD ["sh", "docker/dev-entrypoint.sh"]

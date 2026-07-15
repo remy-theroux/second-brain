@@ -1,0 +1,15 @@
+package xyz.sterenn.secondbrain;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+@Import(TestcontainersConfiguration.class)
+@SpringBootTest
+class SecondBrainApplicationTests {
+
+    @Test
+    void contextLoads() {
+        // Vérifie que le contexte démarre et que Flyway migre la base Testcontainers.
+    }
+}
