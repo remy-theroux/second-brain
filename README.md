@@ -43,6 +43,12 @@ met à jour `build/classes`, et `bootRun` dont Spring Boot DevTools surveille ce
 Modifiez un fichier `.java` : recompilation puis redémarrage automatique en < 1 s
 (visible dans `docker compose logs -f app`).
 
+### Identifiants de l'API
+
+L'API est protégée par HTTP Basic avec un unique utilisateur en dur, défini par
+`APP_ADMIN_USER` / `APP_ADMIN_PASSWORD` (voir `.env`, valeurs par défaut `admin` / `admin`).
+Après modification : `docker compose up -d app` pour recharger.
+
 ### Endpoints de démo
 
 ```bash

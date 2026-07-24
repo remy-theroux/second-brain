@@ -36,6 +36,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-second_brain}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-second_brain}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-second_brain}
+      APP_ADMIN_USER: ${APP_ADMIN_USER:-admin}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-admin}
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
