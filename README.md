@@ -11,7 +11,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Build | Gradle (Kotlin DSL) + version catalog |
 | Base de données | PostgreSQL 17 |
 | Migrations | Flyway (SQL versionné) |
-| Sécurité | Spring Security (HTTP Basic de départ) |
+| Sécurité | Spring Security (aucune authentification pour l'instant) |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
 
@@ -43,23 +43,10 @@ met à jour `build/classes`, et `bootRun` dont Spring Boot DevTools surveille ce
 Modifiez un fichier `.java` : recompilation puis redémarrage automatique en < 1 s
 (visible dans `docker compose logs -f app`).
 
-### Identifiants de l'API
+### Authentification
 
-L'API est protégée par HTTP Basic avec un unique utilisateur en dur, défini par
-`APP_ADMIN_USER` / `APP_ADMIN_PASSWORD` (voir `.env`, valeurs par défaut `admin` / `admin`).
-Après modification : `docker compose up -d app` pour recharger.
-
-### Endpoints de démo
-
-```bash
-# Créer une note (auth HTTP Basic : admin / admin)
-curl -u admin:admin -X POST http://localhost:8080/api/notes \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Première note","content":"Bonjour"}'
-
-# Lister
-curl -u admin:admin http://localhost:8080/api/notes
-```
+Aucune. L'authentification HTTP Basic de départ a été retirée : tous les endpoints
+sont publics en attendant le ticket « login ».
 
 ## Tests
 
@@ -96,13 +83,14 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 ```
 src/main/java/xyz/sterenn/secondbrain/
 ├── SecondBrainApplication.java
-├── config/            # SecurityConfig, OpenApiConfig
-└── note/              # feature de démo (entity + repository + controller)
+└── config/            # SecurityConfig, OpenApiConfig
 src/main/resources/
 ├── application.yml            # config commune (pilotée par variables d'env)
 ├── application-dev.yml        # profil dev
-└── db/migration/V1__init.sql  # migration Flyway
+└── db/migration/              # migrations Flyway
 ```
+
+(Ce bloc sera complété au fil des tâches suivantes.)
 
 ## Notes de version
 
