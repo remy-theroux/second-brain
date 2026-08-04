@@ -31,6 +31,7 @@ Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (tool
 | Service | URL |
 |---|---|
 | API | http://localhost:8080 |
+| Création de compte | http://localhost:8080/register |
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Adminer (UI base) | http://localhost:8081 (serveur `db`, base/user/mdp `second_brain`) |
@@ -83,14 +84,36 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 ```
 src/main/java/xyz/sterenn/secondbrain/
 ├── SecondBrainApplication.java
-└── config/            # SecurityConfig, OpenApiConfig
+├── config/                     # SecurityConfig, OpenApiConfig
+├── shared/bus/                 # CommandBus (transactionnel) et QueryBus
+└── users/                      # bounded context, en 3 couches
+    ├── domain/                 # User, Email, PasswordPolicy, ports
+    ├── application/            # command/ et query/ + leurs handlers
+    └── infrastructure/         # adapters : persistence/, security/, web/
 src/main/resources/
-├── application.yml            # config commune (pilotée par variables d'env)
-├── application-dev.yml        # profil dev
-└── db/migration/              # migrations Flyway
+├── application.yml             # config commune (pilotée par variables d'env)
+├── application-dev.yml         # profil dev
+├── templates/register.html     # formulaire d'inscription (Thymeleaf)
+└── db/migration/               # migrations Flyway
 ```
 
-(Ce bloc sera complété au fil des tâches suivantes.)
+## Architecture
+
+Hexagonale, un dossier par couche et par bounded context :
+
+- **domain** — entités, value objects, règles métier et **ports** (interfaces). Ne dépend
+  de rien d'autre que du JDK.
+- **application** — une commande ou une query par intention, avec son handler. Aucune
+  logique métier : le handler orchestre le domaine.
+- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage) et les
+  adapters entrants (contrôleurs web).
+
+CQRS minimal : `CommandBus.dispatch` pour écrire, `QueryBus.ask` pour lire. Les deux sont
+synchrones et routent vers un handler unique, résolu au démarrage par son type générique.
+
+**La transaction SQL est portée par le `CommandBus`** : `dispatch` est `@Transactional`,
+donc tout le handler s'exécute dans une seule transaction et la moindre exception annule
+l'ensemble. Corollaire : **ne jamais annoter un handler avec `@Transactional`**.
 
 ## Notes de version
 
