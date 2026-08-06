@@ -3,10 +3,12 @@ package xyz.sterenn.secondbrain.users.infrastructure.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
@@ -80,5 +82,24 @@ class JpaUserRepositoryAdapterTest {
 
         assertThatThrownBy(() -> users.save(User.register(new Email("erin@example.com"), "autre")))
             .isInstanceOf(EmailAlreadyUsedException.class);
+    }
+
+    @Test
+    void ne_traduit_plus_une_violation_d_integrite_lors_d_une_mise_a_jour() throws Exception {
+        users.save(User.register(new Email("gina@example.com"), "empreinte"));
+        User autre = users.save(User.register(new Email("henri@example.com"), "empreinte"));
+
+        // Le domaine n'expose aucun mutateur d'email — VerifyAccountHandler ne fait que
+        // basculer `verified`, jamais l'email. On force ici le champ de l'entité déjà
+        // persistée pour isoler la seule chose sous test : une fois `autre` pourvu d'un
+        // identifiant (mise à jour, pas insertion), une violation d'intégrité ne doit plus
+        // être traduite en EmailAlreadyUsedException.
+        Field email = User.class.getDeclaredField("email");
+        email.setAccessible(true);
+        email.set(autre, new Email("gina@example.com"));
+
+        assertThatThrownBy(() -> users.save(autre))
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .isNotInstanceOf(EmailAlreadyUsedException.class);
     }
 }
