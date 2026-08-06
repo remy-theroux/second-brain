@@ -27,6 +27,13 @@ services:
       db:
         condition: service_healthy
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      # SMTP pour l'application, interface web pour lire les mails capturés.
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
+
   app:
     build:
       context: .
@@ -36,6 +43,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-second_brain}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-second_brain}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-second_brain}
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      SECONDBRAIN_BASE_URL: http://localhost:${APP_PORT:-8080}
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
@@ -46,6 +56,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
 volumes:
   db-data:

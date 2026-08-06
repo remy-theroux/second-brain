@@ -33,6 +33,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
+    // Notifications
+    implementation("org.springframework.boot:spring-boot-starter-mail")
+
     // Persistance
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     // Spring Boot 4 : le starter Flyway apporte l'auto-config (module spring-boot-flyway).
