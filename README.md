@@ -11,7 +11,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Build | Gradle (Kotlin DSL) + version catalog |
 | Base de données | PostgreSQL 17 |
 | Migrations | Flyway (SQL versionné) |
-| Sécurité | Spring Security (HTTP Basic de départ) |
+| Sécurité | Spring Security (aucune authentification pour l'instant) |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
 
@@ -30,7 +30,7 @@ Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (tool
 
 | Service | URL |
 |---|---|
-| API | http://localhost:8080 |
+| Accueil | http://localhost:8080/ |
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Adminer (UI base) | http://localhost:8081 (serveur `db`, base/user/mdp `second_brain`) |
@@ -42,18 +42,6 @@ La source est montée dans le conteneur `app`. Deux processus tournent en parall
 met à jour `build/classes`, et `bootRun` dont Spring Boot DevTools surveille ce dossier.
 Modifiez un fichier `.java` : recompilation puis redémarrage automatique en < 1 s
 (visible dans `docker compose logs -f app`).
-
-### Endpoints de démo
-
-```bash
-# Créer une note (auth HTTP Basic : admin / admin)
-curl -u admin:admin -X POST http://localhost:8080/api/notes \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Première note","content":"Bonjour"}'
-
-# Lister
-curl -u admin:admin http://localhost:8080/api/notes
-```
 
 ## Tests
 
@@ -85,18 +73,23 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 ./gradlew bootBuildImage
 ```
 
-## Structure
+## Architecture
 
-```
-src/main/java/xyz/sterenn/secondbrain/
-├── SecondBrainApplication.java
-├── config/            # SecurityConfig, OpenApiConfig
-└── note/              # feature de démo (entity + repository + controller)
-src/main/resources/
-├── application.yml            # config commune (pilotée par variables d'env)
-├── application-dev.yml        # profil dev
-└── db/migration/V1__init.sql  # migration Flyway
-```
+Hexagonale, un dossier par couche et par bounded context :
+
+- **domain** — entités, value objects, règles métier et **ports** (interfaces). Ne dépend
+  de rien d'autre que du JDK.
+- **application** — une commande ou une query par intention, avec son handler. Aucune
+  logique métier : le handler orchestre le domaine.
+- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage) et les
+  adapters entrants (contrôleurs web).
+
+CQRS minimal : `CommandBus.dispatch` pour écrire, `QueryBus.ask` pour lire. Les deux sont
+synchrones et routent vers un handler unique, résolu au démarrage par son type générique.
+
+**La transaction SQL est portée par le `CommandBus`** : `dispatch` est `@Transactional`,
+donc tout le handler s'exécute dans une seule transaction et la moindre exception annule
+l'ensemble. Corollaire : **ne jamais annoter un handler avec `@Transactional`**.
 
 ## Notes de version
 

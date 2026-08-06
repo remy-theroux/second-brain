@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Créer mon compte</title>
+</head>
+<body>
+<h1>Créer mon compte</h1>
+
+<p th:if="${param.success}">
+    Votre compte a été créé. Il reste à vérifier.
+</p>
+
+<form th:action="@{/register}" th:object="${registrationForm}" method="post">
+    <p>
+        <label for="email">Email</label><br>
+        <input type="text" id="email" th:field="*{email}">
+        <span th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></span>
+    </p>
+    <p>
+        <label for="password">Mot de passe</label><br>
+        <!-- Thymeleaf ne réémet jamais la valeur d'un input de type password. -->
+        <input type="password" id="password" th:field="*{password}">
+        <span th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></span>
+    </p>
+    <p>
+        <button type="submit">Créer mon compte</button>
+    </p>
+</form>
+</body>
+</html>

@@ -2,20 +2,20 @@ package xyz.sterenn.secondbrain.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Configuration de sécurité de départ.
+ * Configuration de sécurité.
  *
- * <p>API stateless (pas de session HTTP), CSRF désactivé car pas de formulaires web.
- * Les endpoints publics (health, documentation OpenAPI) sont ouverts ; tout le reste
- * exige une authentification (HTTP Basic pour l'instant).
+ * <p>L'authentification HTTP Basic de départ (utilisateur admin en dur) a été retirée :
+ * la création de compte doit être accessible à un visiteur anonyme et il n'existe pas
+ * encore de mécanisme de remplacement. Tout est donc public.
  *
- * <p>TODO : remplacer HTTP Basic par le mécanisme d'authentification réel
- * (JWT / OAuth2 resource server) quand le besoin sera défini.
+ * <p>TODO : le ticket « login » introduira l'authentification par session, et avec elle
+ * la réactivation de CSRF et une vraie politique d'autorisation. CSRF reste désactivé et
+ * la session STATELESS d'ici là, faute de session HTTP à protéger.
  */
 @Configuration
 public class SecurityConfig {
@@ -25,17 +25,7 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/actuator/health/**",
-                    "/actuator/info",
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
-                    "/swagger-ui.html"
-                ).permitAll()
-                .anyRequest().authenticated()
-            )
-            .httpBasic(Customizer.withDefaults());
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
         return http.build();
     }
