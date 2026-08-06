@@ -31,6 +31,15 @@ spring:
           auth: false
           starttls:
             enable: false
+          # Jakarta Mail n'a par défaut aucun timeout : sans ces trois valeurs, un relais
+          # qui accepte le TCP puis ne répond plus bloque le thread indéfiniment.
+          # `RegisterUserHandler` envoie depuis l'intérieur de la transaction ouverte par
+          # `SpringCommandBus`, connexion PostgreSQL déjà tenue : un pool Hikari de 10
+          # connexions se fige en dix inscriptions bloquées. Ces timeouts ne sont donc pas
+          # optionnels ici.
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 management:
   endpoints:
