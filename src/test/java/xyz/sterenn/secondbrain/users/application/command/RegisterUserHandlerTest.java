@@ -3,6 +3,7 @@ package xyz.sterenn.secondbrain.users.application.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,19 +11,26 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
+import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
+import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.entity.VerificationToken;
 import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
 import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
+import xyz.sterenn.secondbrain.users.domain.port.TokenHasher;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
+import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
 /**
  * La commande est toujours dispatchée par le bus, jamais appelée en direct : c'est le
- * chemin réel de production.
+ * chemin réel de production. Le canal de notification est remplacé par un enregistreur en
+ * mémoire — c'est le port qui est vérifié, pas l'adapter email.
  */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @Transactional
 class RegisterUserHandlerTest {
@@ -37,6 +45,22 @@ class RegisterUserHandlerTest {
 
     @Autowired
     private PasswordHasher passwordHasher;
+
+    @Autowired
+    private VerificationTokenRepository verificationTokens;
+
+    @Autowired
+    private TokenHasher tokenHasher;
+
+    @Autowired
+    private RecordingNotificationSender notifications;
+
+    @BeforeEach
+    void vide_les_notifications() {
+        // L'enregistreur est un bean partagé par le contexte : le rollback de la
+        // transaction de test ne le vide pas.
+        notifications.clear();
+    }
 
     @Test
     void cree_un_compte_non_verifie_avec_un_mot_de_passe_hache() {
@@ -86,5 +110,43 @@ class RegisterUserHandlerTest {
 
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("erin@example.com", "court")))
             .isInstanceOf(WeakPasswordException.class);
+    }
+
+    @Test
+    void notifie_le_nouveau_compte_de_sa_verification() {
+        commandBus.dispatch(new RegisterUser("frank@example.com", MOT_DE_PASSE_VALIDE));
+
+        VerificationNotification notification = notifications.derniere();
+        assertThat(notification.recipient()).isEqualTo(new Email("frank@example.com"));
+        assertThat(notification.rawToken().value()).isNotBlank();
+    }
+
+    @Test
+    void emet_un_jeton_dont_seule_l_empreinte_est_stockee() {
+        commandBus.dispatch(new RegisterUser("grace@example.com", MOT_DE_PASSE_VALIDE));
+
+        VerificationNotification notification = notifications.derniere();
+        VerificationToken jeton = verificationTokens.findByUserId(notification.accountId()).orElseThrow();
+
+        assertThat(jeton.getTokenHash()).doesNotContain(notification.rawToken().value());
+        assertThat(tokenHasher.matches(notification.rawToken().value(), jeton.getTokenHash())).isTrue();
+        assertThat(jeton.isConsumed()).isFalse();
+    }
+
+    @Test
+    void adresse_la_notification_au_compte_reellement_cree() {
+        commandBus.dispatch(new RegisterUser("heidi@example.com", MOT_DE_PASSE_VALIDE));
+
+        VerificationNotification notification = notifications.derniere();
+        assertThat(users.findByEmail(new Email("heidi@example.com")).orElseThrow().getId())
+            .isEqualTo(notification.accountId());
+    }
+
+    @Test
+    void ne_notifie_pas_quand_l_inscription_est_refusee() {
+        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("ivan@example.com", "court")))
+            .isInstanceOf(WeakPasswordException.class);
+
+        assertThat(notifications.verifications()).isEmpty();
     }
 }

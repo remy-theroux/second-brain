@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
+import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.application.query.FindUserByEmail;
 import xyz.sterenn.secondbrain.users.application.query.UserView;
 
@@ -24,7 +25,7 @@ import xyz.sterenn.secondbrain.users.application.query.UserView;
  * Couvre les scénarios d'écriture du ticket de création de compte au niveau HTTP.
  * CSRF est désactivé côté application : aucun jeton à fournir.
  */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
