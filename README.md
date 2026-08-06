@@ -30,8 +30,7 @@ Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (tool
 
 | Service | URL |
 |---|---|
-| API | http://localhost:8080 |
-| Création de compte | http://localhost:8080/register |
+| Accueil | http://localhost:8080/ |
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Adminer (UI base) | http://localhost:8081 (serveur `db`, base/user/mdp `second_brain`) |
@@ -43,11 +42,6 @@ La source est montée dans le conteneur `app`. Deux processus tournent en parall
 met à jour `build/classes`, et `bootRun` dont Spring Boot DevTools surveille ce dossier.
 Modifiez un fichier `.java` : recompilation puis redémarrage automatique en < 1 s
 (visible dans `docker compose logs -f app`).
-
-### Authentification
-
-Aucune. L'authentification HTTP Basic de départ a été retirée : tous les endpoints
-sont publics en attendant le ticket « login ».
 
 ## Tests
 
@@ -77,24 +71,6 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 
 ```bash
 ./gradlew bootBuildImage
-```
-
-## Structure
-
-```
-src/main/java/xyz/sterenn/secondbrain/
-├── SecondBrainApplication.java
-├── config/                     # SecurityConfig, OpenApiConfig
-├── shared/bus/                 # CommandBus (transactionnel) et QueryBus
-└── users/                      # bounded context, en 3 couches
-    ├── domain/                 # User, Email, PasswordPolicy, ports
-    ├── application/            # command/ et query/ + leurs handlers
-    └── infrastructure/         # adapters : persistence/, security/, web/
-src/main/resources/
-├── application.yml             # config commune (pilotée par variables d'env)
-├── application-dev.yml         # profil dev
-├── templates/register.html     # formulaire d'inscription (Thymeleaf)
-└── db/migration/               # migrations Flyway
 ```
 
 ## Architecture
