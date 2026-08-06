@@ -1,7 +1,7 @@
 package xyz.sterenn.secondbrain.users;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -28,7 +28,7 @@ public class RecordingNotificationSenderConfiguration {
 
     public static class RecordingNotificationSender implements NotificationSender {
 
-        private final List<Notification> envoyees = new ArrayList<>();
+        private final List<Notification> envoyees = new CopyOnWriteArrayList<>();
 
         @Override
         public void send(Notification notification) {
