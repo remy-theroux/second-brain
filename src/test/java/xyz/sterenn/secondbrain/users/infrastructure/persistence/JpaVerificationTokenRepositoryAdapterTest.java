@@ -83,8 +83,11 @@ class JpaVerificationTokenRepositoryAdapterTest {
     }
 
     @Test
-    void ne_stocke_jamais_le_jeton_en_clair() {
-        // Contrôle direct en SQL : la colonne ne doit contenir que l'empreinte reçue.
+    void persiste_l_empreinte_sans_la_tronquer() {
+        // Contrôle direct en SQL : la colonne doit contenir l'empreinte reçue telle quelle,
+        // sans troncature ni conversion. La garantie que le jeton en clair, lui, n'est
+        // jamais stocké est apportée ailleurs, par
+        // RegisterUserHandlerTest.emet_un_jeton_dont_seule_l_empreinte_est_stockee.
         UUID compte = compteExistant("dave@example.com");
         tokens.save(VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
 
