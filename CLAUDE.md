@@ -171,6 +171,24 @@ détail dans les règles backend, section « Adapters ».
 5. `VerificationToken` référence son compte par un `UUID` et non par un `@ManyToOne` :
    deux agrégats distincts ne se tiennent pas par une association JPA. La cohérence est
    garantie par la clé étrangère en base, pas par le graphe d'objets.
+6. Le jeton de vérification voyage en query string. Il apparaît donc dans l'historique du
+   navigateur, dans les logs d'accès de tout reverse-proxy en amont (nginx et Traefik
+   journalisent la query string par défaut), et dans les logs applicatifs dès que
+   `org.springframework.web` passe en `DEBUG` — ce qui est le cas du profil `dev`. Le
+   masquage soigné des `toString()` ne couvre donc pas ce chemin-là. Acceptable pour un
+   jeton à usage unique et de courte durée ; à rediscuter si un jeton du même modèle sert
+   un jour à réinitialiser un mot de passe.
+7. L'usage unique n'est garanti que par un lire-puis-écrire. `VerificationToken` n'a pas
+   de `@Version` et la migration ne pose aucune contrainte sur `consumed_at` : deux clics
+   simultanés sur le même lien passeraient tous deux le contrôle avant que l'un ait
+   commité. Sans conséquence ici — vérifier deux fois est idempotent — mais l'invariant
+   n'est pas tenu par la base, et il le faudra le jour où ce modèle de jeton ouvrira une
+   action non idempotente.
+8. `secondbrain.base-url` a une valeur par défaut qui ment en production. Déployée sans la
+   variable, l'application démarre, envoie des mails, et tous les liens pointent vers
+   `http://localhost:8080` : la panne ne se manifeste que chez l'utilisateur. La valeur
+   par défaut est conservée parce que les tests et le développement local en dépendent ;
+   c'est donc la première variable à poser sur un vrai déploiement.
 
 ## Stack et versions
 
