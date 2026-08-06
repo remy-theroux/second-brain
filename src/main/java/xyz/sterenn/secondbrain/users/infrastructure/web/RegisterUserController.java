@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.users.infrastructure.web;
 
 import jakarta.validation.Valid;
+import org.springframework.mail.MailException;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -41,6 +42,13 @@ public class RegisterUserController {
             return "register";
         } catch (WeakPasswordException e) {
             bindingResult.rejectValue("password", "password.faible", e.getMessage());
+            return "register";
+        } catch (MailException e) {
+            // Le rollback a déjà eu lieu côté SpringCommandBus : aucune faute de champ ici,
+            // c'est le canal de notification qui a échoué, pas la saisie de l'utilisateur.
+            bindingResult.reject("notification.echec",
+                "Votre compte n'a pas pu être créé : l'email de vérification n'a pas pu être "
+                    + "envoyé. Réessayez dans quelques instants.");
             return "register";
         }
 
