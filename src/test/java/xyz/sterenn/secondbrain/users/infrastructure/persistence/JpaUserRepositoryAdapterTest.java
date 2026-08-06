@@ -7,12 +7,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.EmailAlreadyUsedException;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * {@code @Transactional} fait rouler chaque test en arrière : la PostgreSQL
@@ -28,6 +29,9 @@ class JpaUserRepositoryAdapterTest {
 
     @Autowired
     private UserRepository users;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void persiste_un_compte_dans_un_etat_non_verifie() {
@@ -56,6 +60,18 @@ class JpaUserRepositoryAdapterTest {
             .isPresent()
             .hasValueSatisfying(user -> assertThat(user.isVerified()).isFalse());
         assertThat(users.findByEmail(new Email("inconnu@example.com"))).isEmpty();
+    }
+
+    @Test
+    void projette_l_email_sur_une_colonne_texte() {
+        // Seule preuve observable qu'EmailAttributeConverter est bien auto-appliqué : il
+        // n'est nommé nulle part dans le code, et un test unitaire du converter passerait
+        // au vert même si Hibernate ne l'appliquait jamais.
+        users.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
+
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT email FROM users_users WHERE email = ?", String.class, "frank@example.com"))
+            .isEqualTo("frank@example.com");
     }
 
     @Test

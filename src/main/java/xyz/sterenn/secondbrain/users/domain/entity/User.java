@@ -1,7 +1,6 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.entity;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,6 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Compte utilisateur.
@@ -19,7 +19,8 @@ import org.hibernate.annotations.CreationTimestamp;
  * jamais le mot de passe en clair.
  *
  * <p>Les annotations JPA dans le domaine sont un écart assumé au profit du minimalisme
- * (pas de classe miroir ni de mapper) — voir le plan d'architecture.
+ * (pas de classe miroir ni de mapper) — voir « Écarts assumés » dans CLAUDE.md. L'écart
+ * s'arrête là : l'entité ignore comment son {@link Email} atteint sa colonne.
  */
 @Entity
 @Table(name = "users_users")
@@ -32,7 +33,8 @@ public class User {
 
     // length explicite : Hibernate tourne en ddl-auto=validate et compare les
     // métadonnées de l'entité au schéma créé par Flyway.
-    @Convert(converter = EmailAttributeConverter.class)
+    // Pas de @Convert ici : projeter Email sur une colonne texte est un détail
+    // d'infrastructure, appliqué par un converter autoApply (users.infrastructure.persistence).
     @Column(nullable = false, unique = true, length = Email.MAX_LENGTH)
     private Email email;
 

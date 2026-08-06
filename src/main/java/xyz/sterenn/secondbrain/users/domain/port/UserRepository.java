@@ -1,6 +1,9 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.port;
 
 import java.util.Optional;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Port sortant vers le stockage des comptes. Le domaine énonce ce dont il a besoin ;

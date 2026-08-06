@@ -3,7 +3,7 @@ package xyz.sterenn.secondbrain.users.infrastructure.security;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import xyz.sterenn.secondbrain.users.domain.PasswordHasher;
+import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
 
 /**
  * Adapter du port {@link PasswordHasher}, adossé à l'encodeur délégant de Spring

@@ -13,7 +13,7 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
-import xyz.sterenn.secondbrain.users.domain.InvalidEmailException;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest

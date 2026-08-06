@@ -2,13 +2,13 @@ package xyz.sterenn.secondbrain.users.application.command;
 
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.EmailAlreadyUsedException;
-import xyz.sterenn.secondbrain.users.domain.PasswordHasher;
 import xyz.sterenn.secondbrain.users.domain.PasswordPolicy;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
-import xyz.sterenn.secondbrain.users.domain.WeakPasswordException;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
+import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
+import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Orchestre l'inscription : conversion en value objects, contrôles métier, écriture.

@@ -10,13 +10,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.EmailAlreadyUsedException;
-import xyz.sterenn.secondbrain.users.domain.InvalidEmailException;
-import xyz.sterenn.secondbrain.users.domain.PasswordHasher;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
-import xyz.sterenn.secondbrain.users.domain.WeakPasswordException;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
+import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
+import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * La commande est toujours dispatchée par le bus, jamais appelée en direct : c'est le

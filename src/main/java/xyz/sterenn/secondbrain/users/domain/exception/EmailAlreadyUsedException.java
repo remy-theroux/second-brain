@@ -1,4 +1,6 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.exception;
+
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * L'email soumis correspond déjà à un compte existant.

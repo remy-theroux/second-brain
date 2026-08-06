@@ -1,9 +1,10 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.valueobject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 
 class EmailTest {
 

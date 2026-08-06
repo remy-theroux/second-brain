@@ -37,7 +37,7 @@ gtest() {
 | Besoin | Commande |
 |---|---|
 | Toute la suite | `gtest test` |
-| Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.EmailTest"` |
+| Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.valueobject.EmailTest"` |
 | Un package | `gtest test --tests "xyz.sterenn.secondbrain.shared.bus.*"` |
 | Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
 | Compilation seule | `gtest compileJava` |
@@ -71,19 +71,25 @@ xyz.sterenn.secondbrain
 │   ├── bus/                 socle CQRS, aucune dépendance métier
 │   └── web/                 pages n'appartenant à aucun contexte (accueil)
 └── users/                   bounded context (gabarit pour les suivants)
-    ├── domain/              entités, value objects, règles, PORTS (interfaces)
+    ├── domain/              règles métier pures et transverses (PasswordPolicy)
+    │   ├── entity/          agrégats (User)
+    │   ├── valueobject/     valeurs validées et normalisées (Email)
+    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher)
+    │   └── exception/       refus métier, messages affichables tels quels
     ├── application/
     │   ├── command/         une commande + son handler par intention d'écriture
     │   └── query/           une query + son handler + son modèle de lecture
     └── infrastructure/
-        ├── persistence/     ADAPTER JPA du port UserRepository
+        ├── persistence/     ADAPTER JPA du port UserRepository + mapping (EmailAttributeConverter)
         ├── security/        ADAPTER du port PasswordHasher
         └── web/             ADAPTER entrant (contrôleur + form de liaison)
 ```
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
-n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception
-actée : il porte les annotations `jakarta.persistence` (voir « Écarts assumés »).
+n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception actée :
+l'entité `User` porte les annotations `jakarta.persistence` (voir « Écarts assumés »). Le
+mapping du value object `Email` sur sa colonne, lui, est entièrement du côté infrastructure :
+`EmailAttributeConverter` est `autoApply`, donc `User` ne le nomme pas.
 
 ### Le flux d'une écriture
 
@@ -121,10 +127,18 @@ Flyway est **maître du schéma** ; Hibernate tourne en `ddl-auto: validate` et 
 contente de vérifier la correspondance entités ↔ tables au démarrage. Les tables
 sont préfixées par leur contexte (`users_users`).
 
+`Email` est projeté sur un `varchar(320)` par `EmailAttributeConverter`, annoté
+`@Converter(autoApply = true)` et rangé dans `users/infrastructure/persistence/`. Aucune
+classe ne le référence : Hibernate ne le connaît que parce que le scan d'entités part du
+package de `SecondBrainApplication`. Ne pas le supprimer au motif qu'il paraît inutilisé —
+détail dans les règles backend, section « Adapters ».
+
 ### Écarts assumés (documentés, ne pas « corriger » spontanément)
 
-1. `User` est une `@Entity` située dans `domain/` : pas de classe miroir ni de
-   mapper. L'hexagone fuit sur ce point précis, les ports tiennent partout ailleurs.
+1. `User` est une `@Entity` située dans `domain/entity/` : pas de classe miroir ni de
+   mapper. L'hexagone fuit sur ce point précis, et sur lui seul — l'entité ne connaît même
+   pas le converter qui projette son `Email`, appliqué par `autoApply` depuis
+   l'infrastructure.
 2. CSRF désactivé et session `STATELESS` dans `SecurityConfig` — il n'y a pas encore
    de session HTTP à protéger. Le ticket « login » lèvera cette dette.
 3. `FindUserByEmail` n'est consommée par aucun écran : elle existe pour que le query

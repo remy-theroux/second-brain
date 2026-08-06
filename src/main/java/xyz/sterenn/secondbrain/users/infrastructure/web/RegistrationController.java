@@ -10,9 +10,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
-import xyz.sterenn.secondbrain.users.domain.EmailAlreadyUsedException;
-import xyz.sterenn.secondbrain.users.domain.InvalidEmailException;
-import xyz.sterenn.secondbrain.users.domain.WeakPasswordException;
+import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
+import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
 
 /**
  * Adapter entrant : traduit un formulaire HTML en commande, puis les exceptions métier
@@ -35,8 +35,10 @@ public class RegistrationController {
     }
 
     @PostMapping
-    public String register(@Valid @ModelAttribute RegistrationForm registrationForm,
-                           BindingResult bindingResult) {
+    public String register(
+            @Valid @ModelAttribute RegistrationForm registrationForm,
+           BindingResult bindingResult
+    ) {
         if (bindingResult.hasErrors()) {
             return "register";
         }

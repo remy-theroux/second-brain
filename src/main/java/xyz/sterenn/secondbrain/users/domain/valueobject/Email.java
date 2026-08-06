@@ -1,7 +1,8 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.valueobject;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 
 /**
  * Adresse email d'un compte, toujours normalisée : impossible de construire un

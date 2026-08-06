@@ -77,12 +77,13 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 
 Hexagonale, un dossier par couche et par bounded context :
 
-- **domain** — entités, value objects, règles métier et **ports** (interfaces). Ne dépend
-  de rien d'autre que du JDK.
+- **domain** — le cœur métier : `entity/` (agrégats), `valueobject/` (valeurs validées et
+  normalisées), `port/` (les interfaces vers l'extérieur), `exception/`, et les règles pures
+  à la racine. Ne dépend de rien d'autre que du JDK, aux annotations JPA de l'entité près.
 - **application** — une commande ou une query par intention, avec son handler. Aucune
   logique métier : le handler orchestre le domaine.
-- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage) et les
-  adapters entrants (contrôleurs web).
+- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage), le
+  mapping des types du domaine vers les colonnes, et les adapters entrants (contrôleurs web).
 
 CQRS minimal : `CommandBus.dispatch` pour écrire, `QueryBus.ask` pour lire. Les deux sont
 synchrones et routent vers un handler unique, résolu au démarrage par son type générique.

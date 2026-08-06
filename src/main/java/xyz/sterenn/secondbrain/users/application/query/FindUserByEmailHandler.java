@@ -3,9 +3,9 @@ package xyz.sterenn.secondbrain.users.application.query;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Aucun {@code @Transactional} ici : {@code SpringQueryBus.ask} ouvre déjà une
