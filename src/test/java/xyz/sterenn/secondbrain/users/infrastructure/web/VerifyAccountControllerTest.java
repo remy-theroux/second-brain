@@ -77,7 +77,7 @@ class VerifyAccountControllerTest {
             .andExpect(status().isOk())
             .andExpect(view().name("verification"))
             .andExpect(model().attribute("verifie", false))
-            .andExpect(model().attributeExists("erreur"));
+            .andExpect(model().attribute("erreur", "Ce lien de vérification n'est pas valide."));
 
         assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
     }
@@ -90,7 +90,8 @@ class VerifyAccountControllerTest {
                 .param("compte", UUID.randomUUID().toString())
                 .param("jeton", notification.rawToken().value()))
             .andExpect(status().isOk())
-            .andExpect(model().attribute("verifie", false));
+            .andExpect(model().attribute("verifie", false))
+            .andExpect(model().attribute("erreur", "Ce lien de vérification n'est pas valide."));
     }
 
     @Test
