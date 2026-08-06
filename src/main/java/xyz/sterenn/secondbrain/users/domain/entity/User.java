@@ -15,8 +15,8 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * Compte utilisateur.
  *
  * <p>Le constructeur est privé : un compte ne se crée que par {@link #register}, ce qui
- * garantit l'invariant « un compte naît non vérifié ». {@code passwordHash} ne contient
- * jamais le mot de passe en clair.
+ * garantit l'invariant « un compte naît non vérifié », que seul {@link #verify()} lève.
+ * {@code passwordHash} ne contient jamais le mot de passe en clair.
  *
  * <p>Les annotations JPA dans le domaine sont un écart assumé au profit du minimalisme
  * (pas de classe miroir ni de mapper) — voir « Écarts assumés » dans CLAUDE.md. L'écart
@@ -63,6 +63,14 @@ public class User {
      */
     public static User register(Email email, String passwordHash) {
         return new User(email, passwordHash);
+    }
+
+    /**
+     * Marque l'adresse email comme vérifiée. La garantie qu'un lien ne sert qu'une fois
+     * est portée par {@code VerificationToken}, pas ici.
+     */
+    public void verify() {
+        this.verified = true;
     }
 
     public UUID getId() {

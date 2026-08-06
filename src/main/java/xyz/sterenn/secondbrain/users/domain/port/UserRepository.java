@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.users.domain.port;
 
 import java.util.Optional;
+import java.util.UUID;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
@@ -20,4 +21,6 @@ public interface UserRepository {
     User save(User user);
 
     Optional<User> findByEmail(Email email);
+
+    Optional<User> findById(UUID id);
 }

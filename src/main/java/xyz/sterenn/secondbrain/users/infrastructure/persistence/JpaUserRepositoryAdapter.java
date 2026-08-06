@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.users.infrastructure.persistence;
 
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
@@ -41,5 +42,10 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     @Override
     public Optional<User> findByEmail(Email email) {
         return jpa.findByEmail(email);
+    }
+
+    @Override
+    public Optional<User> findById(UUID id) {
+        return jpa.findById(id);
     }
 }
