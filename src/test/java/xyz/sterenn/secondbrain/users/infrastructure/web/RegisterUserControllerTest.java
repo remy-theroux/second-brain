@@ -1,7 +1,6 @@
 package xyz.sterenn.secondbrain.users.infrastructure.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -22,14 +21,14 @@ import xyz.sterenn.secondbrain.users.application.query.FindUserByEmail;
 import xyz.sterenn.secondbrain.users.application.query.UserView;
 
 /**
- * Couvre les trois scénarios Gherkin du ticket au niveau HTTP.
+ * Couvre les scénarios d'écriture du ticket de création de compte au niveau HTTP.
  * CSRF est désactivé côté application : aucun jeton à fournir.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class RegistrationControllerTest {
+class RegisterUserControllerTest {
 
     private static final String MOT_DE_PASSE_VALIDE = "chevalpile42";
 
@@ -38,14 +37,6 @@ class RegistrationControllerTest {
 
     @Autowired
     private QueryBus queryBus;
-
-    @Test
-    void affiche_le_formulaire_a_un_visiteur_anonyme() throws Exception {
-        mockMvc.perform(get("/register"))
-            .andExpect(status().isOk())
-            .andExpect(view().name("register"))
-            .andExpect(model().attributeExists("registrationForm"));
-    }
 
     @Test
     void cree_le_compte_et_redirige_en_cas_de_succes() throws Exception {

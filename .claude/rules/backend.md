@@ -98,6 +98,12 @@ Avant d'écrire une classe, décider de sa couche :
   n'importe quel bounded context, passera par ce converter. C'est voulu ici.
 - Un contrôleur ne contient **aucune règle métier**. Il valide la présence des champs,
   dispatche, et traduit les exceptions métier en erreurs de champ.
+- **Une classe de contrôleur ne porte qu'un seul mapping**, et elle est nommée par
+  l'intention de la route, pas par son verbe HTTP : `ShowRegistrationFormController`
+  et `RegisterUserController`, pas `RegistrationController`. Un contrôleur mono-route
+  n'injecte que ce dont sa route a besoin — celui qui affiche le formulaire ne connaît
+  pas le `CommandBus` — et son test n'a qu'un seul sujet. Le nom se lit comme celui
+  d'une commande : un verbe et son objet.
 - Ne pas dupliquer une règle du domaine dans la validation du formulaire — les deux
   divergeraient. `@NotBlank` côté form, format et robustesse côté domaine.
 - Après un POST réussi : redirect-after-post.

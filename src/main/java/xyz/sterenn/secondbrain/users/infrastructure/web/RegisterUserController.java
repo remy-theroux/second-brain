@@ -2,12 +2,9 @@ package xyz.sterenn.secondbrain.users.infrastructure.web;
 
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
 import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
@@ -19,25 +16,18 @@ import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
  * en erreurs de champ. Aucune règle métier ne vit ici.
  */
 @Controller
-@RequestMapping("/register")
-public class RegistrationController {
+public class RegisterUserController {
 
     private final CommandBus commandBus;
 
-    public RegistrationController(CommandBus commandBus) {
+    public RegisterUserController(CommandBus commandBus) {
         this.commandBus = commandBus;
     }
 
-    @GetMapping
-    public String showForm(Model model) {
-        model.addAttribute("registrationForm", new RegistrationForm());
-        return "register";
-    }
-
-    @PostMapping
+    @PostMapping("/register")
     public String register(
             @Valid @ModelAttribute RegistrationForm registrationForm,
-           BindingResult bindingResult
+            BindingResult bindingResult
     ) {
         if (bindingResult.hasErrors()) {
             return "register";
