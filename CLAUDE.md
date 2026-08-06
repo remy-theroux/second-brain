@@ -81,12 +81,12 @@ xyz.sterenn.secondbrain
     │   └── exception/       refus métier, messages affichables tels quels
     ├── application/
     │   ├── command/         une commande + son handler par intention d'écriture
-    │   └── query/            une query + son handler + son modèle de lecture
+    │   └── query/           une query + son handler + son modèle de lecture
     └── infrastructure/
         ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
         ├── security/        ADAPTERS des ports PasswordHasher et TokenHasher
         ├── email/           ADAPTER du port NotificationSender
-        └── web/              ADAPTERS entrants (un contrôleur par route + form de liaison)
+        └── web/             ADAPTERS entrants (un contrôleur par route + form de liaison)
 ```
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
