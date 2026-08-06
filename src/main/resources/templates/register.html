@@ -9,7 +9,8 @@
 <h1>Créer mon compte</h1>
 
 <p th:if="${param.success}">
-    Votre compte a été créé. Il reste à vérifier.
+    Votre compte a été créé. Un mail vient de vous être envoyé : suivez le lien qu'il
+    contient pour vérifier votre adresse email. Ce lien est valable 24 heures.
 </p>
 
 <form th:action="@{/register}" th:object="${registrationForm}" method="post">
