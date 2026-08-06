@@ -57,7 +57,8 @@ dont DevTools surveille ce dossier. Éditer un `.java` sur l'hôte redémarre l'
 
 Points d'entrée : app <http://localhost:8080/>, Swagger UI `/swagger-ui.html`,
 health `/actuator/health`, Adminer <http://localhost:8081> (serveur `db`,
-base/user/mdp `second_brain`).
+base/user/mdp `second_brain`), Mailpit <http://localhost:8025> — tous les mails
+émis en développement y sont capturés, aucun ne sort de la machine.
 
 ## Architecture
 
@@ -66,23 +67,26 @@ deux bus synchrones.
 
 ```
 xyz.sterenn.secondbrain
-├── config/                  SecurityConfig, OpenApiConfig — transverse
+├── config/                  SecurityConfig, OpenApiConfig, ClockConfiguration — transverse
 ├── shared/
 │   ├── bus/                 socle CQRS, aucune dépendance métier
 │   └── web/                 pages n'appartenant à aucun contexte (accueil)
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy)
-    │   ├── entity/          agrégats (User)
-    │   ├── valueobject/     valeurs validées et normalisées (Email)
-    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher)
+    │   ├── entity/          agrégats (User, VerificationToken)
+    │   ├── valueobject/     valeurs validées et normalisées (Email, RawVerificationToken,
+    │   │                    Notification et ses implémentations)
+    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher,
+    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender)
     │   └── exception/       refus métier, messages affichables tels quels
     ├── application/
     │   ├── command/         une commande + son handler par intention d'écriture
-    │   └── query/           une query + son handler + son modèle de lecture
+    │   └── query/            une query + son handler + son modèle de lecture
     └── infrastructure/
-        ├── persistence/     ADAPTER JPA du port UserRepository + mapping (EmailAttributeConverter)
-        ├── security/        ADAPTER du port PasswordHasher
-        └── web/             ADAPTER entrant (contrôleur + form de liaison)
+        ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
+        ├── security/        ADAPTERS des ports PasswordHasher et TokenHasher
+        ├── email/           ADAPTER du port NotificationSender
+        └── web/              ADAPTERS entrants (un contrôleur par route + form de liaison)
 ```
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
@@ -99,6 +103,25 @@ Contrôleur → `commandBus.dispatch(new RegisterUser(...))` → routage vers
 Le contrôleur ne connaît ni le handler ni le domaine autrement que par les
 exceptions métier qu'il traduit en erreurs de champ. Le handler n'a aucune logique
 métier : il convertit en value objects, orchestre, écrit.
+
+### Le flux de la vérification d'email
+
+L'inscription émet un jeton aléatoire, n'en persiste que l'empreinte salée
+(`TokenHasher`, adapter BCrypt) et envoie le clair par le port `NotificationSender`.
+Notifier est une décision du domaine ; l'email n'est qu'un canal, et l'adapter
+`users/infrastructure/email/` est seul à connaître l'URL publique, le sujet et le corps.
+`Notification` est une interface **scellée** : l'adapter fait un `switch` exhaustif, donc
+un nouveau type de notification non traité ne compile pas.
+
+`GET /verification?compte=&jeton=` recharge le jeton du compte, le compare via le hasher
+puis le consomme. `VerificationToken` porte les deux règles — expiration à 24 h et usage
+unique — et lève lui-même le refus correspondant. Les trois façons de présenter un lien
+inexploitable (UUID illisible, compte inconnu, jeton faux) partagent volontairement un
+seul message : les distinguer ferait de la route un oracle d'existence de compte.
+
+L'envoi se fait **dans la transaction du bus** : une panne du canal annule l'inscription.
+Tant que « renvoyer le lien » n'existe pas, un compte créé sans notification serait
+définitivement invérifiable.
 
 ### Les deux bus (`shared/bus`)
 
@@ -145,6 +168,9 @@ détail dans les règles backend, section « Adapters ».
    bus soit livré testé, et sert de gabarit.
 4. BCrypt ignore les octets au-delà du 72e alors que la politique autorise 128
    caractères. Comportement standard.
+5. `VerificationToken` référence son compte par un `UUID` et non par un `@ManyToOne` :
+   deux agrégats distincts ne se tiennent pas par une association JPA. La cohérence est
+   garantie par la clé étrangère en base, pas par le graphe d'objets.
 
 ## Stack et versions
 
