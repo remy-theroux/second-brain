@@ -3,7 +3,7 @@ package xyz.sterenn.secondbrain.users.infrastructure.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import xyz.sterenn.secondbrain.users.domain.PasswordHasher;
+import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
 
 class BCryptPasswordHasherTest {
 

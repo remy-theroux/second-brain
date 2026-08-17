@@ -3,9 +3,9 @@ package xyz.sterenn.secondbrain.users.application.query;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Aucun {@code @Transactional} ici : {@code SpringQueryBus.ask} ouvre déjà une
@@ -14,15 +14,15 @@ import xyz.sterenn.secondbrain.users.domain.UserRepository;
 @Component
 public class FindUserByEmailHandler implements QueryHandler<FindUserByEmail, Optional<UserView>> {
 
-    private final UserRepository users;
+    private final UserRepository userRepository;
 
-    public FindUserByEmailHandler(UserRepository users) {
-        this.users = users;
+    public FindUserByEmailHandler(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     @Override
     public Optional<UserView> handle(FindUserByEmail query) {
-        return users.findByEmail(new Email(query.email())).map(FindUserByEmailHandler::toView);
+        return userRepository.findByEmail(new Email(query.email())).map(FindUserByEmailHandler::toView);
     }
 
     private static UserView toView(User user) {

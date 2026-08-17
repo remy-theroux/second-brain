@@ -9,20 +9,40 @@ Avant d'écrire une classe, décider de sa couche :
 
 | Ce que fait la classe | Où elle va |
 |---|---|
-| Porte une règle métier, un invariant, un value object | `<contexte>/domain/` |
-| Déclare un besoin du domaine vers l'extérieur (interface) | `<contexte>/domain/` — c'est un **port** |
+| Porte un invariant sur une valeur, se normalise à la construction | `<contexte>/domain/valueobject/` |
+| Est un agrégat : une identité, un cycle de vie | `<contexte>/domain/entity/` |
+| Déclare un besoin du domaine vers l'extérieur (interface) | `<contexte>/domain/port/` — c'est un **port** |
+| Signale un refus métier | `<contexte>/domain/exception/` |
+| Porte une règle métier pure, transverse aux types ci-dessus | `<contexte>/domain/` (racine) |
 | Exprime une intention d'écriture et l'orchestre | `<contexte>/application/command/` |
 | Exprime une lecture et sa projection | `<contexte>/application/query/` |
 | Implémente un port avec une techno concrète | `<contexte>/infrastructure/<techno>/` |
+| Projette un type du domaine sur une colonne (`AttributeConverter`) | `<contexte>/infrastructure/persistence/` |
 | Traduit HTTP en commande/query | `<contexte>/infrastructure/web/` |
 | Sert plusieurs contextes sans logique métier | `shared/` |
 
 - **Le domaine n'importe jamais `org.springframework.*` ni `…infrastructure.*`.**
-  Seule exception actée : `jakarta.persistence` sur `User` et `EmailAttributeConverter`.
+  Seule exception actée : les annotations `jakarta.persistence` sur l'entité `User`. Elle
+  **ne s'étend pas au mapping** : un `AttributeConverter` est un détail de persistance, il
+  vit dans `infrastructure/persistence/` et aucune classe du domaine ne le nomme.
+- `domain/` se découpe en `entity/`, `valueobject/`, `port/` et `exception/`, et garde à sa
+  racine les règles métier pures sans dépendance (`PasswordPolicy`). Ne pas créer un
+  sous-package d'avance : il naît quand la première classe l'exige.
 - Un nouveau bounded context reprend la même arborescence à trois couches. `users`
   est le gabarit.
 - Les classes purement techniques d'un adapter sont **package-private** quand rien
-  au-dehors ne doit en dépendre (voir `SpringDataUserRepository`).
+  au-dehors ne doit en dépendre (voir `SpringDataUserRepository`). Exception :
+  `EmailAttributeConverter` reste `public` — package-private fonctionnerait, mais plus
+  aucun appel ne le référence, et le rendre invisible en ferait du code mort en apparence.
+
+## Nommage
+
+- **Un champ, un paramètre ou une variable de type repository porte le nom de son type
+  en lowerCamelCase** : `userRepository`, `verificationTokenRepository`,
+  `springDataUserRepository`. Jamais le pluriel de l'entité (`users`, `tokens`), jamais
+  une abréviation de la techno (`jpa`, `repo`). Le pluriel se lit comme une collection en
+  mémoire alors que l'appel part en base, et il devient ambigu dès qu'un contexte
+  manipule deux repositories. Cette règle vaut aussi dans les tests.
 
 ## Bus, commandes et queries
 
@@ -56,6 +76,10 @@ Avant d'écrire une classe, décider de sa couche :
   ils énoncent la règle, en français, sans jargon technique.
 - Les règles métier pures (`PasswordPolicy`) sont statiques et sans dépendance :
   elles se testent sans Spring.
+- Le découpage de `domain/` transforme les anciens voisinages de package en imports
+  explicites, **y compris en Javadoc** : un `{@link}` ou un `@throws` vers un type d'un
+  autre sous-package a besoin de son import, sinon le lien ne résout plus (voir
+  `UserRepository.save` et `EmailAlreadyUsedException`). `javac` ne le signale pas.
 
 ## Adapters
 
@@ -65,8 +89,30 @@ Avant d'écrire une classe, décider de sa couche :
 - Utiliser `saveAndFlush` quand la traduction d'une violation de contrainte doit se
   faire dans le `try/catch` : sans flush explicite, l'erreur ne survient qu'au commit,
   hors de portée.
+- **Un `AttributeConverter` porte `@Converter(autoApply = true)` et vit dans
+  `infrastructure/persistence/`.** C'est ce qui dispense l'entité de déclarer
+  `@Convert(converter = …)`, donc de rien importer de l'infrastructure. Pas de
+  `@Component` : Hibernate instancie le converter lui-même.
+- Le prix d'`autoApply` : **plus aucune ligne de code ne référence le converter**. Il n'est
+  trouvé que par le scan de packages — `PersistenceManagedTypesScanner` filtre sur
+  `@Entity`, `@Embeddable`, `@MappedSuperclass` et `@Converter`, à partir du package de
+  `SecondBrainApplication` (ce projet n'a pas d'`@EntityScan`). Le sortir de
+  `xyz.sterenn.secondbrain`, ou ajouter un `@EntityScan` plus étroit, le retirerait
+  silencieusement du scan. Ne jamais supprimer un converter au motif qu'il paraît inutilisé.
+- La panne, elle, est bruyante : `Email` n'étant ni `@Embeddable` ni `Serializable`, un
+  converter non découvert fait échouer le démarrage sur `Could not determine recommended
+  JdbcType for Java type '…Email'`. Aucun chemin ne mène à un contexte qui démarre avec un
+  mapping faux.
+- `autoApply` vaut pour **toute l'unité de persistance** : tout attribut `Email`, dans
+  n'importe quel bounded context, passera par ce converter. C'est voulu ici.
 - Un contrôleur ne contient **aucune règle métier**. Il valide la présence des champs,
   dispatche, et traduit les exceptions métier en erreurs de champ.
+- **Une classe de contrôleur ne porte qu'un seul mapping**, et elle est nommée par
+  l'intention de la route, pas par son verbe HTTP : `ShowRegistrationFormController`
+  et `RegisterUserController`, pas `RegistrationController`. Un contrôleur mono-route
+  n'injecte que ce dont sa route a besoin — celui qui affiche le formulaire ne connaît
+  pas le `CommandBus` — et son test n'a qu'un seul sujet. Le nom se lit comme celui
+  d'une commande : un verbe et son objet.
 - Ne pas dupliquer une règle du domaine dans la validation du formulaire — les deux
   divergeraient. `@NotBlank` côté form, format et robustesse côté domaine.
 - Après un POST réussi : redirect-after-post.
@@ -100,6 +146,11 @@ Avant d'écrire une classe, décider de sa couche :
 - Noms de méthodes de test en français avec des underscores :
   `refuse_un_email_deja_utilise`. Assertions AssertJ.
 - Un test par scénario Gherkin du ticket, au niveau où le scénario est observable.
+- Un mapping qui ne tient qu'à un scan de packages se vérifie **en intégration**. Un test
+  unitaire d'`EmailAttributeConverter` passerait au vert même si Hibernate ne l'appliquait
+  jamais ; ce qui fait foi, c'est `SecondBrainApplicationTests` pour la découverte, et
+  `JpaUserRepositoryAdapterTest.projette_l_email_sur_une_colonne_texte` pour le contenu
+  réel de la colonne.
 
 ## Dépendances et build
 

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
  * d'orienter le visiteur vers les points d'entrée de l'application.
  */
 @Controller
-public class HomeController {
+public class ShowHomeController {
 
     @GetMapping("/")
     public String showHome() {

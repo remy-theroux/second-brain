@@ -1,4 +1,4 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.port;
 
 /**
  * Port sortant vers l'algorithme de hachage. Le domaine ignore lequel est utilisé.

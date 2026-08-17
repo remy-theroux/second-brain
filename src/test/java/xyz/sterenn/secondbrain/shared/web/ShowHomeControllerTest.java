@@ -21,7 +21,7 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
-class HomeControllerTest {
+class ShowHomeControllerTest {
 
     @Autowired
     private MockMvc mockMvc;

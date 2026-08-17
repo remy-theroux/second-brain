@@ -37,7 +37,7 @@ gtest() {
 | Besoin | Commande |
 |---|---|
 | Toute la suite | `gtest test` |
-| Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.EmailTest"` |
+| Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.valueobject.EmailTest"` |
 | Un package | `gtest test --tests "xyz.sterenn.secondbrain.shared.bus.*"` |
 | Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
 | Compilation seule | `gtest compileJava` |
@@ -57,7 +57,8 @@ dont DevTools surveille ce dossier. Éditer un `.java` sur l'hôte redémarre l'
 
 Points d'entrée : app <http://localhost:8080/>, Swagger UI `/swagger-ui.html`,
 health `/actuator/health`, Adminer <http://localhost:8081> (serveur `db`,
-base/user/mdp `second_brain`).
+base/user/mdp `second_brain`), Mailpit <http://localhost:8025> — tous les mails
+émis en développement y sont capturés, aucun ne sort de la machine.
 
 ## Architecture
 
@@ -66,24 +67,33 @@ deux bus synchrones.
 
 ```
 xyz.sterenn.secondbrain
-├── config/                  SecurityConfig, OpenApiConfig — transverse
+├── config/                  SecurityConfig, OpenApiConfig, ClockConfiguration — transverse
 ├── shared/
 │   ├── bus/                 socle CQRS, aucune dépendance métier
 │   └── web/                 pages n'appartenant à aucun contexte (accueil)
 └── users/                   bounded context (gabarit pour les suivants)
-    ├── domain/              entités, value objects, règles, PORTS (interfaces)
+    ├── domain/              règles métier pures et transverses (PasswordPolicy)
+    │   ├── entity/          agrégats (User, VerificationToken)
+    │   ├── valueobject/     valeurs validées et normalisées (Email, RawVerificationToken,
+    │   │                    Notification et ses implémentations)
+    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher,
+    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender)
+    │   └── exception/       refus métier, messages affichables tels quels
     ├── application/
     │   ├── command/         une commande + son handler par intention d'écriture
     │   └── query/           une query + son handler + son modèle de lecture
     └── infrastructure/
-        ├── persistence/     ADAPTER JPA du port UserRepository
-        ├── security/        ADAPTER du port PasswordHasher
-        └── web/             ADAPTER entrant (contrôleur + form de liaison)
+        ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
+        ├── security/        ADAPTERS des ports PasswordHasher et TokenHasher
+        ├── email/           ADAPTER du port NotificationSender
+        └── web/             ADAPTERS entrants (un contrôleur par route + form de liaison)
 ```
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
-n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception
-actée : il porte les annotations `jakarta.persistence` (voir « Écarts assumés »).
+n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception actée :
+l'entité `User` porte les annotations `jakarta.persistence` (voir « Écarts assumés »). Le
+mapping du value object `Email` sur sa colonne, lui, est entièrement du côté infrastructure :
+`EmailAttributeConverter` est `autoApply`, donc `User` ne le nomme pas.
 
 ### Le flux d'une écriture
 
@@ -93,6 +103,25 @@ Contrôleur → `commandBus.dispatch(new RegisterUser(...))` → routage vers
 Le contrôleur ne connaît ni le handler ni le domaine autrement que par les
 exceptions métier qu'il traduit en erreurs de champ. Le handler n'a aucune logique
 métier : il convertit en value objects, orchestre, écrit.
+
+### Le flux de la vérification d'email
+
+L'inscription émet un jeton aléatoire, n'en persiste que l'empreinte salée
+(`TokenHasher`, adapter BCrypt) et envoie le clair par le port `NotificationSender`.
+Notifier est une décision du domaine ; l'email n'est qu'un canal, et l'adapter
+`users/infrastructure/email/` est seul à connaître l'URL publique, le sujet et le corps.
+`Notification` est une interface **scellée** : l'adapter fait un `switch` exhaustif, donc
+un nouveau type de notification non traité ne compile pas.
+
+`GET /verification?compte=&jeton=` recharge le jeton du compte, le compare via le hasher
+puis le consomme. `VerificationToken` porte les deux règles — expiration à 24 h et usage
+unique — et lève lui-même le refus correspondant. Les trois façons de présenter un lien
+inexploitable (UUID illisible, compte inconnu, jeton faux) partagent volontairement un
+seul message : les distinguer ferait de la route un oracle d'existence de compte.
+
+L'envoi se fait **dans la transaction du bus** : une panne du canal annule l'inscription.
+Tant que « renvoyer le lien » n'existe pas, un compte créé sans notification serait
+définitivement invérifiable.
 
 ### Les deux bus (`shared/bus`)
 
@@ -121,16 +150,45 @@ Flyway est **maître du schéma** ; Hibernate tourne en `ddl-auto: validate` et 
 contente de vérifier la correspondance entités ↔ tables au démarrage. Les tables
 sont préfixées par leur contexte (`users_users`).
 
+`Email` est projeté sur un `varchar(320)` par `EmailAttributeConverter`, annoté
+`@Converter(autoApply = true)` et rangé dans `users/infrastructure/persistence/`. Aucune
+classe ne le référence : Hibernate ne le connaît que parce que le scan d'entités part du
+package de `SecondBrainApplication`. Ne pas le supprimer au motif qu'il paraît inutilisé —
+détail dans les règles backend, section « Adapters ».
+
 ### Écarts assumés (documentés, ne pas « corriger » spontanément)
 
-1. `User` est une `@Entity` située dans `domain/` : pas de classe miroir ni de
-   mapper. L'hexagone fuit sur ce point précis, les ports tiennent partout ailleurs.
+1. `User` est une `@Entity` située dans `domain/entity/` : pas de classe miroir ni de
+   mapper. L'hexagone fuit sur ce point précis, et sur lui seul — l'entité ne connaît même
+   pas le converter qui projette son `Email`, appliqué par `autoApply` depuis
+   l'infrastructure.
 2. CSRF désactivé et session `STATELESS` dans `SecurityConfig` — il n'y a pas encore
    de session HTTP à protéger. Le ticket « login » lèvera cette dette.
 3. `FindUserByEmail` n'est consommée par aucun écran : elle existe pour que le query
    bus soit livré testé, et sert de gabarit.
 4. BCrypt ignore les octets au-delà du 72e alors que la politique autorise 128
    caractères. Comportement standard.
+5. `VerificationToken` référence son compte par un `UUID` et non par un `@ManyToOne` :
+   deux agrégats distincts ne se tiennent pas par une association JPA. La cohérence est
+   garantie par la clé étrangère en base, pas par le graphe d'objets.
+6. Le jeton de vérification voyage en query string. Il apparaît donc dans l'historique du
+   navigateur, dans les logs d'accès de tout reverse-proxy en amont (nginx et Traefik
+   journalisent la query string par défaut), et dans les logs applicatifs dès que
+   `org.springframework.web` passe en `DEBUG` — ce qui est le cas du profil `dev`. Le
+   masquage soigné des `toString()` ne couvre donc pas ce chemin-là. Acceptable pour un
+   jeton à usage unique et de courte durée ; à rediscuter si un jeton du même modèle sert
+   un jour à réinitialiser un mot de passe.
+7. L'usage unique n'est garanti que par un lire-puis-écrire. `VerificationToken` n'a pas
+   de `@Version` et la migration ne pose aucune contrainte sur `consumed_at` : deux clics
+   simultanés sur le même lien passeraient tous deux le contrôle avant que l'un ait
+   commité. Sans conséquence ici — vérifier deux fois est idempotent — mais l'invariant
+   n'est pas tenu par la base, et il le faudra le jour où ce modèle de jeton ouvrira une
+   action non idempotente.
+8. `secondbrain.base-url` a une valeur par défaut qui ment en production. Déployée sans la
+   variable, l'application démarre, envoie des mails, et tous les liens pointent vers
+   `http://localhost:8080` : la panne ne se manifeste que chez l'utilisateur. La valeur
+   par défaut est conservée parce que les tests et le développement local en dépendent ;
+   c'est donc la première variable à poser sur un vrai déploiement.
 
 ## Stack et versions
 

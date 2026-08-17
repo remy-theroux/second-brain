@@ -12,10 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
+import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
-import xyz.sterenn.secondbrain.users.domain.InvalidEmailException;
+import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @Transactional
 class FindUserByEmailHandlerTest {

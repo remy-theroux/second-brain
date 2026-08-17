@@ -15,9 +15,9 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.Command;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
-import xyz.sterenn.secondbrain.users.domain.Email;
-import xyz.sterenn.secondbrain.users.domain.User;
-import xyz.sterenn.secondbrain.users.domain.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Vérifie l'exigence centrale du CommandBus : tout le handler s'exécute dans une seule
@@ -35,7 +35,7 @@ class CommandBusTransactionTest {
     private CommandBus commandBus;
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -56,7 +56,7 @@ class CommandBusTransactionTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("échec volontaire");
 
-        assertThat(users.existsByEmail(new Email("frank@example.com"))).isFalse();
+        assertThat(userRepository.existsByEmail(new Email("frank@example.com"))).isFalse();
     }
 
     record EchouerApresEcriture(String email) implements Command {
@@ -68,15 +68,15 @@ class CommandBusTransactionTest {
      */
     static class EchouerApresEcritureHandler implements CommandHandler<EchouerApresEcriture> {
 
-        private final UserRepository users;
+        private final UserRepository userRepository;
 
-        EchouerApresEcritureHandler(UserRepository users) {
-            this.users = users;
+        EchouerApresEcritureHandler(UserRepository userRepository) {
+            this.userRepository = userRepository;
         }
 
         @Override
         public void handle(EchouerApresEcriture command) {
-            users.save(User.register(new Email(command.email()), "empreinte"));
+            userRepository.save(User.register(new Email(command.email()), "empreinte"));
             throw new IllegalStateException("échec volontaire");
         }
     }
@@ -85,8 +85,8 @@ class CommandBusTransactionTest {
     static class HandlerDeTest {
 
         @Bean
-        EchouerApresEcritureHandler echouerApresEcritureHandler(UserRepository users) {
-            return new EchouerApresEcritureHandler(users);
+        EchouerApresEcritureHandler echouerApresEcritureHandler(UserRepository userRepository) {
+            return new EchouerApresEcritureHandler(userRepository);
         }
     }
 }

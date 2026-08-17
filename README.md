@@ -34,6 +34,7 @@ Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (tool
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Adminer (UI base) | http://localhost:8081 (serveur `db`, base/user/mdp `second_brain`) |
+| Mailpit (mails capturés en dev) | http://localhost:8025 — aucun mail ne sort de la machine |
 
 ### Hot reload
 
@@ -64,8 +65,21 @@ docker build -t second-brain:latest .
 docker run --rm -p 8080:8080 \
   -e SPRING_DATASOURCE_URL=jdbc:postgresql://<host>:5432/second_brain \
   -e SPRING_DATASOURCE_USERNAME=... -e SPRING_DATASOURCE_PASSWORD=... \
+  -e SPRING_MAIL_HOST=... -e SPRING_MAIL_PORT=... \
+  -e SECONDBRAIN_BASE_URL=https://<domaine-public> \
+  -e SECONDBRAIN_NOTIFICATION_FROM=no-reply@<domaine-public> \
   second-brain:latest
 ```
+
+Variables d'environnement lues par l'application (docker compose les fixe déjà pour le
+développement, voir `compose.yaml`) :
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | Connexion PostgreSQL | — |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | Relais SMTP pour les mails de vérification | `localhost:1025` (Mailpit en dev) |
+| `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
+| `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
 
 Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 
@@ -77,12 +91,13 @@ Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 
 Hexagonale, un dossier par couche et par bounded context :
 
-- **domain** — entités, value objects, règles métier et **ports** (interfaces). Ne dépend
-  de rien d'autre que du JDK.
+- **domain** — le cœur métier : `entity/` (agrégats), `valueobject/` (valeurs validées et
+  normalisées), `port/` (les interfaces vers l'extérieur), `exception/`, et les règles pures
+  à la racine. Ne dépend de rien d'autre que du JDK, aux annotations JPA de l'entité près.
 - **application** — une commande ou une query par intention, avec son handler. Aucune
   logique métier : le handler orchestre le domaine.
-- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage) et les
-  adapters entrants (contrôleurs web).
+- **infrastructure** — les **adapters** qui implémentent les ports (JPA, hachage), le
+  mapping des types du domaine vers les colonnes, et les adapters entrants (contrôleurs web).
 
 CQRS minimal : `CommandBus.dispatch` pour écrire, `QueryBus.ask` pour lire. Les deux sont
 synchrones et routent vers un handler unique, résolu au démarrage par son type générique.

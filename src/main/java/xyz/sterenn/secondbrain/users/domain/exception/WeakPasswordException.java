@@ -1,4 +1,6 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.exception;
+
+import xyz.sterenn.secondbrain.users.domain.PasswordPolicy;
 
 /**
  * Le mot de passe soumis ne satisfait pas {@link PasswordPolicy}. Le message énonce

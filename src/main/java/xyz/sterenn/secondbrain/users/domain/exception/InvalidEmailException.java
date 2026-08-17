@@ -1,4 +1,4 @@
-package xyz.sterenn.secondbrain.users.domain;
+package xyz.sterenn.secondbrain.users.domain.exception;
 
 /**
  * L'email soumis n'a pas une forme exploitable. Le message est destiné à être
