@@ -50,6 +50,25 @@ services:
       mailpit:
         condition: service_started
 
+  frontend:
+    image: node:24-alpine
+    working_dir: /app
+    # npm ci et non npm install : le lock est la référence, et il n'est pas réécrit dans
+    # le dépôt monté. node_modules vit dans un volume nommé, pas dans le bind mount —
+    # sinon l'arborescence installée en conteneur écraserait celle de l'hôte.
+    command: sh -c "npm ci && npm run dev"
+    environment:
+      # Le back est joignable par son nom de service sur le réseau Compose.
+      VITE_API_TARGET: http://app:8080
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - app
+
 volumes:
   db-data:
   gradle-cache:
+  frontend-node-modules:
