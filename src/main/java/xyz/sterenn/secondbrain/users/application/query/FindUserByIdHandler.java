@@ -4,23 +4,22 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
-import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Aucun {@code @Transactional} ici : {@code SpringQueryBus.ask} ouvre déjà une
  * transaction en lecture seule.
  */
 @Component
-public class FindUserByEmailHandler implements QueryHandler<FindUserByEmail, Optional<UserView>> {
+public class FindUserByIdHandler implements QueryHandler<FindUserById, Optional<UserView>> {
 
     private final UserRepository userRepository;
 
-    public FindUserByEmailHandler(UserRepository userRepository) {
+    public FindUserByIdHandler(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     @Override
-    public Optional<UserView> handle(FindUserByEmail query) {
-        return userRepository.findByEmail(new Email(query.email())).map(UserView::of);
+    public Optional<UserView> handle(FindUserById query) {
+        return userRepository.findById(query.id()).map(UserView::of);
     }
 }
