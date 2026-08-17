@@ -21,7 +21,11 @@ import xyz.sterenn.secondbrain.users.domain.exception.InvalidCredentialsExceptio
 import xyz.sterenn.secondbrain.users.domain.exception.UnverifiedAccountException;
 
 /**
- * Les cinq issues de la connexion, dispatchées par le bus — le chemin réel de production.
+ * Les cinq issues de la connexion, dispatchées par le bus — le chemin réel de production —
+ * plus deux cas au-delà du strict design : la casse de l'email, qui vérifie que la
+ * normalisation a bien lieu avant comparaison, et l'absence d'oracle d'existence de compte
+ * (un mot de passe faux sur un compte non vérifié échoue comme sur un compte inexistant),
+ * qui protège une propriété de sécurité qu'aucun des cinq scénarios nommés ne couvre seul.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest

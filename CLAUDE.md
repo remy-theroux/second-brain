@@ -182,6 +182,11 @@ jeton en amont ; le contrôleur ne lit que `sub` et interroge `FindUserById`. Un
 signé dont le compte a disparu répond `401` et non `404` : il n'identifie plus personne, et
 le front n'a ainsi qu'un seul cas d'échec à traiter.
 
+`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique,
+et `GET /api/profile` reste aujourd'hui la seule route authentifiée. Une nouvelle route
+publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ; sans quoi elle
+répond `401`.
+
 Le secret de signature (`secondbrain.jwt.secret`, 32 octets minimum) **n'a aucune valeur
 par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
 `src/test/resources/application.properties` en fournissent un, chacun pour son
@@ -281,6 +286,14 @@ détail dans les règles backend, section « Adapters ».
 14. `FindUserByEmail` reste sans écran (voir l'écart n° 3) : le profil lit par identifiant,
     puisque c'est l'identifiant que le jeton porte. Chercher par email quand on détient un
     UUID immuable serait un contresens.
+15. `LoginView.vue` et `HomeView.vue` ne sont couverts par aucun test automatisé. Le choix
+    délibéré a été de tester le store d'authentification et le garde de route — les deux
+    endroits où un échec passerait silencieusement — et non le rendu des composants. La
+    correction des deux écrans repose donc sur `npm run build` (qui compile les templates
+    sans rien affirmer sur leur comportement) et sur un passage humain dans un navigateur.
+    Conséquence directe : un gestionnaire d'événement mal relié ou un nom de champ mal
+    orthographié passerait au vert. Le passage humain n'est donc pas une étape facultative
+    mais une condition avant toute mise en production.
 
 ## Stack et versions
 

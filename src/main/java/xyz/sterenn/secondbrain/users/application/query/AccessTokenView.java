@@ -9,4 +9,13 @@ package xyz.sterenn.secondbrain.users.application.query;
  * @param expiresIn secondes restantes avant expiration
  */
 public record AccessTokenView(String value, long expiresIn) {
+
+    /**
+     * Le jeton est un porteur d'identité : il ne doit apparaître dans aucun log ni dans
+     * aucun message d'échec d'assertion.
+     */
+    @Override
+    public String toString() {
+        return "AccessTokenView[value=***, expiresIn=" + expiresIn + "]";
+    }
 }

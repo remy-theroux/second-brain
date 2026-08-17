@@ -36,6 +36,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void refuse_par_defaut_une_route_inconnue_sous_api() throws Exception {
+        // Le refus par défaut sous /api/** doit répondre 401 et non 404 : une future route
+        // protégée l'est sans que personne ait eu à la déclarer.
+        mockMvc.perform(get("/api/une-route-inconnue"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void protege_la_route_de_profil() throws Exception {
         // Le verrou vit dans SecurityConfig, pas dans le contrôleur : c'est ici qu'on le
         // constate, pour qu'un `permitAll()` distrait soit rattrapé par ce test.

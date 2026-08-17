@@ -20,12 +20,14 @@ export async function requestToken(email, password) {
     body: new URLSearchParams({ grant_type: 'password', username: email, password }),
   })
 
-  const payload = await response.json()
   if (!response.ok) {
+    // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
+    // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+    const payload = await response.json().catch(() => null)
     // error_description porte le message métier du serveur, affichable tel quel.
-    throw new Error(payload.error_description ?? 'La connexion a échoué.')
+    throw new Error(payload?.error_description ?? 'La connexion a échoué.')
   }
-  return payload
+  return response.json()
 }
 
 /** Lit le profil du porteur du jeton. C'est cet appel qui dit si la session tient encore. */

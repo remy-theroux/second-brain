@@ -6,9 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
@@ -30,7 +33,7 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 /**
- * Les quatre issues du profil, plus le parcours complet. Les jetons ne sont pas simulés :
+ * Les cinq issues du profil, plus le parcours complet. Les jetons ne sont pas simulés :
  * ils sont émis par le port réel, ou obtenus par la vraie route de connexion.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
@@ -79,6 +82,28 @@ class ShowProfileControllerTest {
         String jetonExpire = jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonExpire))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refuse_un_jeton_signe_par_une_autre_cle() throws Exception {
+        // Protège la garantie centrale du porteur : un jeton ne peut pas être forgé sans le
+        // secret. Les revendications sont par ailleurs valides en tout point (sub, iat, exp
+        // cohérents) pour que seule la signature explique le refus.
+        JwtEncoder encodeurEtranger = NimbusJwtEncoder.withSecretKey(
+                new SecretKeySpec(
+                    "une-autre-cle-de-signature-32-octets-au-moins".getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"))
+            .build();
+        Instant maintenant = Instant.now();
+        JwtClaimsSet revendications = JwtClaimsSet.builder()
+            .subject(UUID.randomUUID().toString())
+            .issuedAt(maintenant)
+            .expiresAt(maintenant.plus(Duration.ofHours(1)))
+            .build();
+        String jetonForge = encodeurEtranger.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonForge))
             .andExpect(status().isUnauthorized());
     }
 

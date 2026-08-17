@@ -51,7 +51,7 @@ Les tests d'intégration démarrent une PostgreSQL jetable via Testcontainers :
 
 ```bash
 # Sans JDK local, via un conteneur Gradle :
-docker run --rm -v "$PWD":/app -w /app -v /var/run/docker.sock:/var/run/docker.sock \
+docker run --rm --network host -v "$PWD":/app -w /app -v /var/run/docker.sock:/var/run/docker.sock \
   gradle:jdk25 gradle --no-daemon test
 ```
 
@@ -89,7 +89,13 @@ développement, voir `compose.yaml`) :
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | Relais SMTP pour les mails de vérification | `localhost:1025` (Mailpit en dev) |
 | `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
 | `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
-| `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) | **aucun** — l'application refuse de démarrer sans lui |
+| `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
+
+Pour générer `SECONDBRAIN_JWT_SECRET` avant un déploiement :
+
+```bash
+openssl rand -base64 48
+```
 
 Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 

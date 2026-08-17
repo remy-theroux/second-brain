@@ -14,4 +14,14 @@ public record AccessTokenResponse(
     @JsonProperty("token_type") String tokenType,
     @JsonProperty("expires_in") long expiresIn
 ) {
+
+    /**
+     * Le jeton est un porteur d'identité : il ne doit apparaître dans aucun log. Le profil
+     * `dev` journalise le corps des réponses en DEBUG, ce qui passe par ce {@code toString()}.
+     */
+    @Override
+    public String toString() {
+        return "AccessTokenResponse[accessToken=***, tokenType=" + tokenType
+            + ", expiresIn=" + expiresIn + "]";
+    }
 }

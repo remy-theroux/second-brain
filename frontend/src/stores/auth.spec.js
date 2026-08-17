@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 
@@ -12,11 +12,31 @@ function stubFetch(status, body) {
   return fetchStub
 }
 
+// Simule un corps d'erreur non JSON (page HTML d'un proxy en panne, par exemple) :
+// `response.json()` échoue avec une `SyntaxError`, comme le ferait le vrai `fetch`.
+function stubFetchWithUnparsableBody(status) {
+  const fetchStub = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => {
+      throw new SyntaxError("Unexpected token '<', \"<html>...\" is not valid JSON")
+    },
+  })
+  vi.stubGlobal('fetch', fetchStub)
+  return fetchStub
+}
+
 describe("store d'authentification", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     vi.unstubAllGlobals()
+  })
+
+  // Filet de sécurité : si l'assertion du test à minuteurs simulés échoue avant d'atteindre
+  // `vi.useRealTimers()`, les minuteurs simulés ne doivent pas fuir vers les tests suivants.
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('mémorise le jeton et son expiration après une connexion réussie', async () => {
@@ -52,6 +72,14 @@ describe("store d'authentification", () => {
     expect(auth.isAuthenticated()).toBe(false)
   })
 
+  it('propage le message français par défaut quand le corps d\'échec n\'est pas du JSON', async () => {
+    stubFetchWithUnparsableBody(502)
+    const auth = useAuthStore()
+
+    await expect(auth.login('alice@exemple.fr', 'chevalpile42')).rejects.toThrow('La connexion a échoué.')
+    expect(auth.isAuthenticated()).toBe(false)
+  })
+
   it("n'est plus authentifié quand le jeton a expiré", async () => {
     vi.useFakeTimers()
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
@@ -63,7 +91,6 @@ describe("store d'authentification", () => {
     // isAuthenticated doit être une fonction : un `computed` renverrait la valeur mise en
     // cache, ses dépendances réactives n'ayant pas bougé — seule l'horloge a avancé.
     expect(auth.isAuthenticated()).toBe(false)
-    vi.useRealTimers()
   })
 
   it('vide le stockage local à la déconnexion', async () => {
