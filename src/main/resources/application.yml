@@ -62,3 +62,9 @@ secondbrain:
   base-url: ${SECONDBRAIN_BASE_URL:http://localhost:8080}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
+  jwt:
+    # Volontairement sans valeur par défaut : un secret de signature par défaut serait
+    # un secret public. Sans SECONDBRAIN_JWT_SECRET, l'application refuse de démarrer —
+    # à l'inverse de base-url ci-dessus, dont le défaut ment en production (écart n° 8).
+    # 32 octets minimum : HS256 exige une clé de 256 bits.
+    secret: ${SECONDBRAIN_JWT_SECRET}
