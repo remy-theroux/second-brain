@@ -25,15 +25,15 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @Component
 public class JpaUserRepositoryAdapter implements UserRepository {
 
-    private final SpringDataUserRepository jpa;
+    private final SpringDataUserRepository springDataUserRepository;
 
-    JpaUserRepositoryAdapter(SpringDataUserRepository jpa) {
-        this.jpa = jpa;
+    JpaUserRepositoryAdapter(SpringDataUserRepository springDataUserRepository) {
+        this.springDataUserRepository = springDataUserRepository;
     }
 
     @Override
     public boolean existsByEmail(Email email) {
-        return jpa.existsByEmail(email);
+        return springDataUserRepository.existsByEmail(email);
     }
 
     @Override
@@ -44,7 +44,7 @@ public class JpaUserRepositoryAdapter implements UserRepository {
         try {
             // saveAndFlush : sans flush explicite, la violation d'unicité ne surviendrait
             // qu'au commit, hors de portée du try/catch.
-            return jpa.saveAndFlush(user);
+            return springDataUserRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             if (!insertion) {
                 throw e;
@@ -55,11 +55,11 @@ public class JpaUserRepositoryAdapter implements UserRepository {
 
     @Override
     public Optional<User> findByEmail(Email email) {
-        return jpa.findByEmail(email);
+        return springDataUserRepository.findByEmail(email);
     }
 
     @Override
     public Optional<User> findById(UUID id) {
-        return jpa.findById(id);
+        return springDataUserRepository.findById(id);
     }
 }

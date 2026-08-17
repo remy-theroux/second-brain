@@ -14,15 +14,15 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @Component
 public class FindUserByEmailHandler implements QueryHandler<FindUserByEmail, Optional<UserView>> {
 
-    private final UserRepository users;
+    private final UserRepository userRepository;
 
-    public FindUserByEmailHandler(UserRepository users) {
-        this.users = users;
+    public FindUserByEmailHandler(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     @Override
     public Optional<UserView> handle(FindUserByEmail query) {
-        return users.findByEmail(new Email(query.email())).map(FindUserByEmailHandler::toView);
+        return userRepository.findByEmail(new Email(query.email())).map(FindUserByEmailHandler::toView);
     }
 
     private static UserView toView(User user) {

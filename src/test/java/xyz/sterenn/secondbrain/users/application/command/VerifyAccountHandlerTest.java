@@ -40,7 +40,7 @@ class VerifyAccountHandlerTest {
     private CommandBus commandBus;
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @Autowired
     private RecordingNotificationSender notifications;
@@ -81,7 +81,7 @@ class VerifyAccountHandlerTest {
         commandBus.dispatch(new VerifyAccount(
             notification.accountId().toString(), notification.rawToken().value()));
 
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
     }
 
     @Test
@@ -92,7 +92,7 @@ class VerifyAccountHandlerTest {
             new VerifyAccount(notification.accountId().toString(), "un-autre-jeton")))
             .isInstanceOf(InvalidVerificationLinkException.class);
 
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
     }
 
     @Test
@@ -122,7 +122,7 @@ class VerifyAccountHandlerTest {
             notification.accountId().toString(), notification.rawToken().value())))
             .isInstanceOf(ExpiredVerificationLinkException.class);
 
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
     }
 
     @Test
@@ -136,6 +136,6 @@ class VerifyAccountHandlerTest {
             .isInstanceOf(AlreadyUsedVerificationLinkException.class);
 
         // Le compte reste vérifié : le second clic ne défait rien.
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
     }
 }

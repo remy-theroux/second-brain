@@ -30,14 +30,14 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 class JpaUserRepositoryAdapterTest {
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Test
     void persiste_un_compte_dans_un_etat_non_verifie() {
-        User saved = users.save(User.register(new Email("alice@example.com"), "empreinte"));
+        User saved = userRepository.save(User.register(new Email("alice@example.com"), "empreinte"));
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getEmail()).isEqualTo(new Email("alice@example.com"));
@@ -48,20 +48,20 @@ class JpaUserRepositoryAdapterTest {
 
     @Test
     void detecte_un_email_deja_pris() {
-        users.save(User.register(new Email("bob@example.com"), "empreinte"));
+        userRepository.save(User.register(new Email("bob@example.com"), "empreinte"));
 
-        assertThat(users.existsByEmail(new Email("bob@example.com"))).isTrue();
-        assertThat(users.existsByEmail(new Email("carol@example.com"))).isFalse();
+        assertThat(userRepository.existsByEmail(new Email("bob@example.com"))).isTrue();
+        assertThat(userRepository.existsByEmail(new Email("carol@example.com"))).isFalse();
     }
 
     @Test
     void retrouve_un_compte_par_son_email() {
-        users.save(User.register(new Email("dave@example.com"), "empreinte"));
+        userRepository.save(User.register(new Email("dave@example.com"), "empreinte"));
 
-        assertThat(users.findByEmail(new Email("dave@example.com")))
+        assertThat(userRepository.findByEmail(new Email("dave@example.com")))
             .isPresent()
             .hasValueSatisfying(user -> assertThat(user.isVerified()).isFalse());
-        assertThat(users.findByEmail(new Email("inconnu@example.com"))).isEmpty();
+        assertThat(userRepository.findByEmail(new Email("inconnu@example.com"))).isEmpty();
     }
 
     @Test
@@ -69,7 +69,7 @@ class JpaUserRepositoryAdapterTest {
         // Seule preuve observable qu'EmailAttributeConverter est bien auto-appliqué : il
         // n'est nommé nulle part dans le code, et un test unitaire du converter passerait
         // au vert même si Hibernate ne l'appliquait jamais.
-        users.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
+        userRepository.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
 
         assertThat(jdbcTemplate.queryForObject(
             "SELECT email FROM users_users WHERE email = ?", String.class, "frank@example.com"))
@@ -78,16 +78,16 @@ class JpaUserRepositoryAdapterTest {
 
     @Test
     void traduit_la_violation_d_unicite_en_erreur_metier() {
-        users.save(User.register(new Email("erin@example.com"), "empreinte"));
+        userRepository.save(User.register(new Email("erin@example.com"), "empreinte"));
 
-        assertThatThrownBy(() -> users.save(User.register(new Email("erin@example.com"), "autre")))
+        assertThatThrownBy(() -> userRepository.save(User.register(new Email("erin@example.com"), "autre")))
             .isInstanceOf(EmailAlreadyUsedException.class);
     }
 
     @Test
     void ne_traduit_plus_une_violation_d_integrite_lors_d_une_mise_a_jour() throws Exception {
-        users.save(User.register(new Email("gina@example.com"), "empreinte"));
-        User autre = users.save(User.register(new Email("henri@example.com"), "empreinte"));
+        userRepository.save(User.register(new Email("gina@example.com"), "empreinte"));
+        User autre = userRepository.save(User.register(new Email("henri@example.com"), "empreinte"));
 
         // Le domaine n'expose aucun mutateur d'email — VerifyAccountHandler ne fait que
         // basculer `verified`, jamais l'email. On force ici le champ de l'entité déjà
@@ -98,7 +98,7 @@ class JpaUserRepositoryAdapterTest {
         email.setAccessible(true);
         email.set(autre, new Email("gina@example.com"));
 
-        assertThatThrownBy(() -> users.save(autre))
+        assertThatThrownBy(() -> userRepository.save(autre))
             .isInstanceOf(DataIntegrityViolationException.class)
             .isNotInstanceOf(EmailAlreadyUsedException.class);
     }

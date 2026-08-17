@@ -40,7 +40,7 @@ class VerifyAccountControllerTest {
     private RecordingNotificationSender notifications;
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @BeforeEach
     void vide_les_notifications() {
@@ -64,7 +64,7 @@ class VerifyAccountControllerTest {
             .andExpect(model().attribute("verifie", true))
             .andExpect(model().attributeDoesNotExist("erreur"));
 
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
     }
 
     @Test
@@ -79,7 +79,7 @@ class VerifyAccountControllerTest {
             .andExpect(model().attribute("verifie", false))
             .andExpect(model().attribute("erreur", "Ce lien de vérification n'est pas valide."));
 
-        assertThat(users.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
     }
 
     @Test

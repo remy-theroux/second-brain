@@ -17,21 +17,22 @@ import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 @Component
 public class JpaVerificationTokenRepositoryAdapter implements VerificationTokenRepository {
 
-    private final SpringDataVerificationTokenRepository jpa;
+    private final SpringDataVerificationTokenRepository springDataVerificationTokenRepository;
 
-    JpaVerificationTokenRepositoryAdapter(SpringDataVerificationTokenRepository jpa) {
-        this.jpa = jpa;
+    JpaVerificationTokenRepositoryAdapter(
+            SpringDataVerificationTokenRepository springDataVerificationTokenRepository) {
+        this.springDataVerificationTokenRepository = springDataVerificationTokenRepository;
     }
 
     @Override
     public VerificationToken save(VerificationToken token) {
         // saveAndFlush : le jeton référence l'utilisateur par une clé étrangère, la
         // violation éventuelle doit survenir ici et non au commit.
-        return jpa.saveAndFlush(token);
+        return springDataVerificationTokenRepository.saveAndFlush(token);
     }
 
     @Override
     public Optional<VerificationToken> findByUserId(UUID userId) {
-        return jpa.findByUserId(userId);
+        return springDataVerificationTokenRepository.findByUserId(userId);
     }
 }

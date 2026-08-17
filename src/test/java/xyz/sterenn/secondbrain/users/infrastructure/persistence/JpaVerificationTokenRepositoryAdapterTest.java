@@ -29,23 +29,24 @@ class JpaVerificationTokenRepositoryAdapterTest {
     private static final Instant EMISSION = Instant.parse("2026-08-06T10:00:00Z");
 
     @Autowired
-    private VerificationTokenRepository tokens;
+    private VerificationTokenRepository verificationTokenRepository;
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private UUID compteExistant(String email) {
-        return users.save(User.register(new Email(email), "empreinte")).getId();
+        return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
     @Test
     void persiste_un_jeton_pour_un_compte() {
         UUID compte = compteExistant("alice@example.com");
 
-        VerificationToken saved = tokens.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+        VerificationToken saved =
+            verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getUserId()).isEqualTo(compte);
@@ -57,28 +58,29 @@ class JpaVerificationTokenRepositoryAdapterTest {
     @Test
     void retrouve_le_jeton_d_un_compte() {
         UUID compte = compteExistant("bob@example.com");
-        tokens.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+        verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
 
-        assertThat(tokens.findByUserId(compte))
+        assertThat(verificationTokenRepository.findByUserId(compte))
             .isPresent()
             .hasValueSatisfying(jeton -> assertThat(jeton.getTokenHash()).isEqualTo("empreinte"));
     }
 
     @Test
     void ne_retrouve_rien_pour_un_compte_sans_jeton() {
-        assertThat(tokens.findByUserId(UUID.randomUUID())).isEmpty();
+        assertThat(verificationTokenRepository.findByUserId(UUID.randomUUID())).isEmpty();
     }
 
     @Test
     void enregistre_la_consommation_du_jeton() {
         UUID compte = compteExistant("carol@example.com");
-        VerificationToken jeton = tokens.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+        VerificationToken jeton =
+            verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
         Instant clic = EMISSION.plusSeconds(60);
 
         jeton.consume(clic);
-        tokens.save(jeton);
+        verificationTokenRepository.save(jeton);
 
-        assertThat(tokens.findByUserId(compte))
+        assertThat(verificationTokenRepository.findByUserId(compte))
             .hasValueSatisfying(relu -> assertThat(relu.isConsumed()).isTrue());
     }
 
@@ -89,7 +91,8 @@ class JpaVerificationTokenRepositoryAdapterTest {
         // jamais stocké est apportée ailleurs, par
         // RegisterUserHandlerTest.emet_un_jeton_dont_seule_l_empreinte_est_stockee.
         UUID compte = compteExistant("dave@example.com");
-        tokens.save(VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
+        verificationTokenRepository.save(
+            VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
 
         assertThat(jdbcTemplate.queryForObject(
             "SELECT token_hash FROM users_verification_tokens WHERE user_id = ?",

@@ -41,13 +41,13 @@ class RegisterUserHandlerTest {
     private CommandBus commandBus;
 
     @Autowired
-    private UserRepository users;
+    private UserRepository userRepository;
 
     @Autowired
     private PasswordHasher passwordHasher;
 
     @Autowired
-    private VerificationTokenRepository verificationTokens;
+    private VerificationTokenRepository verificationTokenRepository;
 
     @Autowired
     private TokenHasher tokenHasher;
@@ -66,7 +66,7 @@ class RegisterUserHandlerTest {
     void cree_un_compte_non_verifie_avec_un_mot_de_passe_hache() {
         commandBus.dispatch(new RegisterUser("alice@example.com", MOT_DE_PASSE_VALIDE));
 
-        User created = users.findByEmail(new Email("alice@example.com")).orElseThrow();
+        User created = userRepository.findByEmail(new Email("alice@example.com")).orElseThrow();
         assertThat(created.getId()).isNotNull();
         assertThat(created.isVerified()).isFalse();
         assertThat(created.getPasswordHash()).isNotEqualTo(MOT_DE_PASSE_VALIDE);
@@ -77,7 +77,7 @@ class RegisterUserHandlerTest {
     void normalise_l_email_avant_de_le_stocker() {
         commandBus.dispatch(new RegisterUser("  Bob@Example.COM  ", MOT_DE_PASSE_VALIDE));
 
-        assertThat(users.existsByEmail(new Email("bob@example.com"))).isTrue();
+        assertThat(userRepository.existsByEmail(new Email("bob@example.com"))).isTrue();
     }
 
     @Test
@@ -95,7 +95,7 @@ class RegisterUserHandlerTest {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("dave@example.com", "court")))
             .isInstanceOf(WeakPasswordException.class);
 
-        assertThat(users.existsByEmail(new Email("dave@example.com"))).isFalse();
+        assertThat(userRepository.existsByEmail(new Email("dave@example.com"))).isFalse();
     }
 
     @Test
@@ -126,7 +126,8 @@ class RegisterUserHandlerTest {
         commandBus.dispatch(new RegisterUser("grace@example.com", MOT_DE_PASSE_VALIDE));
 
         VerificationNotification notification = notifications.derniere();
-        VerificationToken jeton = verificationTokens.findByUserId(notification.accountId()).orElseThrow();
+        VerificationToken jeton =
+            verificationTokenRepository.findByUserId(notification.accountId()).orElseThrow();
 
         assertThat(jeton.getTokenHash()).doesNotContain(notification.rawToken().value());
         assertThat(tokenHasher.matches(notification.rawToken().value(), jeton.getTokenHash())).isTrue();
@@ -138,7 +139,7 @@ class RegisterUserHandlerTest {
         commandBus.dispatch(new RegisterUser("heidi@example.com", MOT_DE_PASSE_VALIDE));
 
         VerificationNotification notification = notifications.derniere();
-        assertThat(users.findByEmail(new Email("heidi@example.com")).orElseThrow().getId())
+        assertThat(userRepository.findByEmail(new Email("heidi@example.com")).orElseThrow().getId())
             .isEqualTo(notification.accountId());
     }
 

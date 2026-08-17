@@ -29,24 +29,24 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification
 @Component
 public class RegisterUserHandler implements CommandHandler<RegisterUser> {
 
-    private final UserRepository users;
+    private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
-    private final VerificationTokenRepository verificationTokens;
+    private final VerificationTokenRepository verificationTokenRepository;
     private final TokenHasher tokenHasher;
     private final NotificationSender notificationSender;
     private final Clock clock;
 
     public RegisterUserHandler(
-            UserRepository users,
+            UserRepository userRepository,
             PasswordHasher passwordHasher,
-            VerificationTokenRepository verificationTokens,
+            VerificationTokenRepository verificationTokenRepository,
             TokenHasher tokenHasher,
             NotificationSender notificationSender,
             Clock clock
     ) {
-        this.users = users;
+        this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
-        this.verificationTokens = verificationTokens;
+        this.verificationTokenRepository = verificationTokenRepository;
         this.tokenHasher = tokenHasher;
         this.notificationSender = notificationSender;
         this.clock = clock;
@@ -61,16 +61,16 @@ public class RegisterUserHandler implements CommandHandler<RegisterUser> {
         if (!PasswordPolicy.isAcceptable(command.rawPassword())) {
             throw new WeakPasswordException();
         }
-        if (users.existsByEmail(email)) {
+        if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyUsedException(email);
         }
 
-        User user = users.save(User.register(email, passwordHasher.hash(command.rawPassword())));
+        User user = userRepository.save(User.register(email, passwordHasher.hash(command.rawPassword())));
 
         // Le clair ne quitte jamais cette méthode autrement que dans la notification :
         // ce qui est persisté, c'est uniquement son empreinte salée.
         RawVerificationToken rawToken = RawVerificationToken.generate();
-        verificationTokens.save(
+        verificationTokenRepository.save(
             VerificationToken.issue(user.getId(), tokenHasher.hash(rawToken.value()), clock.instant()));
 
         notificationSender.send(new VerificationNotification(email, user.getId(), rawToken));

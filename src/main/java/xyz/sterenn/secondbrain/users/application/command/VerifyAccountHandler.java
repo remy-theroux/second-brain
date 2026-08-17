@@ -21,19 +21,19 @@ import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 @Component
 public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
 
-    private final UserRepository users;
-    private final VerificationTokenRepository verificationTokens;
+    private final UserRepository userRepository;
+    private final VerificationTokenRepository verificationTokenRepository;
     private final TokenHasher tokenHasher;
     private final Clock clock;
 
     public VerifyAccountHandler(
-            UserRepository users,
-            VerificationTokenRepository verificationTokens,
+            UserRepository userRepository,
+            VerificationTokenRepository verificationTokenRepository,
             TokenHasher tokenHasher,
             Clock clock
     ) {
-        this.users = users;
-        this.verificationTokens = verificationTokens;
+        this.userRepository = userRepository;
+        this.verificationTokenRepository = verificationTokenRepository;
         this.tokenHasher = tokenHasher;
         this.clock = clock;
     }
@@ -42,7 +42,7 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
     public void handle(VerifyAccount command) {
         UUID accountId = parseAccountId(command.accountId());
 
-        VerificationToken token = verificationTokens.findByUserId(accountId)
+        VerificationToken token = verificationTokenRepository.findByUserId(accountId)
             .orElseThrow(InvalidVerificationLinkException::new);
 
         // Le hash est salé : la seule comparaison possible passe par le hasher.
@@ -52,11 +52,11 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
 
         // Lève « déjà utilisé » ou « expiré » le cas échéant.
         token.consume(clock.instant());
-        verificationTokens.save(token);
+        verificationTokenRepository.save(token);
 
-        User user = users.findById(accountId).orElseThrow(InvalidVerificationLinkException::new);
+        User user = userRepository.findById(accountId).orElseThrow(InvalidVerificationLinkException::new);
         user.verify();
-        users.save(user);
+        userRepository.save(user);
     }
 
     private UUID parseAccountId(String accountId) {

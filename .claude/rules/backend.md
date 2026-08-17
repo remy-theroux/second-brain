@@ -35,6 +35,15 @@ Avant d'écrire une classe, décider de sa couche :
   `EmailAttributeConverter` reste `public` — package-private fonctionnerait, mais plus
   aucun appel ne le référence, et le rendre invisible en ferait du code mort en apparence.
 
+## Nommage
+
+- **Un champ, un paramètre ou une variable de type repository porte le nom de son type
+  en lowerCamelCase** : `userRepository`, `verificationTokenRepository`,
+  `springDataUserRepository`. Jamais le pluriel de l'entité (`users`, `tokens`), jamais
+  une abréviation de la techno (`jpa`, `repo`). Le pluriel se lit comme une collection en
+  mémoire alors que l'appel part en base, et il devient ambigu dès qu'un contexte
+  manipule deux repositories. Cette règle vaut aussi dans les tests.
+
 ## Bus, commandes et queries
 
 - **Ne jamais annoter un handler avec `@Transactional`.** La transaction appartient
