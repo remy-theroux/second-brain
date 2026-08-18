@@ -28,10 +28,10 @@ repositories {
 }
 
 dependencies {
-    // Web / REST
+    // Web / REST — aucune vue rendue côté serveur : le front Vue est un projet séparé,
+    // et la seule route non-API (GET /verification) répond par une redirection.
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     // Notifications
     implementation("org.springframework.boot:spring-boot-starter-mail")
