@@ -25,6 +25,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(email, password) {
     const payload = await requestToken(email, password)
+    // Une session expirée ne passe pas par `logout()` : le profil du compte précédent est
+    // encore là, et il s'afficherait le temps du chargement du nouveau — indéfiniment si
+    // celui-ci échoue.
+    profile.value = null
     token.value = payload.access_token
     expiresAt.value = Date.now() + payload.expires_in * 1000
     localStorage.setItem(TOKEN_KEY, token.value)

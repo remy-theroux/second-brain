@@ -50,6 +50,22 @@ describe("store d'authentification", () => {
     expect(localStorage.getItem('second-brain.access-token')).toBe('jeton-abc')
   })
 
+  it("oublie le profil du compte précédent dès la connexion suivante", async () => {
+    // Une session expirée ne passe pas par `logout()` : le garde renvoie sur `/login` en
+    // laissant le profil en place. Sans oubli explicite, `HomeView` affiche l'adresse du
+    // compte précédent le temps du chargement — et indéfiniment si celui-ci échoue.
+    stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
+    const auth = useAuthStore()
+    await auth.login('alice@exemple.fr', 'chevalpile42')
+    stubFetch(200, { id: 'un-uuid', email: 'alice@exemple.fr', verified: true })
+    await auth.loadProfile()
+
+    stubFetch(200, { access_token: 'jeton-xyz', token_type: 'Bearer', expires_in: 3600 })
+    await auth.login('bob@exemple.fr', 'chevalpile43')
+
+    expect(auth.profile).toBeNull()
+  })
+
   it("envoie l'échange au format attendu par le serveur", async () => {
     const fetchStub = stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
