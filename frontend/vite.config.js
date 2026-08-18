@@ -2,9 +2,6 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// Cible du proxy : le nom de service Compose du back en conteneur, localhost sinon.
-const apiTarget = process.env.VITE_API_TARGET ?? 'http://localhost:8080'
-
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -14,13 +11,17 @@ export default defineConfig({
   },
   server: {
     // 0.0.0.0 : sans ça, le serveur n'écoute que la boucle locale du conteneur et le
-    // port publié par Compose ne mène nulle part.
+    // reverse proxy ne l'atteindrait pas.
     host: '0.0.0.0',
     port: 5173,
-    // Le navigateur ne voit qu'une seule origine : rien à configurer en CORS côté Spring.
-    proxy: {
-      '/api': { target: apiTarget, changeOrigin: true },
-    },
+    // Le navigateur atteint Vite à travers le reverse proxy, qui route /api vers Spring :
+    // une seule origine, donc rien à configurer en CORS. Il n'y a plus de proxy ici — le
+    // garder laisserait une configuration morte racontant une histoire fausse sur qui
+    // tient cette origine unique.
+    //
+    // En revanche le WebSocket du rechargement à chaud doit viser le port public, pas le
+    // 5173 du conteneur, qui n'est plus publié.
+    hmr: { clientPort: Number(process.env.VITE_PUBLIC_PORT ?? 8080) },
   },
   test: {
     // Le store lit localStorage : il faut un environnement navigateur, sans navigateur.

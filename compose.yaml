@@ -1,6 +1,21 @@
 name: second-brain
 
 services:
+  proxy:
+    image: traefik:v3
+    command:
+      # Le routage se lit sur les labels des conteneurs, rien d'autre.
+      - --providers.docker=true
+      # Sans ça, db et mailpit se retrouveraient routés sans l'avoir demandé.
+      - --providers.docker.exposedByDefault=false
+      - --entryPoints.web.address=:80
+    ports:
+      # Seul port publié de l'application : c'est l'unique origine que voit le navigateur,
+      # en développement comme en production, où Coolify tient ce rôle.
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   db:
     image: postgres:17-alpine
     environment:
@@ -35,10 +50,18 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-second_brain}
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
-      SECONDBRAIN_BASE_URL: http://localhost:${APP_PORT:-8080}
+      SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
-    ports:
-      - "${APP_PORT:-8080}:8080"
+    labels:
+      - "traefik.enable=true"
+      # /verification est hors /api à dessein : c'est une navigation, pas un appel XHR.
+      # Swagger et actuator sont routés ici parce que ce fichier décrit un environnement de
+      # développement ; en production le proxy n'expose que /api et /verification.
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/verification`) || PathPrefix(`/swagger-ui`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/actuator`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      # Priorité explicite : ne pas dépendre du calcul par longueur de règle de Traefik.
+      - "traefik.http.routers.backend.priority=100"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
     volumes:
       # Source montée pour le hot reload (Gradle --continuous + DevTools).
       - ./:/workspace
@@ -58,10 +81,16 @@ services:
     # sinon l'arborescence installée en conteneur écraserait celle de l'hôte.
     command: sh -c "npm ci && npm run dev"
     environment:
-      # Le back est joignable par son nom de service sur le réseau Compose.
-      VITE_API_TARGET: http://app:8080
-    ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      # Le client de rechargement à chaud se connecte à l'origine publique, pas au 5173
+      # du conteneur, qui n'est plus publié.
+      VITE_PUBLIC_PORT: ${HTTP_PORT:-8080}
+    labels:
+      - "traefik.enable=true"
+      # Attrape-tout : tout ce que le back n'a pas réclamé est un chemin de la SPA.
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
     volumes:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
