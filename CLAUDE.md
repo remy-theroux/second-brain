@@ -104,8 +104,7 @@ xyz.sterenn.secondbrain
 ├── config/                  SecurityConfig, JwtConfiguration, OpenApiConfig,
 │                            ClockConfiguration — transverse
 ├── shared/
-│   ├── bus/                 socle CQRS, aucune dépendance métier
-│   └── web/                 pages n'appartenant à aucun contexte (accueil)
+│   └── bus/                 socle CQRS, aucune dépendance métier
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy,
     │   │                    AccessTokenPolicy)

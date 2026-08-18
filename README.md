@@ -149,8 +149,6 @@ curl -s http://localhost:8080/api/profile -H "Authorization: Bearer eyJ…"
 
 Le compte doit avoir été **vérifié** par le lien reçu par email : sinon la connexion est
 refusée avec un message dédié. `/api/profile` est aujourd'hui la seule route authentifiée.
-Le build de production du front n'est pas déployé : `frontend/` n'est servi qu'en
-développement, par le serveur Vite de `docker compose`.
 
 ## Architecture
 
