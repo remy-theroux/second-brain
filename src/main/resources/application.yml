@@ -2,6 +2,19 @@ spring:
   application:
     name: second-brain
 
+  servlet:
+    multipart:
+      # Le ticket fixe le plafond ; `max-request-size` doit suivre, sinon c'est lui qui
+      # tranche le premier et le refus ne parle plus du fichier.
+      max-file-size: 20MB
+      max-request-size: 20MB
+      # Repousse la résolution du multipart au moment où le contrôleur lit son argument,
+      # donc APRÈS le choix du handler. Sans ça, MaxUploadSizeExceededException est levée
+      # par DispatcherServlet.checkMultipart alors qu'aucun contrôleur n'est encore
+      # désigné : seul un @RestControllerAdvice global la capterait, et ce projet garde la
+      # traduction des refus auprès de la route concernée.
+      resolve-lazily: true
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/second_brain}
     username: ${SPRING_DATASOURCE_USERNAME:second_brain}
@@ -60,6 +73,11 @@ springdoc:
 # dans son navigateur : c'est elle qui est écrite dans les liens des notifications.
 secondbrain:
   base-url: ${SECONDBRAIN_BASE_URL:http://localhost:8080}
+  storage:
+    # Où sont conservés les fichiers d'origine, un par document, nommés par son
+    # identifiant. Comme `base-url`, le défaut sert le développement : hors conteneur,
+    # `/data` n'est pas écrivable, et c'est SECONDBRAIN_ORIGINALS_PATH qui fait foi.
+    originals-path: ${SECONDBRAIN_ORIGINALS_PATH:/data/originals}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   jwt:

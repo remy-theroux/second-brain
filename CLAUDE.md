@@ -158,7 +158,23 @@ xyz.sterenn.secondbrain
 ├── config/                  SecurityConfig, JwtConfiguration, OpenApiConfig,
 │                            ClockConfiguration — transverse
 ├── shared/
-│   └── bus/                 socle CQRS, aucune dépendance métier
+│   ├── bus/                 socle CQRS, aucune dépendance métier
+│   └── web/                 formes d'erreur communes à toutes les routes
+│                            (ErrorResponse, ValidationErrorResponse)
+├── knowledge/               bounded context — base de connaissance
+│   ├── domain/
+│   │   ├── entity/          Document
+│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus
+│   │   ├── port/            DocumentRepository, DocumentStorage
+│   │   └── exception/       DuplicateDocumentException, DocumentNotFoundException,
+│   │                        UnsupportedDocumentFormatException
+│   ├── application/
+│   │   ├── command/         UploadDocument, DeleteDocument
+│   │   └── query/           ListDocuments + DocumentView
+│   └── infrastructure/
+│       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
+│       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
+│       └── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy,
     │   │                    AccessTokenPolicy)
@@ -189,9 +205,17 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView)
 ```
 
-Le package `shared/web` n'existe plus et `src/main/resources/templates/` non plus :
-**aucune vue n'est rendue par le serveur.** L'application Java expose des routes d'API,
-plus `GET /verification` qui répond par une redirection.
+`src/main/resources/templates/` n'existe plus : **aucune vue n'est rendue par le
+serveur.** L'application Java expose des routes d'API, plus `GET /verification` qui répond
+par une redirection.
+
+`shared/web`, supprimé en même temps que les vues, est réapparu avec le second contexte
+borné — mais il ne porte plus rien qui rende du HTML : seulement `ErrorResponse` et
+`ValidationErrorResponse`, les deux formes de refus que **toute** route suit. Elles vivaient
+dans `users` alors qu'elles n'ont jamais rien eu de propre aux comptes ; les importer depuis
+`knowledge` aurait fait dépendre un contexte borné d'un autre pour deux records de trois
+lignes. `OAuth2ErrorResponse`, lui, reste dans `users` : sa forme appartient à `/api/token`
+et à RFC 6749, pas au projet.
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
 n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception actée :
@@ -296,6 +320,47 @@ par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
 `src/test/resources/application.properties` en fournissent un, chacun pour son
 environnement — le confort est rendu là où il ne peut pas fuir en production.
 
+### Le flux du dépôt d'un document
+
+`POST /api/documents` reçoit un multipart (`file`), dispatche `UploadDocument` et répond
+`201` sans corps — même raison qu'à l'inscription : une commande ne retourne rien, et
+`GET /api/documents` rend l'état complet de la base, c'est lui que le front relit.
+
+**L'identité d'un document est son empreinte SHA-256, jamais son nom.** Le même contenu
+redéposé sous un autre nom est refusé ; deux contenus différents portant le même nom sont
+deux documents. Le nom se change d'un clic, le contenu non. `Checksum.of(byte[])` calcule
+l'empreinte dans le domaine — `MessageDigest` vient du JDK, pas d'un framework.
+
+Trois refus, trois codes, parce qu'ils appellent trois gestes différents : `415` change de
+fichier (le message énonce les formats acceptés, construit à partir de l'énumération
+`DocumentFormat`, jamais recopié), `409` renvoie vers le document existant dont il porte
+l'identifiant, `413` allège le dépôt. Le doublon est détecté par une lecture avant
+l'écriture, parce que c'est elle qui permet de *désigner* le document existant ; la
+contrainte `UNIQUE (owner_id, checksum)` reste le filet, et ne se referme que sur deux
+dépôts simultanés du même contenu.
+
+L'unicité porte sur le couple **(propriétaire, empreinte)** : deux comptes qui déposent le
+même PDF déposent deux documents. Toute la base est cloisonnée de la même façon — les trois
+routes lisent le `sub` du jeton, et `findByIdAndOwnerId` rend le document d'autrui aussi
+introuvable qu'un identifiant inexistant. Un `403` confirmerait l'existence de
+l'identifiant demandé.
+
+`spring.servlet.multipart.resolve-lazily` est à `true`, et ce n'est pas un réglage de
+confort : sans lui, `MaxUploadSizeExceededException` est levée par `DispatcherServlet`
+**avant** qu'un contrôleur soit désigné, et seul un `@RestControllerAdvice` global la
+capterait — ce que ce projet évite, pour que la traduction des refus reste auprès de la
+route concernée. Avec lui, le multipart est résolu au moment où le contrôleur lit son
+argument, et l'`@ExceptionHandler` d'`UploadDocumentController` la voit.
+
+L'ordre des trois écritures est un choix : contrôle du doublon, écriture en base
+(`saveAndFlush`), puis fichier. Le fichier en dernier parce qu'**un système de fichiers ne
+participe à aucune transaction** — écrit avant, il survivrait à un rollback en désignant
+une ligne qui n'existe pas (écart n° 19).
+
+`DELETE /api/documents/{id}` efface la ligne puis l'original. Les extraits ne sont pas
+mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
+`ON DELETE CASCADE`.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -328,6 +393,16 @@ sont préfixées par leur contexte (`users_users`).
 classe ne le référence : Hibernate ne le connaît que parce que le scan d'entités part du
 package de `SecondBrainApplication`. Ne pas le supprimer au motif qu'il paraît inutilisé —
 détail dans les règles backend, section « Adapters ».
+
+`Checksum` suit exactement le même chemin, par `ChecksumAttributeConverter` dans
+`knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
+tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
+
+**Tout n'est pas en base.** Les fichiers d'origine des documents vivent sur disque, un par
+document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
+(`/data/originals`, un volume nommé en développement). Ce répertoire est un état à part
+entière : il ne se restaure pas avec un dump PostgreSQL, et rien ne l'annule avec une
+transaction (écart n° 19).
 
 ### Écarts assumés (documentés, ne pas « corriger » spontanément)
 
@@ -417,6 +492,21 @@ détail dans les règles backend, section « Adapters ».
     inconnue par construction. Une erreur dans `frontend/nginx.conf` ne se verrait qu'une
     fois déployée. Le contrôle se fait à la main :
     `docker build -t second-brain-frontend ./frontend` puis un `curl` sur `/login`.
+19. **Le système de fichiers ne participe à aucune transaction.** `UploadDocumentHandler`
+    écrit l'original en dernier, après le `saveAndFlush` : une panne survenant entre les
+    deux annule la ligne et laisse un fichier que plus rien ne désigne. Symétriquement,
+    `DeleteDocumentHandler` efface la ligne avant le fichier, et un échec entre les deux
+    laisse un original orphelin. Aucune des deux fuites n'est visible de l'utilisateur —
+    elles remplissent un disque, elles ne cassent rien. La parade (journal des fichiers à
+    effacer, balayage périodique) est un ticket à elle seule, à ouvrir le jour où le volume
+    des dépôts la justifiera, ou quand le remplacement d'un document multipliera les
+    occasions.
+20. **Le contenu déposé transite entièrement en mémoire.** SHA-256 ne se calcule pas sur un
+    extrait : il faut les octets complets, et `UploadDocument` les transporte donc en
+    `byte[]`. Le plafond de 20 Mo borne le risque — mais il le borne *par requête*, et rien
+    ne limite le nombre de dépôts simultanés. Le jour où le plafond monterait, ou où
+    plusieurs utilisateurs déposeraient ensemble, il faudra écrire le flux sur disque en
+    calculant l'empreinte au fil de l'eau, et ne relire que pour vérifier.
 
 ## Stack et versions
 

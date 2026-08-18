@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
+import xyz.sterenn.secondbrain.shared.web.ErrorResponse;
+import xyz.sterenn.secondbrain.shared.web.ValidationErrorResponse;
 import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
 import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
