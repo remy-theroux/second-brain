@@ -38,13 +38,13 @@ async function submit() {
 
       <form @submit.prevent="submit">
         <p>
-          <label for="email">Email</label><br>
-          <input id="email" v-model="email" type="email" autocomplete="username">
+          <label for="email">Email</label><br />
+          <input id="email" v-model="email" type="email" autocomplete="username" />
           <span v-if="fieldErrors.email" role="alert">{{ fieldErrors.email }}</span>
         </p>
         <p>
-          <label for="password">Mot de passe</label><br>
-          <input id="password" v-model="password" type="password" autocomplete="new-password">
+          <label for="password">Mot de passe</label><br />
+          <input id="password" v-model="password" type="password" autocomplete="new-password" />
           <span v-if="fieldErrors.password" role="alert">{{ fieldErrors.password }}</span>
         </p>
         <p>

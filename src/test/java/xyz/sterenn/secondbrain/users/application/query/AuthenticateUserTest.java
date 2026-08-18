@@ -10,8 +10,6 @@ class AuthenticateUserTest {
     void ne_divulgue_pas_le_mot_de_passe_dans_son_rendu_texte() {
         AuthenticateUser query = new AuthenticateUser("alice@exemple.fr", "chevalpile42");
 
-        assertThat(query.toString())
-            .contains("alice@exemple.fr")
-            .doesNotContain("chevalpile42");
+        assertThat(query.toString()).contains("alice@exemple.fr").doesNotContain("chevalpile42");
     }
 }

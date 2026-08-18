@@ -27,8 +27,7 @@ public class EmailNotificationSender implements NotificationSender {
     EmailNotificationSender(
             JavaMailSender mailSender,
             @Value("${secondbrain.base-url}") String baseUrl,
-            @Value("${secondbrain.notification.from}") String from
-    ) {
+            @Value("${secondbrain.notification.from}") String from) {
         this.mailSender = mailSender;
         this.baseUrl = baseUrl;
         this.from = from;
@@ -48,11 +47,11 @@ public class EmailNotificationSender implements NotificationSender {
 
     private SimpleMailMessage verificationMessage(VerificationNotification notification) {
         String lien = UriComponentsBuilder.fromUriString(baseUrl)
-            .path("/verification")
-            .queryParam("compte", notification.accountId())
-            .queryParam("jeton", notification.rawToken().value())
-            .build()
-            .toUriString();
+                .path("/verification")
+                .queryParam("compte", notification.accountId())
+                .queryParam("jeton", notification.rawToken().value())
+                .build()
+                .toUriString();
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);

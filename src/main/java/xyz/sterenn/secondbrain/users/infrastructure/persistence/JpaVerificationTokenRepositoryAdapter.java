@@ -19,8 +19,7 @@ public class JpaVerificationTokenRepositoryAdapter implements VerificationTokenR
 
     private final SpringDataVerificationTokenRepository springDataVerificationTokenRepository;
 
-    JpaVerificationTokenRepositoryAdapter(
-            SpringDataVerificationTokenRepository springDataVerificationTokenRepository) {
+    JpaVerificationTokenRepositoryAdapter(SpringDataVerificationTokenRepository springDataVerificationTokenRepository) {
         this.springDataVerificationTokenRepository = springDataVerificationTokenRepository;
     }
 

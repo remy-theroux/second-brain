@@ -57,9 +57,9 @@ class RegisterUserControllerTest {
     @Test
     void cree_le_compte_et_repond_201_en_cas_de_succes() throws Exception {
         mockMvc.perform(post("/api/registrations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("alice@example.com", MOT_DE_PASSE_VALIDE)))
-            .andExpect(status().isCreated());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps("alice@example.com", MOT_DE_PASSE_VALIDE)))
+                .andExpect(status().isCreated());
 
         Optional<UserView> vue = queryBus.ask(new FindUserByEmail("alice@example.com"));
         assertThat(vue).isPresent();
@@ -69,25 +69,25 @@ class RegisterUserControllerTest {
     @Test
     void refuse_un_email_deja_utilise_avec_une_erreur_sur_le_champ_email() throws Exception {
         mockMvc.perform(post("/api/registrations")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)));
 
         mockMvc.perform(post("/api/registrations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.errors.email").exists())
-            .andExpect(jsonPath("$.errors.password").doesNotExist());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.email").exists())
+                .andExpect(jsonPath("$.errors.password").doesNotExist());
     }
 
     @Test
     void refuse_un_mot_de_passe_faible_avec_une_erreur_sur_le_champ_password() throws Exception {
         mockMvc.perform(post("/api/registrations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("carol@example.com", "court")))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.errors.password").exists())
-            .andExpect(jsonPath("$.errors.email").doesNotExist());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps("carol@example.com", "court")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.password").exists())
+                .andExpect(jsonPath("$.errors.email").doesNotExist());
 
         assertThat(queryBus.ask(new FindUserByEmail("carol@example.com"))).isEmpty();
     }
@@ -95,20 +95,20 @@ class RegisterUserControllerTest {
     @Test
     void refuse_un_email_mal_forme_avec_une_erreur_sur_le_champ_email() throws Exception {
         mockMvc.perform(post("/api/registrations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("pas-un-email", MOT_DE_PASSE_VALIDE)))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.errors.email").exists());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps("pas-un-email", MOT_DE_PASSE_VALIDE)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.email").exists());
     }
 
     @Test
     void refuse_les_champs_vides_en_nommant_les_deux() throws Exception {
         mockMvc.perform(post("/api/registrations")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("", "")))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.errors.email").exists())
-            .andExpect(jsonPath("$.errors.password").exists());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corps("", "")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors.email").exists())
+                .andExpect(jsonPath("$.errors.password").exists());
     }
 
     /**
@@ -154,11 +154,11 @@ class RegisterUserControllerTest {
         @Test
         void repond_503_sans_erreur_de_champ_et_annule_la_creation_du_compte() throws Exception {
             mockMvc.perform(post("/api/registrations")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(corps("erin@example.com", MOT_DE_PASSE_VALIDE)))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.message").isNotEmpty())
-                .andExpect(jsonPath("$.errors").doesNotExist());
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(corps("erin@example.com", MOT_DE_PASSE_VALIDE)))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.message").isNotEmpty())
+                    .andExpect(jsonPath("$.errors").doesNotExist());
 
             // Le rollback de SpringCommandBus doit avoir annulé l'inscription entière.
             assertThat(queryBus.ask(new FindUserByEmail("erin@example.com"))).isEmpty();

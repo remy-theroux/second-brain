@@ -30,8 +30,7 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
             UserRepository userRepository,
             VerificationTokenRepository verificationTokenRepository,
             TokenHasher tokenHasher,
-            Clock clock
-    ) {
+            Clock clock) {
         this.userRepository = userRepository;
         this.verificationTokenRepository = verificationTokenRepository;
         this.tokenHasher = tokenHasher;
@@ -42,8 +41,8 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
     public void handle(VerifyAccount command) {
         UUID accountId = parseAccountId(command.accountId());
 
-        VerificationToken token = verificationTokenRepository.findByUserId(accountId)
-            .orElseThrow(InvalidVerificationLinkException::new);
+        VerificationToken token =
+                verificationTokenRepository.findByUserId(accountId).orElseThrow(InvalidVerificationLinkException::new);
 
         // Le hash est salé : la seule comparaison possible passe par le hasher.
         if (!tokenHasher.matches(command.rawToken(), token.getTokenHash())) {

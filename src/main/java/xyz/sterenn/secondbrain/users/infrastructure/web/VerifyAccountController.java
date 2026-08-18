@@ -43,8 +43,7 @@ public class VerifyAccountController {
     @GetMapping("/verification")
     public ResponseEntity<Void> verify(
             @RequestParam(name = "compte", defaultValue = "") String compte,
-            @RequestParam(name = "jeton", defaultValue = "") String jeton
-    ) {
+            @RequestParam(name = "jeton", defaultValue = "") String jeton) {
         String code;
         try {
             commandBus.dispatch(new VerifyAccount(compte, jeton));
@@ -61,7 +60,7 @@ public class VerifyAccountController {
         }
 
         return ResponseEntity.status(HttpStatus.FOUND)
-            .location(URI.create(LOGIN_PATH + code))
-            .build();
+                .location(URI.create(LOGIN_PATH + code))
+                .build();
     }
 }

@@ -42,8 +42,7 @@ public class RegisterUserHandler implements CommandHandler<RegisterUser> {
             VerificationTokenRepository verificationTokenRepository,
             TokenHasher tokenHasher,
             NotificationSender notificationSender,
-            Clock clock
-    ) {
+            Clock clock) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.verificationTokenRepository = verificationTokenRepository;
@@ -71,7 +70,7 @@ public class RegisterUserHandler implements CommandHandler<RegisterUser> {
         // ce qui est persisté, c'est uniquement son empreinte salée.
         RawVerificationToken rawToken = RawVerificationToken.generate();
         verificationTokenRepository.save(
-            VerificationToken.issue(user.getId(), tokenHasher.hash(rawToken.value()), clock.instant()));
+                VerificationToken.issue(user.getId(), tokenHasher.hash(rawToken.value()), clock.instant()));
 
         notificationSender.send(new VerificationNotification(email, user.getId(), rawToken));
     }

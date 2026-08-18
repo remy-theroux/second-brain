@@ -37,8 +37,7 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
             UserRepository userRepository,
             PasswordHasher passwordHasher,
             AccessTokenIssuer accessTokenIssuer,
-            Clock clock
-    ) {
+            Clock clock) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.accessTokenIssuer = accessTokenIssuer;
@@ -47,8 +46,7 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
 
     @Override
     public AccessTokenView handle(AuthenticateUser query) {
-        User user = userRepository.findByEmail(parseEmail(query.email()))
-            .orElseThrow(InvalidCredentialsException::new);
+        User user = userRepository.findByEmail(parseEmail(query.email())).orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordHasher.matches(query.rawPassword(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
@@ -59,7 +57,7 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
 
         Instant maintenant = clock.instant();
         AccessToken accessToken =
-            accessTokenIssuer.issue(user.getId(), maintenant, AccessTokenPolicy.expiresAt(maintenant));
+                accessTokenIssuer.issue(user.getId(), maintenant, AccessTokenPolicy.expiresAt(maintenant));
 
         return new AccessTokenView(accessToken.value(), accessToken.expiresIn(maintenant));
     }

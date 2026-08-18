@@ -7,9 +7,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * du protocole ; {@code error_description} porte le message métier, affichable tel quel.
  */
 public record OAuth2ErrorResponse(
-    @JsonProperty("error") String error,
-    @JsonProperty("error_description") String errorDescription
-) {
+        @JsonProperty("error") String error,
+        @JsonProperty("error_description") String errorDescription) {
 
     /** Requête mal formée : un paramètre obligatoire manque. */
     public static OAuth2ErrorResponse invalidRequest(String description) {

@@ -19,7 +19,7 @@ function stubFetchWithUnparsableBody(status) {
     ok: status >= 200 && status < 300,
     status,
     json: async () => {
-      throw new SyntaxError("Unexpected token '<', \"<html>...\" is not valid JSON")
+      throw new SyntaxError('Unexpected token \'<\', "<html>..." is not valid JSON')
     },
   })
   vi.stubGlobal('fetch', fetchStub)
@@ -50,7 +50,7 @@ describe("store d'authentification", () => {
     expect(localStorage.getItem('second-brain.access-token')).toBe('jeton-abc')
   })
 
-  it("oublie le profil du compte précédent dès la connexion suivante", async () => {
+  it('oublie le profil du compte précédent dès la connexion suivante', async () => {
     // Une session expirée ne passe pas par `logout()` : le garde renvoie sur `/login` en
     // laissant le profil en place. Sans oubli explicite, `HomeView` affiche l'adresse du
     // compte précédent le temps du chargement — et indéfiniment si celui-ci échoue.
@@ -67,7 +67,11 @@ describe("store d'authentification", () => {
   })
 
   it("envoie l'échange au format attendu par le serveur", async () => {
-    const fetchStub = stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
+    const fetchStub = stubFetch(200, {
+      access_token: 'jeton-abc',
+      token_type: 'Bearer',
+      expires_in: 3600,
+    })
     const auth = useAuthStore()
 
     await auth.login('alice@exemple.fr', 'chevalpile42')
@@ -81,18 +85,25 @@ describe("store d'authentification", () => {
   })
 
   it('propage le message du serveur quand la connexion échoue', async () => {
-    stubFetch(400, { error: 'invalid_grant', error_description: 'Email ou mot de passe incorrect.' })
+    stubFetch(400, {
+      error: 'invalid_grant',
+      error_description: 'Email ou mot de passe incorrect.',
+    })
     const auth = useAuthStore()
 
-    await expect(auth.login('alice@exemple.fr', 'faux')).rejects.toThrow('Email ou mot de passe incorrect.')
+    await expect(auth.login('alice@exemple.fr', 'faux')).rejects.toThrow(
+      'Email ou mot de passe incorrect.',
+    )
     expect(auth.isAuthenticated()).toBe(false)
   })
 
-  it('propage le message français par défaut quand le corps d\'échec n\'est pas du JSON', async () => {
+  it("propage le message français par défaut quand le corps d'échec n'est pas du JSON", async () => {
     stubFetchWithUnparsableBody(502)
     const auth = useAuthStore()
 
-    await expect(auth.login('alice@exemple.fr', 'chevalpile42')).rejects.toThrow('La connexion a échoué.')
+    await expect(auth.login('alice@exemple.fr', 'chevalpile42')).rejects.toThrow(
+      'La connexion a échoué.',
+    )
     expect(auth.isAuthenticated()).toBe(false)
   })
 

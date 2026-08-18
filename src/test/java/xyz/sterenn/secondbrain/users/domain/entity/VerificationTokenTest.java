@@ -59,7 +59,7 @@ class VerificationTokenTest {
         jeton.consume(EMISSION.plus(Duration.ofMinutes(5)));
 
         assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofMinutes(10))))
-            .isInstanceOf(AlreadyUsedVerificationLinkException.class);
+                .isInstanceOf(AlreadyUsedVerificationLinkException.class);
     }
 
     @Test
@@ -67,7 +67,7 @@ class VerificationTokenTest {
         VerificationToken jeton = emis();
 
         assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofHours(25))))
-            .isInstanceOf(ExpiredVerificationLinkException.class);
+                .isInstanceOf(ExpiredVerificationLinkException.class);
         assertThat(jeton.isConsumed()).isFalse();
     }
 
@@ -79,6 +79,6 @@ class VerificationTokenTest {
         jeton.consume(EMISSION.plus(Duration.ofMinutes(5)));
 
         assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofHours(25))))
-            .isInstanceOf(AlreadyUsedVerificationLinkException.class);
+                .isInstanceOf(AlreadyUsedVerificationLinkException.class);
     }
 }

@@ -21,7 +21,6 @@ public record VerificationNotification(Email recipient, UUID accountId, RawVerif
 
     @Override
     public String toString() {
-        return "VerificationNotification[recipient=" + recipient
-            + ", accountId=" + accountId + ", rawToken=***]";
+        return "VerificationNotification[recipient=" + recipient + ", accountId=" + accountId + ", rawToken=***]";
     }
 }

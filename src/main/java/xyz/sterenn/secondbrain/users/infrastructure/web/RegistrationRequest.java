@@ -20,9 +20,10 @@ import jakarta.validation.constraints.NotBlank;
  * @param password mot de passe en clair
  */
 public record RegistrationRequest(
-    @NotBlank(message = "L'email est obligatoire") String email,
-    @NotBlank(message = "Le mot de passe est obligatoire") String password
-) {
+        @NotBlank(message = "L'email est obligatoire") String email,
+
+        @NotBlank(message = "Le mot de passe est obligatoire")
+        String password) {
 
     @Override
     public String toString() {

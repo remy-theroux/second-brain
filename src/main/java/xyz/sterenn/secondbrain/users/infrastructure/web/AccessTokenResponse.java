@@ -10,10 +10,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * mais ses annotations vivent toujours dans {@code com.fasterxml.jackson.annotation}.)
  */
 public record AccessTokenResponse(
-    @JsonProperty("access_token") String accessToken,
-    @JsonProperty("token_type") String tokenType,
-    @JsonProperty("expires_in") long expiresIn
-) {
+        @JsonProperty("access_token") String accessToken,
+        @JsonProperty("token_type") String tokenType,
+        @JsonProperty("expires_in") long expiresIn) {
 
     /**
      * Le jeton est un porteur d'identité : il ne doit apparaître dans aucun log. Le profil
@@ -21,7 +20,6 @@ public record AccessTokenResponse(
      */
     @Override
     public String toString() {
-        return "AccessTokenResponse[accessToken=***, tokenType=" + tokenType
-            + ", expiresIn=" + expiresIn + "]";
+        return "AccessTokenResponse[accessToken=***, tokenType=" + tokenType + ", expiresIn=" + expiresIn + "]";
     }
 }

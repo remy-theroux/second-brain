@@ -12,14 +12,12 @@ class AccessTokenTest {
 
     @Test
     void refuse_une_valeur_vide() {
-        assertThatThrownBy(() -> new AccessToken("  ", MAINTENANT))
-            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AccessToken("  ", MAINTENANT)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void refuse_une_expiration_absente() {
-        assertThatThrownBy(() -> new AccessToken("eyJ", null))
-            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AccessToken("eyJ", null)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

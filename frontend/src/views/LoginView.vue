@@ -48,12 +48,12 @@ async function submit() {
 
     <form @submit.prevent="submit">
       <p>
-        <label for="email">Email</label><br>
-        <input id="email" v-model="email" type="email" autocomplete="username">
+        <label for="email">Email</label><br />
+        <input id="email" v-model="email" type="email" autocomplete="username" />
       </p>
       <p>
-        <label for="password">Mot de passe</label><br>
-        <input id="password" v-model="password" type="password" autocomplete="current-password">
+        <label for="password">Mot de passe</label><br />
+        <input id="password" v-model="password" type="password" autocomplete="current-password" />
       </p>
       <p>
         <button type="submit">Se connecter</button>

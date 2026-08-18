@@ -9,5 +9,4 @@ import xyz.sterenn.secondbrain.shared.bus.Query;
  *
  * @param email email saisi, non normalisé
  */
-public record FindUserByEmail(String email) implements Query<Optional<UserView>> {
-}
+public record FindUserByEmail(String email) implements Query<Optional<UserView>> {}

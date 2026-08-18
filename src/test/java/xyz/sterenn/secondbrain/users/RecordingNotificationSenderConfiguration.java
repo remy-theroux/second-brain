@@ -37,9 +37,9 @@ public class RecordingNotificationSenderConfiguration {
 
         public List<VerificationNotification> verifications() {
             return envoyees.stream()
-                .filter(VerificationNotification.class::isInstance)
-                .map(VerificationNotification.class::cast)
-                .toList();
+                    .filter(VerificationNotification.class::isInstance)
+                    .map(VerificationNotification.class::cast)
+                    .toList();
         }
 
         public VerificationNotification derniere() {

@@ -40,28 +40,27 @@ public class IssueAccessTokenController {
     public ResponseEntity<Object> issueAccessToken(
             @RequestParam(name = "grant_type", defaultValue = "") String grantType,
             @RequestParam(name = "username", defaultValue = "") String username,
-            @RequestParam(name = "password", defaultValue = "") String password
-    ) {
+            @RequestParam(name = "password", defaultValue = "") String password) {
         if (grantType.isBlank()) {
-            return ResponseEntity.badRequest().body(
-                OAuth2ErrorResponse.invalidRequest("Le paramètre grant_type est obligatoire."));
+            return ResponseEntity.badRequest()
+                    .body(OAuth2ErrorResponse.invalidRequest("Le paramètre grant_type est obligatoire."));
         }
         if (!PASSWORD_GRANT_TYPE.equals(grantType)) {
-            return ResponseEntity.badRequest().body(OAuth2ErrorResponse.unsupportedGrantType(
-                "Seul le type d'autorisation « password » est accepté."));
+            return ResponseEntity.badRequest()
+                    .body(OAuth2ErrorResponse.unsupportedGrantType(
+                            "Seul le type d'autorisation « password » est accepté."));
         }
         if (username.isBlank() || password.isBlank()) {
-            return ResponseEntity.badRequest().body(OAuth2ErrorResponse.invalidRequest(
-                "Les paramètres username et password sont obligatoires."));
+            return ResponseEntity.badRequest()
+                    .body(OAuth2ErrorResponse.invalidRequest("Les paramètres username et password sont obligatoires."));
         }
 
         try {
             AccessTokenView accessToken = queryBus.ask(new AuthenticateUser(username, password));
             // no-store : RFC 6749 §5.1 interdit qu'une réponse portant un jeton soit mise en cache.
             return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .body(new AccessTokenResponse(
-                    accessToken.value(), BEARER_TOKEN_TYPE, accessToken.expiresIn()));
+                    .cacheControl(CacheControl.noStore())
+                    .body(new AccessTokenResponse(accessToken.value(), BEARER_TOKEN_TYPE, accessToken.expiresIn()));
         } catch (InvalidCredentialsException | UnverifiedAccountException e) {
             return ResponseEntity.badRequest().body(OAuth2ErrorResponse.invalidGrant(e.getMessage()));
         }

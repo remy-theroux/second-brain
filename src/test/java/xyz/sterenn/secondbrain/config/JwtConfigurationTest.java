@@ -38,12 +38,13 @@ class JwtConfigurationTest {
     void relit_un_jeton_qu_il_vient_de_signer() {
         Instant maintenant = Instant.now();
         JwtClaimsSet revendications = JwtClaimsSet.builder()
-            .subject(SUJET)
-            .issuedAt(maintenant)
-            .expiresAt(maintenant.plus(Duration.ofHours(1)))
-            .build();
+                .subject(SUJET)
+                .issuedAt(maintenant)
+                .expiresAt(maintenant.plus(Duration.ofHours(1)))
+                .build();
 
-        String valeur = jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String valeur =
+                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
 
         Jwt relu = jwtDecoder.decode(valeur);
         assertThat(relu.getSubject()).isEqualTo(SUJET);
@@ -56,14 +57,14 @@ class JwtConfigurationTest {
         // dater franchement dans le passé pour observer le refus.
         Instant ilYaDeuxHeures = Instant.now().minus(Duration.ofHours(2));
         JwtClaimsSet revendications = JwtClaimsSet.builder()
-            .subject(SUJET)
-            .issuedAt(ilYaDeuxHeures)
-            .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
-            .build();
-        String valeur = jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+                .subject(SUJET)
+                .issuedAt(ilYaDeuxHeures)
+                .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
+                .build();
+        String valeur =
+                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
 
-        assertThatThrownBy(() -> jwtDecoder.decode(valeur))
-            .isInstanceOf(JwtValidationException.class);
+        assertThatThrownBy(() -> jwtDecoder.decode(valeur)).isInstanceOf(JwtValidationException.class);
     }
 
     @Test
@@ -71,7 +72,7 @@ class JwtConfigurationTest {
         // Sans ce garde, Nimbus lèverait « This key is too small for any standard JWK
         // symmetric signing algorithm » — exact mais illisible pour qui déploie.
         assertThatThrownBy(() -> new JwtConfiguration("trop-court"))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("32 octets");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32 octets");
     }
 }
