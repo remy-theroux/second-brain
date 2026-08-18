@@ -2,6 +2,7 @@ plugins {
     java
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.dependency.management)
+    alias(libs.plugins.spotless)
 }
 
 group = "xyz.sterenn"
@@ -25,6 +26,21 @@ configurations {
 
 repositories {
     mavenCentral()
+}
+
+spotless {
+    java {
+        // Palantir et non google-java-format : ce dernier, même en style AOSP, casse les
+        // chaînes fluent en cascades de 8 espaces (`SecurityConfig` en est l'exemple) et
+        // repousse si loin à droite que les commentaires en fin de ligne se retrouvent
+        // découpés en milieu de phrase. Palantir est né de ce reproche : 4 espaces de
+        // continuation, 120 colonnes, et un traitement des builders qui reste lisible.
+        //
+        // Rien d'autre dans ce bloc : le formateur trie déjà les imports et supprime les
+        // inutilisés, `removeUnusedImports()` ou `trimTrailingWhitespace()` feraient double
+        // emploi.
+        palantirJavaFormat(libs.versions.palantirJavaFormat.get())
+    }
 }
 
 dependencies {

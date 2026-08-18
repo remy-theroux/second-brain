@@ -14,6 +14,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Sécurité | Spring Security (jeton d'accès JWT HS256, resource server) |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
+| Formatage | Spotless + palantir-java-format (back), Prettier (front) |
 | Front | Vue 3 + Vite + vue-router + pinia (dossier frontend/, hors build Gradle) |
 
 ## Prérequis
@@ -60,6 +61,25 @@ La source est montée dans le conteneur `app`. Deux processus tournent en parall
 met à jour `build/classes`, et `bootRun` dont Spring Boot DevTools surveille ce dossier.
 Modifiez un fichier `.java` : recompilation puis redémarrage automatique en < 1 s
 (visible dans `docker compose logs -f app`).
+
+## Qualité
+
+Un `Makefile` regroupe les commandes de formatage, de test et de build, chacune déléguée à
+un conteneur — il n'y a toujours ni JDK ni Node à installer :
+
+```bash
+make help      # liste les cibles
+make format    # formate le Java (Spotless) et le front (Prettier)
+make check     # vérifie le formatage, puis lance les tests des deux côtés
+make build     # produit le jar et frontend/dist — ce que vérifie la CI
+```
+
+Les trois se déclinent en `-back` et `-front` (`make check-front`) pour n'en payer qu'un
+côté. Le formatage est **bloquant en CI** des deux côtés : côté Java sans étape dédiée,
+`spotlessCheck` étant accroché à la tâche `check` de Gradle.
+
+Ces cibles ne cohabitent pas avec `docker compose up` : les deux verrouillent le `.gradle/`
+du répertoire. Arrêter la pile avant `make check` ou `make build`.
 
 ## Tests
 

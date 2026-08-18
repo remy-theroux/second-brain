@@ -15,6 +15,28 @@ Les noms de classes, de méthodes de production et de packages restent en anglai
 
 ## Commandes
 
+Le `Makefile` fige les invocations Docker ci-dessous. C'est l'entrée par défaut pour tout
+ce qui est formatage, tests et build :
+
+| Cible | Ce qu'elle fait |
+|---|---|
+| `make help` | liste les cibles |
+| `make format` | formate le back (Spotless) et le front (Prettier) |
+| `make check` | vérifie le formatage puis lance les tests, des deux côtés |
+| `make build` | produit le jar et `frontend/dist` — exactement ce que vérifie la CI |
+
+Chacune des trois se décline en `-back` et `-front` (`make check-front`) pour n'en payer
+qu'un côté. Le formatage du Java est **décidé par palantir-java-format** : ne pas se battre
+avec lui, `make format-back` avant de committer. Le Javadoc, lui, n'est jamais reformaté.
+
+`gradle.properties` porte les `--add-exports` sans lesquels le formateur échoue sur une
+`IllegalAccessError` — il analyse le code avec les API internes de javac, que JEP 396 a
+fermées depuis le JDK 16. Ce fichier est versionné : la CI en a besoin autant que le poste
+local.
+
+Le `Makefile` ne couvre pas le lancement d'**un** test : pour ça, et pour tout le reste, les
+deux fonctions ci-dessous restent la référence.
+
 **Il n'y a aucun JDK ni Gradle sur la machine hôte.** Tout passe par Docker.
 Définir cette fonction une fois par session avant toute commande Gradle :
 
@@ -61,6 +83,7 @@ gfront() {
 |---|---|
 | Tests unitaires du front | `gfront npm run test:unit` |
 | Un seul fichier de test | `gfront npx vitest run src/stores/auth.spec.js` |
+| Formatage du front | `gfront npm run format` |
 | Build du front | `gfront npm run build` |
 | Ajouter une dépendance | `gfront npm install <paquet>` |
 
