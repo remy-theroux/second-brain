@@ -29,13 +29,29 @@ docker compose up --build     # démarre PostgreSQL, Mailpit, l'app et le front 
 
 Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (toolchain) — c'est un peu long, ensuite c'est mis en cache.
 
+Un service Traefik publie **un seul port** et route `/api` et `/verification` vers
+l'application Java, tout le reste vers le front. Ni l'app ni le serveur Vite ne publient de
+port.
+
 | Service | URL |
 |---|---|
-| Front Vue (connexion, espace connecté) | http://localhost:5173/ |
-| Accueil | http://localhost:8080/ |
+| Application (front Vue) | http://localhost:8080/ |
+| API | http://localhost:8080/api/… |
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Mailpit (mails capturés en dev) | http://localhost:8025 — aucun mail ne sort de la machine |
+
+Health et Swagger ne sont routés qu'en développement : en production, le proxy n'expose que
+`/api` et `/verification`.
+
+Si l'application échoue au démarrage sur « Main class name has not been configured »,
+`bootRun` a perdu la course contre la compilation continue et `build/classes` était encore
+vide. Compiler une fois puis relancer :
+
+```bash
+docker compose run --rm --no-deps app ./gradlew --no-daemon classes
+docker compose up -d app
+```
 
 ### Hot reload
 
@@ -66,7 +82,16 @@ docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
 
 ## Build de production
 
-Image OCI optimisée (multi-stage, layers, JRE non-root) :
+Deux images indépendantes : l'API Java et le front statique.
+
+Le front — build npm puis nginx servant `dist`, avec le repli SPA sans lequel un
+rechargement de page sur `/login` rendrait 404 :
+
+```bash
+docker build -t second-brain-frontend:latest ./frontend
+```
+
+L'API — image OCI optimisée (multi-stage, layers, JRE non-root) :
 
 ```bash
 docker build -t second-brain:latest .
@@ -90,6 +115,13 @@ développement, voir `compose.yaml`) :
 | `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
 | `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
 | `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
+
+Le déploiement suppose un **reverse proxy devant les deux images**, qui route `/api` et
+`/verification` vers l'API et tout le reste vers le front — c'est ce qui donne au navigateur
+une origine unique, donc aucune configuration CORS à écrire. Il ne doit exposer ni
+`/actuator` ni `/swagger-ui`. `SECONDBRAIN_BASE_URL` vaut alors l'origine publique de ce
+proxy : c'est elle qui est écrite dans les liens des mails, et c'est elle que la redirection
+de vérification résout.
 
 Pour générer `SECONDBRAIN_JWT_SECRET` avant un déploiement :
 

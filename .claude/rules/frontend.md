@@ -3,23 +3,23 @@
 Ces règles ont été posées par le ticket « login », premier à introduire une application
 Vue. Comme les règles backend, chacune est un piège rencontré ou évité sur ce repo.
 
-## Deux fronts cohabitent
+## Un seul front
 
-- `src/main/resources/templates/` — Thymeleaf servi par Spring MVC, sur le port 8080 :
-  page d'accueil, inscription, vérification d'email. Rendu serveur, aucun JavaScript.
-- `frontend/` — application Vue 3 servie par Vite, sur le port 5173 : connexion et espace
-  connecté. **Hors du build Gradle.**
+`frontend/` porte **tout** le parcours utilisateur : accueil, inscription, connexion,
+espace connecté. Il est hors du build Gradle, se construit seul (`frontend/Dockerfile`) et
+se sert seul (nginx sur `dist`).
 
-Ce n'est pas une transition à moitié faite, c'est un choix : les parcours qui n'ont besoin
-d'aucun état client restent en rendu serveur. Ne pas migrer un écran Thymeleaf vers Vue
-sans ticket qui le demande.
+L'application Java n'expose plus aucune vue : des routes d'API sous `/api`, plus
+`GET /verification`, qui répond `302` vers `/login?verification=<code>`. Thymeleaf a été
+retiré du projet ; ne pas le réintroduire pour « une petite page » — c'est le retour de la
+couture qu'on a supprimée.
 
 ## Le projet front
 
 - **JavaScript, pas TypeScript.** Aucun `tsconfig`, aucune dépendance de types. Le jour où
   le front justifiera TypeScript, ce sera un ticket, pas une dérive.
-- **Aucun CSS, aucune bibliothèque de composants.** Le HTML est nu, comme les templates
-  Thymeleaf. C'est le ticket « interface » qui tranchera.
+- **Aucun CSS, aucune bibliothèque de composants.** Le HTML est nu. C'est le ticket
+  « interface » qui tranchera.
 - Alias d'import `@` → `frontend/src`. Pas de chemins relatifs qui remontent (`../../`).
 - `<script setup>` pour tous les composants, `ref` plutôt que `reactive`.
 - Un composant par fichier, une vue par route, dans `src/views/`.
@@ -55,26 +55,41 @@ sans ticket qui le demande.
 
 ## Communication avec le back
 
-- Toutes les routes API sont préfixées `/api`, et le serveur de développement Vite les
-  proxifie vers Spring. **Le navigateur ne voit qu'une seule origine : il n'y a aucune
-  configuration CORS dans ce projet, et il ne doit pas y en avoir.** Un besoin de CORS
-  signale qu'on a contourné le proxy.
-- La cible du proxy vient de `VITE_API_TARGET` (`http://app:8080` sous Compose).
+- Toutes les routes API sont préfixées `/api`. **Le navigateur ne voit qu'une seule
+  origine : il n'y a aucune configuration CORS dans ce projet, et il ne doit pas y en
+  avoir.** Un besoin de CORS signale qu'on a contourné le proxy.
+- C'est un **reverse proxy** qui tient cette origine, pas Vite : Traefik dans
+  `compose.yaml`, Coolify en production. Les deux routent `/api` et `/verification` vers
+  Spring, tout le reste vers le front. `vite.config.js` n'a plus de bloc `proxy` — le
+  remettre y ferait mentir sur qui route quoi.
+- Le seul réglage réseau restant côté Vite est `server.hmr.clientPort`, alimenté par
+  `VITE_PUBLIC_PORT` : le WebSocket du rechargement à chaud doit viser le port public, le
+  5173 du conteneur n'étant plus publié.
 
 ## Langue
 
 Mêmes règles que le back : **libellés, messages et textes de test en français**, noms de
-fonctions, de variables et de fichiers de production en **anglais**. Les messages d'erreur
-affichés viennent du serveur (`error_description`) et sont affichables tels quels — ne pas
-les réécrire côté front.
+fonctions, de variables et de fichiers de production en **anglais**.
+
+Les messages d'erreur affichés viennent du serveur et sont affichables tels quels — ne pas
+les réécrire côté front. Ça vaut pour `error_description` de `/api/token` comme pour les
+`errors` par champ de `/api/registrations`.
+
+**Une seule exception, et elle est bornée : quand le transport est une redirection, le
+serveur envoie un code, pas un message.** `GET /verification` redirige vers
+`/login?verification=<code>` et c'est `VERIFICATION_MESSAGES` dans `LoginView.vue` qui
+porte les libellés. Un message en query string atterrirait dans l'historique du navigateur
+et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger — est un écart
+assumé documenté dans `CLAUDE.md`.
 
 ## Tests
 
 - **Vitest, environnement `jsdom`**, configuré dans `vite.config.js`. Fichiers `*.spec.js`
   à côté du module testé.
-- On teste **ce qui peut casser silencieusement** : le store d'authentification et le garde
-  de route. Pas de test de rendu de composant, pas de `@vue/test-utils`, pas de navigateur.
-  Un formulaire cassé se voit ; une session qui ne s'invalide pas, non.
+- On teste **ce qui peut casser silencieusement** : le store d'authentification, le garde
+  de route, et la traduction des réponses d'erreur dans `src/api/`. Pas de test de rendu de
+  composant, pas de `@vue/test-utils`, pas de navigateur. Un formulaire cassé se voit ; une
+  session qui ne s'invalide pas ou un `422` mal lu, non.
 - `fetch` est bouché par `vi.stubGlobal`, jamais par une vraie requête.
 - `setActivePinia(createPinia())` et `localStorage.clear()` en `beforeEach` : un store est
   un singleton, et `localStorage` survit d'un test à l'autre.
@@ -87,6 +102,8 @@ les réécrire côté front.
 - `package-lock.json` est versionné, la CI fait `npm ci`.
 - Les dépendances s'installent par `gfront npm install <paquet>`, jamais en éditant
   `package.json` à la main : les versions résolues doivent atterrir dans le lock.
-- **Le build de production du front n'est pas déployé** (aucun serveur ne sert
-  `frontend/dist`). `npm run build` reste lancé en CI parce que c'est le seul contrôle qui
-  compile les templates des composants.
+- `npm run build` produit ce que sert l'image nginx : ce n'est plus seulement un contrôle
+  de compilation, c'est l'artefact déployé. Il reste lancé en CI, et il reste le seul
+  contrôle qui compile les templates des composants — aucun test ne les rend.
+- Le repli SPA (`nginx.conf`, `try_files`) ne s'exerce que sur l'image construite : le
+  vérifier à la main après toute modification de `nginx.conf`.
