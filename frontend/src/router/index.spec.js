@@ -77,4 +77,21 @@ describe("garde d'authentification", () => {
 
     expect(router.currentRoute.value.name).toBe('login')
   })
+
+  it("renvoie de l'inscription vers l'espace connecté quand on est déjà connecté", async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.name).toBe('home')
+  })
+
+  it("laisse un visiteur anonyme atteindre l'inscription", async () => {
+    const router = createTestRouter()
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.name).toBe('register')
+  })
 })
