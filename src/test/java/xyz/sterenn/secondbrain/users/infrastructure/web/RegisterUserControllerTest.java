@@ -2,10 +2,8 @@ package xyz.sterenn.secondbrain.users.infrastructure.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -18,13 +16,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
 import org.springframework.test.context.NestedTestConfiguration;
 import org.springframework.test.context.NestedTestConfiguration.EnclosingConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.validation.BindingResult;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
@@ -33,8 +31,8 @@ import xyz.sterenn.secondbrain.users.application.query.UserView;
 import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 
 /**
- * Couvre les scénarios d'écriture du ticket de création de compte au niveau HTTP.
- * CSRF est désactivé côté application : aucun jeton à fournir.
+ * Couvre les scénarios d'écriture du parcours d'inscription au niveau HTTP, désormais en
+ * JSON. CSRF est désactivé côté application : aucun jeton à fournir.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
@@ -50,13 +48,18 @@ class RegisterUserControllerTest {
     @Autowired
     private QueryBus queryBus;
 
+    private static String corps(String email, String motDePasse) {
+        return """
+            {"email": "%s", "password": "%s"}
+            """.formatted(email, motDePasse);
+    }
+
     @Test
-    void cree_le_compte_et_redirige_en_cas_de_succes() throws Exception {
-        mockMvc.perform(post("/register")
-                .param("email", "alice@example.com")
-                .param("password", MOT_DE_PASSE_VALIDE))
-            .andExpect(status().is3xxRedirection())
-            .andExpect(redirectedUrl("/register?success"));
+    void cree_le_compte_et_repond_201_en_cas_de_succes() throws Exception {
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("alice@example.com", MOT_DE_PASSE_VALIDE)))
+            .andExpect(status().isCreated());
 
         Optional<UserView> vue = queryBus.ask(new FindUserByEmail("alice@example.com"));
         assertThat(vue).isPresent();
@@ -64,49 +67,48 @@ class RegisterUserControllerTest {
     }
 
     @Test
-    void reaffiche_le_formulaire_avec_une_erreur_si_l_email_est_deja_utilise() throws Exception {
-        mockMvc.perform(post("/register")
-            .param("email", "bob@example.com")
-            .param("password", MOT_DE_PASSE_VALIDE));
+    void refuse_un_email_deja_utilise_avec_une_erreur_sur_le_champ_email() throws Exception {
+        mockMvc.perform(post("/api/registrations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)));
 
-        mockMvc.perform(post("/register")
-                .param("email", "bob@example.com")
-                .param("password", MOT_DE_PASSE_VALIDE))
-            .andExpect(status().isOk())
-            .andExpect(view().name("register"))
-            .andExpect(model().attributeHasFieldErrors("registrationForm", "email"));
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errors.email").exists())
+            .andExpect(jsonPath("$.errors.password").doesNotExist());
     }
 
     @Test
-    void reaffiche_le_formulaire_avec_une_erreur_si_le_mot_de_passe_est_faible() throws Exception {
-        mockMvc.perform(post("/register")
-                .param("email", "carol@example.com")
-                .param("password", "court"))
-            .andExpect(status().isOk())
-            .andExpect(view().name("register"))
-            .andExpect(model().attributeHasFieldErrors("registrationForm", "password"));
+    void refuse_un_mot_de_passe_faible_avec_une_erreur_sur_le_champ_password() throws Exception {
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("carol@example.com", "court")))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errors.password").exists())
+            .andExpect(jsonPath("$.errors.email").doesNotExist());
 
         assertThat(queryBus.ask(new FindUserByEmail("carol@example.com"))).isEmpty();
     }
 
     @Test
-    void reaffiche_le_formulaire_avec_une_erreur_si_l_email_est_mal_forme() throws Exception {
-        mockMvc.perform(post("/register")
-                .param("email", "pas-un-email")
-                .param("password", MOT_DE_PASSE_VALIDE))
-            .andExpect(status().isOk())
-            .andExpect(view().name("register"))
-            .andExpect(model().attributeHasFieldErrors("registrationForm", "email"));
+    void refuse_un_email_mal_forme_avec_une_erreur_sur_le_champ_email() throws Exception {
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("pas-un-email", MOT_DE_PASSE_VALIDE)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errors.email").exists());
     }
 
     @Test
-    void reaffiche_le_formulaire_avec_une_erreur_si_un_champ_est_vide() throws Exception {
-        mockMvc.perform(post("/register")
-                .param("email", "")
-                .param("password", ""))
-            .andExpect(status().isOk())
-            .andExpect(view().name("register"))
-            .andExpect(model().attributeHasFieldErrors("registrationForm", "email", "password"));
+    void refuse_les_champs_vides_en_nommant_les_deux() throws Exception {
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps("", "")))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errors.email").exists())
+            .andExpect(jsonPath("$.errors.password").exists());
     }
 
     /**
@@ -150,20 +152,13 @@ class RegisterUserControllerTest {
         }
 
         @Test
-        void reaffiche_le_formulaire_avec_une_erreur_globale_et_annule_la_creation_du_compte()
-                throws Exception {
-            mockMvc.perform(post("/register")
-                    .param("email", "erin@example.com")
-                    .param("password", MOT_DE_PASSE_VALIDE))
-                .andExpect(status().isOk())
-                .andExpect(view().name("register"))
-                .andExpect(result -> {
-                    BindingResult bindingResult = (BindingResult) result.getModelAndView()
-                        .getModel()
-                        .get(BindingResult.MODEL_KEY_PREFIX + "registrationForm");
-                    assertThat(bindingResult.getGlobalErrors()).hasSize(1);
-                    assertThat(bindingResult.getFieldErrors()).isEmpty();
-                });
+        void repond_503_sans_erreur_de_champ_et_annule_la_creation_du_compte() throws Exception {
+            mockMvc.perform(post("/api/registrations")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(corps("erin@example.com", MOT_DE_PASSE_VALIDE)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.errors").doesNotExist());
 
             // Le rollback de SpringCommandBus doit avoir annulé l'inscription entière.
             assertThat(queryBus.ask(new FindUserByEmail("erin@example.com"))).isEmpty();

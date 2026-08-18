@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
@@ -48,7 +49,11 @@ class VerifyAccountControllerTest {
     }
 
     private VerificationNotification inscrit(String email) throws Exception {
-        mockMvc.perform(post("/register").param("email", email).param("password", MOT_DE_PASSE_VALIDE));
+        mockMvc.perform(post("/api/registrations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s", "password": "%s"}
+                """.formatted(email, MOT_DE_PASSE_VALIDE)));
         return notifications.derniere();
     }
 

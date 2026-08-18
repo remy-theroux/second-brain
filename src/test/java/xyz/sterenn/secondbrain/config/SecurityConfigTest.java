@@ -52,6 +52,16 @@ class SecurityConfigTest {
     }
 
     @Test
+    void laisse_la_creation_de_compte_ouverte() throws Exception {
+        // Sans compte, impossible d'obtenir un jeton : l'inscription doit rester anonyme.
+        // Un corps vide suffit — c'est le 401 qu'on cherche à écarter, pas le 422.
+        mockMvc.perform(post("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
     void laisse_la_delivrance_de_jeton_ouverte() throws Exception {
         // Sans jeton, impossible d'en obtenir un : la route de connexion doit rester
         // anonyme. Un 401 ici signifierait une boucle sans issue.
