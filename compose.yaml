@@ -1,4 +1,7 @@
-name: second-brain
+# Le suffixe vient du `.env` du répertoire courant et vaut vide dans le dépôt principal.
+# C'est lui qui sépare les piles : conteneurs, réseau et volumes nommés sont tous préfixés
+# par ce nom de projet, donc deux worktrees ne partagent ni base ni node_modules.
+name: second-brain${STACK_SUFFIX:-}
 
 services:
   proxy:
@@ -8,6 +11,11 @@ services:
       - --providers.docker=true
       # Sans ça, db et mailpit se retrouveraient routés sans l'avoir demandé.
       - --providers.docker.exposedByDefault=false
+      # Le provider Docker lit tout le socket, pas seulement la pile qui l'a démarré. Sans
+      # cette contrainte, deux worktrees lancés en parallèle donnent deux Traefik qui voient
+      # chacun les quatre conteneurs étiquetés, donc deux routeurs nommés `backend` et deux
+      # nommés `frontend` : collision, et une requête part chez la mauvaise feature.
+      - --providers.docker.constraints=Label(`com.docker.compose.project`,`second-brain${STACK_SUFFIX:-}`)
       - --entryPoints.web.address=:80
     ports:
       # Seul port publié de l'application : c'est l'unique origine que voit le navigateur,
