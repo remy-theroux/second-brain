@@ -9,6 +9,40 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/** La saisie a été refusée champ par champ : `errors` associe un nom de champ à son message. */
+export class ValidationError extends Error {
+  constructor(errors) {
+    super('La saisie a été refusée.')
+    this.name = 'ValidationError'
+    this.errors = errors
+  }
+}
+
+/**
+ * Crée un compte. Ne rend rien en cas de succès : le serveur répond 201 sans corps,
+ * puisque rien du compte créé n'est lisible tant qu'il n'est pas vérifié.
+ */
+export async function register(email, password) {
+  const response = await fetch('/api/registrations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+
+  if (response.ok) {
+    return
+  }
+
+  // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
+  // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+  const payload = await response.json().catch(() => null)
+
+  if (response.status === 422) {
+    throw new ValidationError(payload?.errors ?? {})
+  }
+  throw new Error(payload?.message ?? "Votre compte n'a pas pu être créé.")
+}
+
 /**
  * Échange un email et un mot de passe contre un jeton d'accès.
  * Forme du `password grant` de RFC 6749 : corps encodé en formulaire.
