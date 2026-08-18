@@ -43,7 +43,28 @@ gtest() {
 | Compilation seule | `gtest compileJava` |
 | Build complet (ce que fait la CI) | `gtest build` |
 
-Lancer l'application en développement (PostgreSQL + Adminer + app avec hot reload) :
+**Il n'y a pas non plus de Node sur la machine hôte.** Pour le front, définir :
+
+```bash
+gfront() {
+  docker run --rm \
+    -u "$(id -u):$(id -g)" -e HOME=/tmp \
+    -v "$PWD/frontend":/app -w /app \
+    node:24-alpine "$@"
+}
+```
+
+`-u` et `HOME=/tmp` sont obligatoires : sans eux, `npm install` écrit `node_modules/` et
+`package-lock.json` en `root` dans le dépôt monté.
+
+| Besoin | Commande |
+|---|---|
+| Tests unitaires du front | `gfront npm run test:unit` |
+| Un seul fichier de test | `gfront npx vitest run src/stores/auth.spec.js` |
+| Build du front | `gfront npm run build` |
+| Ajouter une dépendance | `gfront npm install <paquet>` |
+
+Lancer l'application en développement (PostgreSQL + Mailpit + app + front avec hot reload) :
 
 ```bash
 cp .env.example .env      # une seule fois
@@ -55,10 +76,23 @@ Le hot reload combine deux processus dans le conteneur (`docker/dev-entrypoint.s
 un `gradlew -t classes` en continu qui recompile vers `build/classes`, et `bootRun`
 dont DevTools surveille ce dossier. Éditer un `.java` sur l'hôte redémarre l'app en < 1 s.
 
-Points d'entrée : app <http://localhost:8080/>, Swagger UI `/swagger-ui.html`,
-health `/actuator/health`, Adminer <http://localhost:8081> (serveur `db`,
-base/user/mdp `second_brain`), Mailpit <http://localhost:8025> — tous les mails
-émis en développement y sont capturés, aucun ne sort de la machine.
+**Une seule origine : <http://localhost:8080/>.** Un service Traefik publie ce port unique
+et route `/api` et `/verification` vers l'application Java, tout le reste vers le front. Ni
+l'app ni le serveur Vite ne publient de port. Le front est donc à la racine, l'API sous
+`/api`, Swagger UI sur `/swagger-ui.html` et le health sur `/actuator/health` — ces deux
+derniers ne sont routés qu'en développement.
+
+Mailpit garde son port propre : <http://localhost:8025>, où tous les mails émis en
+développement sont capturés, aucun ne sortant de la machine.
+
+Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
+échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
+`docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
+`docker compose up -d app` règle le cas.
+
+**`gtest` et `docker compose up` ne cohabitent pas** : les deux verrouillent `.gradle/` du
+même répertoire, et `gtest` échoue sur « Timeout waiting to lock Build Output Cleanup
+Cache ». Arrêter la pile (`docker compose down`) avant de lancer la suite de tests.
 
 ## Architecture
 
@@ -67,27 +101,43 @@ deux bus synchrones.
 
 ```
 xyz.sterenn.secondbrain
-├── config/                  SecurityConfig, OpenApiConfig, ClockConfiguration — transverse
+├── config/                  SecurityConfig, JwtConfiguration, OpenApiConfig,
+│                            ClockConfiguration — transverse
 ├── shared/
-│   ├── bus/                 socle CQRS, aucune dépendance métier
-│   └── web/                 pages n'appartenant à aucun contexte (accueil)
+│   └── bus/                 socle CQRS, aucune dépendance métier
 └── users/                   bounded context (gabarit pour les suivants)
-    ├── domain/              règles métier pures et transverses (PasswordPolicy)
+    ├── domain/              règles métier pures et transverses (PasswordPolicy,
+    │   │                    AccessTokenPolicy)
     │   ├── entity/          agrégats (User, VerificationToken)
     │   ├── valueobject/     valeurs validées et normalisées (Email, RawVerificationToken,
-    │   │                    Notification et ses implémentations)
+    │   │                    AccessToken, Notification et ses implémentations)
     │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher,
-    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender)
+    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender,
+    │   │                    AccessTokenIssuer)
     │   └── exception/       refus métier, messages affichables tels quels
     ├── application/
     │   ├── command/         une commande + son handler par intention d'écriture
     │   └── query/           une query + son handler + son modèle de lecture
     └── infrastructure/
         ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
-        ├── security/        ADAPTERS des ports PasswordHasher et TokenHasher
+        ├── security/        ADAPTERS des ports PasswordHasher, TokenHasher, AccessTokenIssuer
         ├── email/           ADAPTER du port NotificationSender
-        └── web/             ADAPTERS entrants (un contrôleur par route + form de liaison)
+        └── web/             ADAPTERS entrants (un contrôleur par route, requête et
+                             réponses en records)
+
+frontend/                    application Vue 3, hors build Gradle, construite et servie
+│                            en autonomie
+├── Dockerfile               build npm puis nginx qui sert dist
+├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
+├── src/api/                 seul module qui parle HTTP
+├── src/stores/              état partagé (pinia) : jeton, expiration, profil
+├── src/router/              routes et garde d'authentification
+└── src/views/               un composant par écran (LoginView, RegisterView, HomeView)
 ```
+
+Le package `shared/web` n'existe plus et `src/main/resources/templates/` non plus :
+**aucune vue n'est rendue par le serveur.** L'application Java expose des routes d'API,
+plus `GET /verification` qui répond par une redirection.
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
 n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception actée :
@@ -104,6 +154,26 @@ Le contrôleur ne connaît ni le handler ni le domaine autrement que par les
 exceptions métier qu'il traduit en erreurs de champ. Le handler n'a aucune logique
 métier : il convertit en value objects, orchestre, écrit.
 
+### Le flux de l'inscription
+
+`POST /api/registrations` reçoit `{email, password}`, dispatche `RegisterUser` et répond
+`201` sans corps : rien du compte créé n'est lisible tant qu'il n'est pas vérifié et
+qu'aucun jeton n'a été délivré, donc ni ressource à exposer ni en-tête `Location` à poser.
+
+Un refus se rend **champ par champ** — `422 {"errors": {"email": "…"}}` — ce qui permet au
+front de replacer chaque message sous sa saisie. L'échec du canal de notification, lui, ne
+vise aucun champ : `503 {"message": "…"}`, le rollback ayant déjà eu lieu côté
+`SpringCommandBus`.
+
+**Deux formes d'erreur coexistent donc dans l'API**, et c'est assumé : `/api/token` répond
+`{error, error_description}` parce qu'il imite le `password grant` de RFC 6749 et ne peut
+pas s'en écarter sans cesser de l'imiter. La forme à suivre pour toute route future est
+celle de `ValidationErrorResponse`.
+
+Le contrôleur déclare un `BindingResult` en paramètre : sa présence empêche Spring de lever
+`MethodArgumentNotValidException`, donc la traduction des refus reste dans le contrôleur
+plutôt que dans un `@RestControllerAdvice` qui vaudrait pour tout le contexte.
+
 ### Le flux de la vérification d'email
 
 L'inscription émet un jeton aléatoire, n'en persiste que l'empreinte salée
@@ -114,7 +184,17 @@ Notifier est une décision du domaine ; l'email n'est qu'un canal, et l'adapter
 un nouveau type de notification non traité ne compile pas.
 
 `GET /verification?compte=&jeton=` recharge le jeton du compte, le compare via le hasher
-puis le consomme. `VerificationToken` porte les deux règles — expiration à 24 h et usage
+puis le consomme. C'est la **seule action du back qui ne soit pas derrière l'API**, et elle
+le reste : le lien part par email, il doit fonctionner dans n'importe quel client mail, sans
+JavaScript et sans que le front soit en ligne.
+
+La route ne rend plus de page : elle répond `302` vers `/login?verification=<code>`, où le
+code vaut `ok`, `lien-invalide`, `lien-expire` ou `lien-deja-utilise`. Le `Location` est
+**relatif**, donc résolu par le navigateur contre l'origine de la requête — l'application n'a
+aucune URL de front à connaître, et l'origine unique du reverse proxy suffit. Le front porte
+la rédaction française correspondante (`VERIFICATION_MESSAGES` dans `LoginView.vue`) : faire
+voyager le message en query string le collerait dans l'historique du navigateur et les logs
+du proxy, exactement le reproche fait au jeton lui-même (écart n° 6). `VerificationToken` porte les deux règles — expiration à 24 h et usage
 unique — et lève lui-même le refus correspondant. Les trois façons de présenter un lien
 inexploitable (UUID illisible, compte inconnu, jeton faux) partagent volontairement un
 seul message : les distinguer ferait de la route un oracle d'existence de compte.
@@ -122,6 +202,45 @@ seul message : les distinguer ferait de la route un oracle d'existence de compte
 L'envoi se fait **dans la transaction du bus** : une panne du canal annule l'inscription.
 Tant que « renvoyer le lien » n'existe pas, un compte créé sans notification serait
 définitivement invérifiable.
+
+### Le flux de la connexion
+
+`POST /api/token` a la **forme** du `password grant` de RFC 6749 §4.3
+(`application/x-www-form-urlencoded`, `grant_type=password&username=&password=`, réponse
+`access_token` / `token_type` / `expires_in`, refus `{error, error_description}`) sans
+serveur d'autorisation derrière : OAuth 2.1 a supprimé ce type d'autorisation, et un
+client *first-party* n'a ni redirection ni consentement à gérer.
+
+Se connecter est une **query**, pas une commande : il faut retourner un jeton et rien
+n'est écrit en base. `AuthenticateUserHandler` normalise l'email, compare le mot de passe
+par le port `PasswordHasher`, refuse un compte non vérifié, puis fait émettre le jeton par
+le port `AccessTokenIssuer`. Le refus est une exception métier avec un message affichable
+— écart assumé et motivé à la règle « une query rend un `Optional` vide » : cette query ne
+demande pas si un compte existe, elle réclame un jeton.
+
+**L'ordre des contrôles est un choix de sécurité** : mot de passe d'abord, vérification
+d'adresse ensuite. Seul celui qui connaît déjà le mot de passe apprend qu'un compte existe
+mais n'est pas vérifié.
+
+L'adapter `JwtAccessTokenIssuer` signe un JWT HS256 portant `sub` (UUID du compte), `iat`
+et `exp` — **pas d'email, pas d'`iss`**. La durée de vie (1 h) est une règle du domaine
+(`AccessTokenPolicy.LIFETIME`), pas une propriété de configuration : un exploitant ne doit
+pas pouvoir la porter à trente jours par un fichier.
+
+`GET /api/profile` est la seule route authentifiée. Le filtre resource server valide le
+jeton en amont ; le contrôleur ne lit que `sub` et interroge `FindUserById`. Un jeton bien
+signé dont le compte a disparu répond `401` et non `404` : il n'identifie plus personne, et
+le front n'a ainsi qu'un seul cas d'échec à traiter.
+
+`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique,
+et `GET /api/profile` reste aujourd'hui la seule route authentifiée. Une nouvelle route
+publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ; sans quoi elle
+répond `401`.
+
+Le secret de signature (`secondbrain.jwt.secret`, 32 octets minimum) **n'a aucune valeur
+par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
+`src/test/resources/application.properties` en fournissent un, chacun pour son
+environnement — le confort est rendu là où il ne peut pas fuir en production.
 
 ### Les deux bus (`shared/bus`)
 
@@ -162,8 +281,15 @@ détail dans les règles backend, section « Adapters ».
    mapper. L'hexagone fuit sur ce point précis, et sur lui seul — l'entité ne connaît même
    pas le converter qui projette son `Email`, appliqué par `autoApply` depuis
    l'infrastructure.
-2. CSRF désactivé et session `STATELESS` dans `SecurityConfig` — il n'y a pas encore
-   de session HTTP à protéger. Le ticket « login » lèvera cette dette.
+2. CSRF désactivé et session `STATELESS` dans `SecurityConfig`. Ce n'était une dette que
+   tant qu'aucune authentification n'existait ; le ticket « login » l'a levée autrement
+   qu'annoncé — non pas en réactivant CSRF, mais en n'introduisant aucun cookie
+   d'authentification. L'identité voyage dans un en-tête `Authorization`, qu'un navigateur
+   n'envoie jamais spontanément : il n'y a rien à contrefaire depuis un site tiers. Le jour
+   où un cookie d'authentification apparaît, CSRF redevient obligatoire. L'origine unique,
+   elle, ne tient plus au proxy du serveur de développement mais au reverse proxy — Traefik
+   en développement, Coolify en production : la règle « aucune configuration CORS » est
+   désormais vraie partout, et non plus seulement en local.
 3. `FindUserByEmail` n'est consommée par aucun écran : elle existe pour que le query
    bus soit livré testé, et sert de gabarit.
 4. BCrypt ignore les octets au-delà du 72e alors que la politique autorise 128
@@ -189,18 +315,77 @@ détail dans les règles backend, section « Adapters ».
    `http://localhost:8080` : la panne ne se manifeste que chez l'utilisateur. La valeur
    par défaut est conservée parce que les tests et le développement local en dépendent ;
    c'est donc la première variable à poser sur un vrai déploiement.
+9. Pas de jeton de rafraîchissement, pas de révocation. Un JWT vaut jusqu'à son `exp` :
+   « se déconnecter » efface le jeton du navigateur et rien de plus, et un jeton volé reste
+   valable jusqu'à une heure. C'est ce qui rend la durée de vie courte non négociable.
+10. Le jeton est rangé dans le `localStorage` du navigateur. Il survit donc à un
+    rafraîchissement de page — sans quoi « maintenir une connexion » n'aurait aucun sens —
+    mais une faille XSS dans le front le donnerait. La parade (cookie `httpOnly` `Secure`
+    `SameSite` plus jeton de rafraîchissement, donc CSRF à réactiver) est un ticket entier.
+11. `POST /api/token` n'a aucune limitation de débit : rien n'empêche une recherche
+    exhaustive de mot de passe. Dans la même veine, un email inconnu revient sans calcul
+    BCrypt, donc plus vite qu'un email connu : le temps de réponse trahit l'existence d'un
+    compte. Hacher un leurre systématiquement corrigerait le second point, mais boucher
+    cette fissure avant d'avoir fermé la porte à côté serait se raconter une histoire. Les
+    deux se traitent ensemble, avec la journalisation des tentatives.
+12. Le front se construit et se sert en autonomie (`frontend/Dockerfile` : build npm puis
+    nginx servant `dist`), mais **rien dans le dépôt ne décrit son déploiement**. Le
+    routage de production — `/api` et `/verification` vers le back, tout le reste vers le
+    front, ni Swagger ni actuator exposés — vit dans la configuration Coolify, hors du
+    dépôt. Deux configurations de routage doivent donc rester cohérentes à la main.
+13. `/api/profile` sérialise directement le modèle de lecture `UserView` (dont
+    `createdAt`). La forme de l'API est donc couplée à celle de la query. Acceptable pour
+    une projection dédiée aux écrans ; le jour où l'API et un écran divergeront, il faudra
+    un record de réponse dans `infrastructure/web/`.
+14. `FindUserByEmail` reste sans écran (voir l'écart n° 3) : le profil lit par identifiant,
+    puisque c'est l'identifiant que le jeton porte. Chercher par email quand on détient un
+    UUID immuable serait un contresens.
+15. `LoginView.vue`, `RegisterView.vue` et `HomeView.vue` ne sont couverts par aucun test
+    automatisé. Le choix
+    délibéré a été de tester le store d'authentification et le garde de route — les deux
+    endroits où un échec passerait silencieusement — et non le rendu des composants. La
+    correction des deux écrans repose donc sur `npm run build` (qui compile les templates
+    sans rien affirmer sur leur comportement) et sur un passage humain dans un navigateur.
+    Conséquence directe : un gestionnaire d'événement mal relié ou un nom de champ mal
+    orthographié passerait au vert. Le passage humain n'est donc pas une étape facultative
+    mais une condition avant toute mise en production.
+16. Les libellés de refus de vérification existent en deux endroits : les exceptions du
+    domaine (`InvalidVerificationLinkException` et ses sœurs) et `VERIFICATION_MESSAGES`
+    dans `LoginView.vue`, qui traduit les codes portés par la redirection. Ils peuvent
+    diverger sans qu'aucun test ne le voie. C'est le prix du choix de faire voyager un code
+    plutôt qu'un message dans une URL.
+17. Il n'existe plus aucune page publique. Un visiteur anonyme est renvoyé sur `/login`,
+    qui porte le lien vers l'inscription, et c'est tout ce qu'il peut voir de
+    l'application. Le jour où il y aura quelque chose à dire à un visiteur, ce sera un
+    ticket, pas une page d'accueil recréée par réflexe.
+18. Le repli SPA de nginx (`try_files`) n'est exercé par aucun environnement avant la
+    production : `docker compose` fait tourner Vite, qui sert `index.html` sur toute route
+    inconnue par construction. Une erreur dans `frontend/nginx.conf` ne se verrait qu'une
+    fois déployée. Le contrôle se fait à la main :
+    `docker build -t second-brain-frontend ./frontend` puis un `curl` sur `/login`.
 
 ## Stack et versions
 
-Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, Validation) · Thymeleaf ·
-Flyway · PostgreSQL 17 · springdoc-openapi · JUnit 5 + AssertJ + Testcontainers ·
-Gradle Kotlin DSL avec version catalog (`gradle/libs.versions.toml`).
+**Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
+Validation, Mail) · Flyway · PostgreSQL 17 · springdoc-openapi · JUnit 5 +
+AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
+(`gradle/libs.versions.toml`).
+
+**Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
+Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
+
+**Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
+En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit
 dans `org.springframework.boot.webmvc.test.autoconfigure`, l'auto-config Flyway dans
-`spring-boot-starter-flyway`). Si un import ne se résout pas, chercher la classe dans
-les jars du cache Gradle plutôt que de réécrire le code.
+`spring-boot-starter-flyway`, le resource server dans
+`spring-boot-starter-security-oauth2-resource-server` — l'ancien
+`spring-boot-starter-oauth2-resource-server` est déprécié). Boot 4 est aussi passé à
+Jackson 3 : le databind vit sous `tools.jackson`, mais **les annotations restent sous
+`com.fasterxml.jackson.annotation`**. Si un import ne se résout pas, chercher la classe
+dans les jars du cache Gradle plutôt que de réécrire le code.
 
 ## Documents de référence
 

@@ -28,10 +28,10 @@ repositories {
 }
 
 dependencies {
-    // Web / REST
+    // Web / REST — aucune vue rendue côté serveur : le front Vue est un projet séparé,
+    // et la seule route non-API (GET /verification) répond par une redirection.
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     // Notifications
     implementation("org.springframework.boot:spring-boot-starter-mail")
@@ -45,6 +45,10 @@ dependencies {
 
     // Sécurité
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // Apporte spring-security-oauth2-jose (NimbusJwtEncoder ET NimbusJwtDecoder) et
+    // spring-security-oauth2-resource-server. Nom Spring Boot 4 : l'ancien
+    // spring-boot-starter-oauth2-resource-server existe toujours mais est déprécié.
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 
     // Observabilité
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -68,4 +72,10 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Le secret de signature n'a aucune valeur par défaut (voir application.yml) : sans
+    // lui, plus aucun @SpringBootTest ne démarre. Une variable d'environnement est le
+    // seul moyen *certain* de le fournir : elle prime sur tous les fichiers de
+    // configuration, sans dépendre de la précédence entre application.properties et
+    // application.yml.
+    environment("SECONDBRAIN_JWT_SECRET", "secret-de-test-second-brain-32-octets-minimum")
 }

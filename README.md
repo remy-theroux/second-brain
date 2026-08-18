@@ -11,9 +11,10 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Build | Gradle (Kotlin DSL) + version catalog |
 | Base de données | PostgreSQL 17 |
 | Migrations | Flyway (SQL versionné) |
-| Sécurité | Spring Security (aucune authentification pour l'instant) |
+| Sécurité | Spring Security (jeton d'accès JWT HS256, resource server) |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
+| Front | Vue 3 + Vite + vue-router + pinia (dossier frontend/, hors build Gradle) |
 
 ## Prérequis
 
@@ -23,18 +24,34 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 
 ```bash
 cp .env.example .env          # ajuster si besoin
-docker compose up --build     # démarre PostgreSQL, Adminer et l'app (hot reload)
+docker compose up --build     # démarre PostgreSQL, Mailpit, l'app et le front (hot reload)
 ```
 
 Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (toolchain) — c'est un peu long, ensuite c'est mis en cache.
 
+Un service Traefik publie **un seul port** et route `/api` et `/verification` vers
+l'application Java, tout le reste vers le front. Ni l'app ni le serveur Vite ne publient de
+port.
+
 | Service | URL |
 |---|---|
-| Accueil | http://localhost:8080/ |
+| Application (front Vue) | http://localhost:8080/ |
+| API | http://localhost:8080/api/… |
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
-| Adminer (UI base) | http://localhost:8081 (serveur `db`, base/user/mdp `second_brain`) |
 | Mailpit (mails capturés en dev) | http://localhost:8025 — aucun mail ne sort de la machine |
+
+Health et Swagger ne sont routés qu'en développement : en production, le proxy n'expose que
+`/api` et `/verification`.
+
+Si l'application échoue au démarrage sur « Main class name has not been configured »,
+`bootRun` a perdu la course contre la compilation continue et `build/classes` était encore
+vide. Compiler une fois puis relancer :
+
+```bash
+docker compose run --rm --no-deps app ./gradlew --no-daemon classes
+docker compose up -d app
+```
 
 ### Hot reload
 
@@ -50,15 +67,31 @@ Les tests d'intégration démarrent une PostgreSQL jetable via Testcontainers :
 
 ```bash
 # Sans JDK local, via un conteneur Gradle :
-docker run --rm -v "$PWD":/app -w /app -v /var/run/docker.sock:/var/run/docker.sock \
+docker run --rm --network host -v "$PWD":/app -w /app -v /var/run/docker.sock:/var/run/docker.sock \
   gradle:jdk25 gradle --no-daemon test
 ```
 
 Pour lancer l'app depuis l'IDE sur une base Testcontainers : exécuter `TestSecondBrainApplication`.
 
+Tests du front (aucun Node requis sur l'hôte) :
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/frontend":/app -w /app node:24-alpine npm run test:unit
+```
+
 ## Build de production
 
-Image OCI optimisée (multi-stage, layers, JRE non-root) :
+Deux images indépendantes : l'API Java et le front statique.
+
+Le front — build npm puis nginx servant `dist`, avec le repli SPA sans lequel un
+rechargement de page sur `/login` rendrait 404 :
+
+```bash
+docker build -t second-brain-frontend:latest ./frontend
+```
+
+L'API — image OCI optimisée (multi-stage, layers, JRE non-root) :
 
 ```bash
 docker build -t second-brain:latest .
@@ -68,6 +101,7 @@ docker run --rm -p 8080:8080 \
   -e SPRING_MAIL_HOST=... -e SPRING_MAIL_PORT=... \
   -e SECONDBRAIN_BASE_URL=https://<domaine-public> \
   -e SECONDBRAIN_NOTIFICATION_FROM=no-reply@<domaine-public> \
+  -e SECONDBRAIN_JWT_SECRET=... \
   second-brain:latest
 ```
 
@@ -80,12 +114,41 @@ développement, voir `compose.yaml`) :
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | Relais SMTP pour les mails de vérification | `localhost:1025` (Mailpit en dev) |
 | `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
 | `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
+| `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
+
+Le déploiement suppose un **reverse proxy devant les deux images**, qui route `/api` et
+`/verification` vers l'API et tout le reste vers le front — c'est ce qui donne au navigateur
+une origine unique, donc aucune configuration CORS à écrire. Il ne doit exposer ni
+`/actuator` ni `/swagger-ui`. `SECONDBRAIN_BASE_URL` vaut alors l'origine publique de ce
+proxy : c'est elle qui est écrite dans les liens des mails, et c'est elle que la redirection
+de vérification résout.
+
+Pour générer `SECONDBRAIN_JWT_SECRET` avant un déploiement :
+
+```bash
+openssl rand -base64 48
+```
 
 Alternative sans Dockerfile (Cloud Native Buildpacks / Paketo) :
 
 ```bash
 ./gradlew bootBuildImage
 ```
+
+## Connexion
+
+L'authentification se fait par jeton d'accès JWT :
+
+```bash
+curl -s -X POST http://localhost:8080/api/token \
+  -d grant_type=password -d username=alice@exemple.fr -d password=<mot de passe>
+# {"access_token":"eyJ…","token_type":"Bearer","expires_in":3600}
+
+curl -s http://localhost:8080/api/profile -H "Authorization: Bearer eyJ…"
+```
+
+Le compte doit avoir été **vérifié** par le lien reçu par email : sinon la connexion est
+refusée avec un message dédié. `/api/profile` est aujourd'hui la seule route authentifiée.
 
 ## Architecture
 

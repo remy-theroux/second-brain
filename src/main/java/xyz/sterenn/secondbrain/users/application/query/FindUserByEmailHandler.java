@@ -3,7 +3,6 @@ package xyz.sterenn.secondbrain.users.application.query;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
-import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
@@ -22,10 +21,6 @@ public class FindUserByEmailHandler implements QueryHandler<FindUserByEmail, Opt
 
     @Override
     public Optional<UserView> handle(FindUserByEmail query) {
-        return userRepository.findByEmail(new Email(query.email())).map(FindUserByEmailHandler::toView);
-    }
-
-    private static UserView toView(User user) {
-        return new UserView(user.getId(), user.getEmail().value(), user.isVerified(), user.getCreatedAt());
+        return userRepository.findByEmail(new Email(query.email())).map(UserView::of);
     }
 }
