@@ -3,9 +3,8 @@ package xyz.sterenn.secondbrain.users.infrastructure.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,18 +57,18 @@ class VerifyAccountControllerTest {
     }
 
     @Test
-    void verifie_le_compte_quand_je_suis_le_lien_recu() throws Exception {
+    void verifie_le_compte_et_redirige_vers_la_connexion_quand_je_suis_le_lien_recu()
+            throws Exception {
         VerificationNotification notification = inscrit("alice@example.com");
 
         mockMvc.perform(get("/verification")
                 .param("compte", notification.accountId().toString())
                 .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isOk())
-            .andExpect(view().name("verification"))
-            .andExpect(model().attribute("verifie", true))
-            .andExpect(model().attributeDoesNotExist("erreur"));
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/login?verification=ok"));
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified())
+            .isTrue();
     }
 
     @Test
@@ -79,24 +78,24 @@ class VerifyAccountControllerTest {
         mockMvc.perform(get("/verification")
                 .param("compte", notification.accountId().toString())
                 .param("jeton", "un-autre-jeton"))
-            .andExpect(status().isOk())
-            .andExpect(view().name("verification"))
-            .andExpect(model().attribute("verifie", false))
-            .andExpect(model().attribute("erreur", "Ce lien de vérification n'est pas valide."));
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified())
+            .isFalse();
     }
 
     @Test
-    void refuse_un_lien_dont_le_compte_est_inconnu() throws Exception {
+    void refuse_un_lien_dont_le_compte_est_inconnu_avec_le_meme_code_qu_un_lien_falsifie()
+            throws Exception {
         VerificationNotification notification = inscrit("carol@example.com");
 
+        // Un code distinct ferait de cette route un oracle d'existence de compte.
         mockMvc.perform(get("/verification")
                 .param("compte", UUID.randomUUID().toString())
                 .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isOk())
-            .andExpect(model().attribute("verifie", false))
-            .andExpect(model().attribute("erreur", "Ce lien de vérification n'est pas valide."));
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
     }
 
     @Test
@@ -109,16 +108,14 @@ class VerifyAccountControllerTest {
         mockMvc.perform(get("/verification")
                 .param("compte", notification.accountId().toString())
                 .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isOk())
-            .andExpect(model().attribute("verifie", false))
-            .andExpect(model().attribute("erreur", "Ce lien de vérification a déjà été utilisé."));
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/login?verification=lien-deja-utilise"));
     }
 
     @Test
     void refuse_un_lien_sans_parametre() throws Exception {
         mockMvc.perform(get("/verification"))
-            .andExpect(status().isOk())
-            .andExpect(view().name("verification"))
-            .andExpect(model().attribute("verifie", false));
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
     }
 }
