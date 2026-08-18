@@ -15,6 +15,28 @@ Les noms de classes, de méthodes de production et de packages restent en anglai
 
 ## Commandes
 
+Le `Makefile` fige les invocations Docker ci-dessous. C'est l'entrée par défaut pour tout
+ce qui est formatage, tests et build :
+
+| Cible | Ce qu'elle fait |
+|---|---|
+| `make help` | liste les cibles |
+| `make format` | formate le back (Spotless) et le front (Prettier) |
+| `make check` | vérifie le formatage puis lance les tests, des deux côtés |
+| `make build` | produit le jar et `frontend/dist` — exactement ce que vérifie la CI |
+
+Chacune des trois se décline en `-back` et `-front` (`make check-front`) pour n'en payer
+qu'un côté. Le formatage du Java est **décidé par palantir-java-format** : ne pas se battre
+avec lui, `make format-back` avant de committer. Le Javadoc, lui, n'est jamais reformaté.
+
+`gradle.properties` porte les `--add-exports` sans lesquels le formateur échoue sur une
+`IllegalAccessError` — il analyse le code avec les API internes de javac, que JEP 396 a
+fermées depuis le JDK 16. Ce fichier est versionné : la CI en a besoin autant que le poste
+local.
+
+Le `Makefile` ne couvre pas le lancement d'**un** test : pour ça, et pour tout le reste, les
+deux fonctions ci-dessous restent la référence.
+
 **Il n'y a aucun JDK ni Gradle sur la machine hôte.** Tout passe par Docker.
 Définir cette fonction une fois par session avant toute commande Gradle :
 
@@ -61,6 +83,7 @@ gfront() {
 |---|---|
 | Tests unitaires du front | `gfront npm run test:unit` |
 | Un seul fichier de test | `gfront npx vitest run src/stores/auth.spec.js` |
+| Formatage du front | `gfront npm run format` |
 | Build du front | `gfront npm run build` |
 | Ajouter une dépendance | `gfront npm install <paquet>` |
 
@@ -92,7 +115,38 @@ Au premier démarrage, `bootRun` peut perdre la course contre la compilation con
 
 **`gtest` et `docker compose up` ne cohabitent pas** : les deux verrouillent `.gradle/` du
 même répertoire, et `gtest` échoue sur « Timeout waiting to lock Build Output Cleanup
-Cache ». Arrêter la pile (`docker compose down`) avant de lancer la suite de tests.
+Cache ». Arrêter la pile (`docker compose down`) avant de lancer la suite de tests. Vaut
+pour les cibles `make` qui touchent au back, qui passent par le même conteneur.
+
+### Plusieurs features en parallèle
+
+`compose.yaml` publie quatre ports hôte et nomme sa pile : deux répertoires qui font
+`docker compose up` sans précaution ne se partagent pas la machine, ils se la disputent —
+et comme le nom de projet est le même, le second `up` n'ouvre pas une seconde pile, il
+recrée les conteneurs de la première.
+
+Le skill `worktree` (`.claude/skills/worktree/`) crée un worktree dans
+`../second-brain-<slug>` et lui écrit un `.env` portant `STACK_SUFFIX=-<slug>` et un bloc
+de ports décalé (`8080+N`, `5432+N`, `1025+N`, `8025+N`). Deux mécanismes rendent
+l'isolation réelle :
+
+- `name: second-brain${STACK_SUFFIX:-}` — le nom du projet compose sépare conteneurs,
+  réseau et volumes nommés. Chaque feature a donc sa propre base et son propre
+  `node_modules`. Vide par défaut : le dépôt principal garde son nom et ses ports.
+- La contrainte `--providers.docker.constraints` sur Traefik. Le provider Docker lit
+  **tout le socket**, pas seulement la pile qui l'a démarré : sans cette contrainte, chaque
+  Traefik voit les conteneurs étiquetés des deux piles, donc deux routeurs nommés `backend`
+  et deux nommés `frontend`. Collision de noms, et une requête part chez la mauvaise
+  feature.
+
+Conséquence à connaître : **`compose.yaml` est versionné**, donc une branche antérieure à
+ce mécanisme fige `name: second-brain` et sa pile n'est pas isolable. Le script le vérifie
+par `docker compose config` et refuse plutôt que de laisser détruire la pile en cours ; la
+sortie est de reporter `main` sur la branche.
+
+Le cache Gradle et le `node_modules` ne se partagent pas entre worktrees — c'est le
+« Timeout waiting to lock » ci-dessus. Chaque pile paie donc un premier démarrage long, et
+le `gtest` d'un worktree vise un volume `second-brain-gradle-home-<slug>` qui lui est propre.
 
 ## Architecture
 

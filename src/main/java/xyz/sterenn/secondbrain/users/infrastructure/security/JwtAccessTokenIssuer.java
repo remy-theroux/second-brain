@@ -29,12 +29,13 @@ public class JwtAccessTokenIssuer implements AccessTokenIssuer {
     @Override
     public AccessToken issue(UUID subject, Instant issuedAt, Instant expiresAt) {
         JwtClaimsSet revendications = JwtClaimsSet.builder()
-            .subject(subject.toString())
-            .issuedAt(issuedAt)
-            .expiresAt(expiresAt)
-            .build();
+                .subject(subject.toString())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .build();
 
-        String valeur = jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String valeur =
+                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
 
         return new AccessToken(valeur, expiresAt);
     }

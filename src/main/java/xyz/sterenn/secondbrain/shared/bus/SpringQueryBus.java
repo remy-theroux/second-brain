@@ -20,9 +20,9 @@ public class SpringQueryBus implements QueryBus {
             Class<?> queryType = queryTypeOf(handler);
             QueryHandler<?, ?> previous = handlers.put(queryType, handler);
             if (previous != null) {
-                throw new IllegalStateException(
-                    "Deux handlers déclarés pour la query " + queryType.getSimpleName()
-                        + " : " + previous.getClass().getName() + " et " + handler.getClass().getName());
+                throw new IllegalStateException("Deux handlers déclarés pour la query " + queryType.getSimpleName()
+                        + " : " + previous.getClass().getName() + " et "
+                        + handler.getClass().getName());
             }
         }
     }
@@ -40,11 +40,10 @@ public class SpringQueryBus implements QueryBus {
     }
 
     private static Class<?> queryTypeOf(QueryHandler<?, ?> handler) {
-        Class<?>[] arguments =
-            GenericTypeResolver.resolveTypeArguments(handler.getClass(), QueryHandler.class);
+        Class<?>[] arguments = GenericTypeResolver.resolveTypeArguments(handler.getClass(), QueryHandler.class);
         if (arguments == null || arguments.length != 2) {
             throw new IllegalStateException(
-                handler.getClass().getName() + " doit implémenter QueryHandler avec des types concrets");
+                    handler.getClass().getName() + " doit implémenter QueryHandler avec des types concrets");
         }
         return arguments[0];
     }

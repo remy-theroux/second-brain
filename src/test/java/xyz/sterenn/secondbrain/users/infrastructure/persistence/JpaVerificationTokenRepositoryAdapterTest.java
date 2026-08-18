@@ -46,7 +46,7 @@ class JpaVerificationTokenRepositoryAdapterTest {
         UUID compte = compteExistant("alice@example.com");
 
         VerificationToken saved =
-            verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+                verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getUserId()).isEqualTo(compte);
@@ -61,8 +61,8 @@ class JpaVerificationTokenRepositoryAdapterTest {
         verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
 
         assertThat(verificationTokenRepository.findByUserId(compte))
-            .isPresent()
-            .hasValueSatisfying(jeton -> assertThat(jeton.getTokenHash()).isEqualTo("empreinte"));
+                .isPresent()
+                .hasValueSatisfying(jeton -> assertThat(jeton.getTokenHash()).isEqualTo("empreinte"));
     }
 
     @Test
@@ -74,14 +74,14 @@ class JpaVerificationTokenRepositoryAdapterTest {
     void enregistre_la_consommation_du_jeton() {
         UUID compte = compteExistant("carol@example.com");
         VerificationToken jeton =
-            verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+                verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
         Instant clic = EMISSION.plusSeconds(60);
 
         jeton.consume(clic);
         verificationTokenRepository.save(jeton);
 
         assertThat(verificationTokenRepository.findByUserId(compte))
-            .hasValueSatisfying(relu -> assertThat(relu.isConsumed()).isTrue());
+                .hasValueSatisfying(relu -> assertThat(relu.isConsumed()).isTrue());
     }
 
     @Test
@@ -91,12 +91,10 @@ class JpaVerificationTokenRepositoryAdapterTest {
         // jamais stocké est apportée ailleurs, par
         // RegisterUserHandlerTest.emet_un_jeton_dont_seule_l_empreinte_est_stockee.
         UUID compte = compteExistant("dave@example.com");
-        verificationTokenRepository.save(
-            VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
+        verificationTokenRepository.save(VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
 
         assertThat(jdbcTemplate.queryForObject(
-            "SELECT token_hash FROM users_verification_tokens WHERE user_id = ?",
-            String.class, compte))
-            .isEqualTo("{bcrypt}$2a$10$empreinte");
+                        "SELECT token_hash FROM users_verification_tokens WHERE user_id = ?", String.class, compte))
+                .isEqualTo("{bcrypt}$2a$10$empreinte");
     }
 }

@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class SpringQueryBusTest {
 
-    record CompterLettres(String mot) implements Query<Integer> {
-    }
+    record CompterLettres(String mot) implements Query<Integer> {}
 
     static class CompterLettresHandler implements QueryHandler<CompterLettres, Integer> {
         @Override
@@ -32,7 +31,7 @@ class SpringQueryBusTest {
         QueryBus bus = new SpringQueryBus(List.of());
 
         assertThatThrownBy(() -> bus.ask(new CompterLettres("bonjour")))
-            .isInstanceOf(HandlerNotFoundException.class)
-            .hasMessageContaining("CompterLettres");
+                .isInstanceOf(HandlerNotFoundException.class)
+                .hasMessageContaining("CompterLettres");
     }
 }

@@ -40,16 +40,13 @@ public class RegisterUserController {
 
     @PostMapping("/api/registrations")
     public ResponseEntity<Object> register(
-            @Valid @RequestBody RegistrationRequest registrationRequest,
-            BindingResult bindingResult
-    ) {
+            @Valid @RequestBody RegistrationRequest registrationRequest, BindingResult bindingResult) {
         if (bindingResult.hasErrors()) {
             return unprocessable(champsFautifs(bindingResult));
         }
 
         try {
-            commandBus.dispatch(
-                new RegisterUser(registrationRequest.email(), registrationRequest.password()));
+            commandBus.dispatch(new RegisterUser(registrationRequest.email(), registrationRequest.password()));
         } catch (InvalidEmailException | EmailAlreadyUsedException e) {
             return unprocessable(Map.of("email", e.getMessage()));
         } catch (WeakPasswordException e) {
@@ -57,9 +54,10 @@ public class RegisterUserController {
         } catch (MailException e) {
             // Le rollback a déjà eu lieu côté SpringCommandBus : aucune faute de champ ici,
             // c'est le canal de notification qui a échoué, pas la saisie de l'utilisateur.
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErrorResponse(
-                "Votre compte n'a pas pu être créé : l'email de vérification n'a pas pu être "
-                    + "envoyé. Réessayez dans quelques instants."));
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(new ErrorResponse(
+                            "Votre compte n'a pas pu être créé : l'email de vérification n'a pas pu être "
+                                    + "envoyé. Réessayez dans quelques instants."));
         }
 
         return ResponseEntity.status(HttpStatus.CREATED).build();

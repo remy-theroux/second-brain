@@ -49,26 +49,28 @@ class VerifyAccountControllerTest {
 
     private VerificationNotification inscrit(String email) throws Exception {
         mockMvc.perform(post("/api/registrations")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
                 {"email": "%s", "password": "%s"}
                 """.formatted(email, MOT_DE_PASSE_VALIDE)));
         return notifications.derniere();
     }
 
     @Test
-    void verifie_le_compte_et_redirige_vers_la_connexion_quand_je_suis_le_lien_recu()
-            throws Exception {
+    void verifie_le_compte_et_redirige_vers_la_connexion_quand_je_suis_le_lien_recu() throws Exception {
         VerificationNotification notification = inscrit("alice@example.com");
 
         mockMvc.perform(get("/verification")
-                .param("compte", notification.accountId().toString())
-                .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/login?verification=ok"));
+                        .param("compte", notification.accountId().toString())
+                        .param("jeton", notification.rawToken().value()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login?verification=ok"));
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified())
-            .isTrue();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isTrue();
     }
 
     @Test
@@ -76,46 +78,48 @@ class VerifyAccountControllerTest {
         VerificationNotification notification = inscrit("bob@example.com");
 
         mockMvc.perform(get("/verification")
-                .param("compte", notification.accountId().toString())
-                .param("jeton", "un-autre-jeton"))
-            .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
+                        .param("compte", notification.accountId().toString())
+                        .param("jeton", "un-autre-jeton"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login?verification=lien-invalide"));
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified())
-            .isFalse();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isFalse();
     }
 
     @Test
-    void refuse_un_lien_dont_le_compte_est_inconnu_avec_le_meme_code_qu_un_lien_falsifie()
-            throws Exception {
+    void refuse_un_lien_dont_le_compte_est_inconnu_avec_le_meme_code_qu_un_lien_falsifie() throws Exception {
         VerificationNotification notification = inscrit("carol@example.com");
 
         // Un code distinct ferait de cette route un oracle d'existence de compte.
         mockMvc.perform(get("/verification")
-                .param("compte", UUID.randomUUID().toString())
-                .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
+                        .param("compte", UUID.randomUUID().toString())
+                        .param("jeton", notification.rawToken().value()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login?verification=lien-invalide"));
     }
 
     @Test
     void refuse_un_lien_deja_utilise_et_le_dit() throws Exception {
         VerificationNotification notification = inscrit("dave@example.com");
         mockMvc.perform(get("/verification")
-            .param("compte", notification.accountId().toString())
-            .param("jeton", notification.rawToken().value()));
+                .param("compte", notification.accountId().toString())
+                .param("jeton", notification.rawToken().value()));
 
         mockMvc.perform(get("/verification")
-                .param("compte", notification.accountId().toString())
-                .param("jeton", notification.rawToken().value()))
-            .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/login?verification=lien-deja-utilise"));
+                        .param("compte", notification.accountId().toString())
+                        .param("jeton", notification.rawToken().value()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login?verification=lien-deja-utilise"));
     }
 
     @Test
     void refuse_un_lien_sans_parametre() throws Exception {
         mockMvc.perform(get("/verification"))
-            .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/login?verification=lien-invalide"));
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login?verification=lien-invalide"));
     }
 }

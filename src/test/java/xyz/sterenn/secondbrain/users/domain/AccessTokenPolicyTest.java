@@ -12,8 +12,7 @@ class AccessTokenPolicyTest {
     void fait_expirer_le_jeton_une_heure_apres_son_emission() {
         Instant emission = Instant.parse("2026-08-17T10:00:00Z");
 
-        assertThat(AccessTokenPolicy.expiresAt(emission))
-            .isEqualTo(Instant.parse("2026-08-17T11:00:00Z"));
+        assertThat(AccessTokenPolicy.expiresAt(emission)).isEqualTo(Instant.parse("2026-08-17T11:00:00Z"));
     }
 
     @Test

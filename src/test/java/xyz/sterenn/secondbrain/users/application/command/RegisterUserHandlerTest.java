@@ -66,11 +66,13 @@ class RegisterUserHandlerTest {
     void cree_un_compte_non_verifie_avec_un_mot_de_passe_hache() {
         commandBus.dispatch(new RegisterUser("alice@example.com", MOT_DE_PASSE_VALIDE));
 
-        User created = userRepository.findByEmail(new Email("alice@example.com")).orElseThrow();
+        User created =
+                userRepository.findByEmail(new Email("alice@example.com")).orElseThrow();
         assertThat(created.getId()).isNotNull();
         assertThat(created.isVerified()).isFalse();
         assertThat(created.getPasswordHash()).isNotEqualTo(MOT_DE_PASSE_VALIDE);
-        assertThat(passwordHasher.matches(MOT_DE_PASSE_VALIDE, created.getPasswordHash())).isTrue();
+        assertThat(passwordHasher.matches(MOT_DE_PASSE_VALIDE, created.getPasswordHash()))
+                .isTrue();
     }
 
     @Test
@@ -84,16 +86,15 @@ class RegisterUserHandlerTest {
     void refuse_un_email_deja_utilise() {
         commandBus.dispatch(new RegisterUser("carol@example.com", MOT_DE_PASSE_VALIDE));
 
-        assertThatThrownBy(() ->
-            commandBus.dispatch(new RegisterUser("CAROL@Example.com", MOT_DE_PASSE_VALIDE)))
-            .isInstanceOf(EmailAlreadyUsedException.class)
-            .hasMessageContaining("carol@example.com");
+        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("CAROL@Example.com", MOT_DE_PASSE_VALIDE)))
+                .isInstanceOf(EmailAlreadyUsedException.class)
+                .hasMessageContaining("carol@example.com");
     }
 
     @Test
     void refuse_un_mot_de_passe_trop_faible_sans_creer_de_compte() {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("dave@example.com", "court")))
-            .isInstanceOf(WeakPasswordException.class);
+                .isInstanceOf(WeakPasswordException.class);
 
         assertThat(userRepository.existsByEmail(new Email("dave@example.com"))).isFalse();
     }
@@ -101,7 +102,7 @@ class RegisterUserHandlerTest {
     @Test
     void refuse_un_email_mal_forme() {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("pas-un-email", MOT_DE_PASSE_VALIDE)))
-            .isInstanceOf(InvalidEmailException.class);
+                .isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
@@ -109,7 +110,7 @@ class RegisterUserHandlerTest {
         commandBus.dispatch(new RegisterUser("erin@example.com", MOT_DE_PASSE_VALIDE));
 
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("erin@example.com", "court")))
-            .isInstanceOf(WeakPasswordException.class);
+                .isInstanceOf(WeakPasswordException.class);
     }
 
     @Test
@@ -126,11 +127,13 @@ class RegisterUserHandlerTest {
         commandBus.dispatch(new RegisterUser("grace@example.com", MOT_DE_PASSE_VALIDE));
 
         VerificationNotification notification = notifications.derniere();
-        VerificationToken jeton =
-            verificationTokenRepository.findByUserId(notification.accountId()).orElseThrow();
+        VerificationToken jeton = verificationTokenRepository
+                .findByUserId(notification.accountId())
+                .orElseThrow();
 
         assertThat(jeton.getTokenHash()).doesNotContain(notification.rawToken().value());
-        assertThat(tokenHasher.matches(notification.rawToken().value(), jeton.getTokenHash())).isTrue();
+        assertThat(tokenHasher.matches(notification.rawToken().value(), jeton.getTokenHash()))
+                .isTrue();
         assertThat(jeton.isConsumed()).isFalse();
     }
 
@@ -139,14 +142,17 @@ class RegisterUserHandlerTest {
         commandBus.dispatch(new RegisterUser("heidi@example.com", MOT_DE_PASSE_VALIDE));
 
         VerificationNotification notification = notifications.derniere();
-        assertThat(userRepository.findByEmail(new Email("heidi@example.com")).orElseThrow().getId())
-            .isEqualTo(notification.accountId());
+        assertThat(userRepository
+                        .findByEmail(new Email("heidi@example.com"))
+                        .orElseThrow()
+                        .getId())
+                .isEqualTo(notification.accountId());
     }
 
     @Test
     void ne_notifie_pas_quand_l_inscription_est_refusee() {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("ivan@example.com", "court")))
-            .isInstanceOf(WeakPasswordException.class);
+                .isInstanceOf(WeakPasswordException.class);
 
         assertThat(notifications.verifications()).isEmpty();
     }

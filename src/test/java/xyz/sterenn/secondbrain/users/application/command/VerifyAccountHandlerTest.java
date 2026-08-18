@@ -66,9 +66,10 @@ class VerifyAccountHandlerTest {
         // base est le seul moyen d'observer l'expiration sans figer l'horloge du contexte.
         entityManager.flush();
         jdbcTemplate.update(
-            "UPDATE users_verification_tokens "
-                + "SET expires_at = expires_at - CAST(? AS interval) WHERE user_id = ?",
-            age.toHours() + " hours", compte);
+                "UPDATE users_verification_tokens "
+                        + "SET expires_at = expires_at - CAST(? AS interval) WHERE user_id = ?",
+                age.toHours() + " hours",
+                compte);
         // Sans ce clear, le cache de premier niveau d'Hibernate resservirait l'entité
         // telle qu'elle était avant l'UPDATE, et l'expiration passerait inaperçue.
         entityManager.clear();
@@ -79,9 +80,13 @@ class VerifyAccountHandlerTest {
         VerificationNotification notification = inscrit("alice@example.com");
 
         commandBus.dispatch(new VerifyAccount(
-            notification.accountId().toString(), notification.rawToken().value()));
+                notification.accountId().toString(), notification.rawToken().value()));
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isTrue();
     }
 
     @Test
@@ -89,19 +94,23 @@ class VerifyAccountHandlerTest {
         VerificationNotification notification = inscrit("bob@example.com");
 
         assertThatThrownBy(() -> commandBus.dispatch(
-            new VerifyAccount(notification.accountId().toString(), "un-autre-jeton")))
-            .isInstanceOf(InvalidVerificationLinkException.class);
+                        new VerifyAccount(notification.accountId().toString(), "un-autre-jeton")))
+                .isInstanceOf(InvalidVerificationLinkException.class);
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isFalse();
     }
 
     @Test
     void refuse_un_compte_inconnu() {
         VerificationNotification notification = inscrit("carol@example.com");
 
-        assertThatThrownBy(() -> commandBus.dispatch(
-            new VerifyAccount(UUID.randomUUID().toString(), notification.rawToken().value())))
-            .isInstanceOf(InvalidVerificationLinkException.class);
+        assertThatThrownBy(() -> commandBus.dispatch(new VerifyAccount(
+                        UUID.randomUUID().toString(), notification.rawToken().value())))
+                .isInstanceOf(InvalidVerificationLinkException.class);
     }
 
     @Test
@@ -109,8 +118,8 @@ class VerifyAccountHandlerTest {
         VerificationNotification notification = inscrit("dave@example.com");
 
         assertThatThrownBy(() -> commandBus.dispatch(
-            new VerifyAccount("pas-un-uuid", notification.rawToken().value())))
-            .isInstanceOf(InvalidVerificationLinkException.class);
+                        new VerifyAccount("pas-un-uuid", notification.rawToken().value())))
+                .isInstanceOf(InvalidVerificationLinkException.class);
     }
 
     @Test
@@ -119,23 +128,33 @@ class VerifyAccountHandlerTest {
         vieillitLeJeton(notification.accountId(), Duration.ofHours(25));
 
         assertThatThrownBy(() -> commandBus.dispatch(new VerifyAccount(
-            notification.accountId().toString(), notification.rawToken().value())))
-            .isInstanceOf(ExpiredVerificationLinkException.class);
+                        notification.accountId().toString(),
+                        notification.rawToken().value())))
+                .isInstanceOf(ExpiredVerificationLinkException.class);
 
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isFalse();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isFalse();
     }
 
     @Test
     void refuse_un_jeton_deja_utilise() {
         VerificationNotification notification = inscrit("frank@example.com");
         commandBus.dispatch(new VerifyAccount(
-            notification.accountId().toString(), notification.rawToken().value()));
+                notification.accountId().toString(), notification.rawToken().value()));
 
         assertThatThrownBy(() -> commandBus.dispatch(new VerifyAccount(
-            notification.accountId().toString(), notification.rawToken().value())))
-            .isInstanceOf(AlreadyUsedVerificationLinkException.class);
+                        notification.accountId().toString(),
+                        notification.rawToken().value())))
+                .isInstanceOf(AlreadyUsedVerificationLinkException.class);
 
         // Le compte reste vérifié : le second clic ne défait rien.
-        assertThat(userRepository.findById(notification.accountId()).orElseThrow().isVerified()).isTrue();
+        assertThat(userRepository
+                        .findById(notification.accountId())
+                        .orElseThrow()
+                        .isVerified())
+                .isTrue();
     }
 }

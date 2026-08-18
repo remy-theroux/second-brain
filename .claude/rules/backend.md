@@ -159,6 +159,24 @@ Avant d'écrire une classe, décider de sa couche :
 - Ne pinner que ce que le BOM ne couvre pas (plugins, springdoc).
 - Toute dépendance nouvelle passe par le version catalog quand elle porte une version.
 
+## Formatage
+
+- **Le style est décidé par Spotless + palantir-java-format**, pas par le rédacteur :
+  `make format-back` avant de committer, et ne pas se battre avec le résultat. Une chaîne
+  fluent que le formateur casse en une ligne par maillon est correcte ; la remettre à la
+  main la fera revenir au prochain `spotlessApply`.
+- Palantir et non google-java-format, y compris en style AOSP : ce dernier fait exploser
+  les chaînes de builders (`SecurityConfig`) en cascades de huit espaces et repousse le
+  code si loin à droite que les commentaires de fin de ligne se retrouvent redécoupés en
+  milieu de phrase.
+- **Le Javadoc et les commentaires ne sont jamais reformatés** — seule leur indentation
+  suit le code. Leur mise en forme reste donc entièrement à la charge du rédacteur : c'est
+  voulu, ce sont eux qui portent le raisonnement.
+- `spotlessCheck` est accroché à la tâche `check`, donc à `build` : la CI échoue sur du
+  Java mal formaté sans qu'aucune étape dédiée n'apparaisse dans `ci.yml`.
+- Les `--add-exports` de `gradle.properties` sont la condition pour que le formateur
+  tourne (API internes de javac, fermées par JEP 396). Ne pas les retirer.
+
 ## Commits
 
 - Préfixe conventionnel en minuscule (`feat:`, `fix:`, `refactor:`, `conf:`, `test:`)

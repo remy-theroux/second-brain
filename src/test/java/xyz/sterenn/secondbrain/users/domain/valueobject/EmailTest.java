@@ -20,32 +20,27 @@ class EmailTest {
 
     @Test
     void refuse_un_email_sans_arobase() {
-        assertThatThrownBy(() -> new Email("pas-un-email"))
-            .isInstanceOf(InvalidEmailException.class);
+        assertThatThrownBy(() -> new Email("pas-un-email")).isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
     void refuse_un_email_sans_domaine_de_premier_niveau() {
-        assertThatThrownBy(() -> new Email("alice@example"))
-            .isInstanceOf(InvalidEmailException.class);
+        assertThatThrownBy(() -> new Email("alice@example")).isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
     void refuse_un_email_vide() {
-        assertThatThrownBy(() -> new Email("   "))
-            .isInstanceOf(InvalidEmailException.class);
+        assertThatThrownBy(() -> new Email("   ")).isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
     void refuse_un_email_null() {
-        assertThatThrownBy(() -> new Email(null))
-            .isInstanceOf(InvalidEmailException.class);
+        assertThatThrownBy(() -> new Email(null)).isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
     void refuse_un_email_trop_long() {
         String trop_long = "a".repeat(310) + "@example.com";
-        assertThatThrownBy(() -> new Email(trop_long))
-            .isInstanceOf(InvalidEmailException.class);
+        assertThatThrownBy(() -> new Email(trop_long)).isInstanceOf(InvalidEmailException.class);
     }
 }

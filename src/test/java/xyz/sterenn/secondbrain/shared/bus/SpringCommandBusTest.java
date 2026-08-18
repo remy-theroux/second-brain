@@ -13,11 +13,9 @@ import org.junit.jupiter.api.Test;
  */
 class SpringCommandBusTest {
 
-    record Saluer(String nom) implements Command {
-    }
+    record Saluer(String nom) implements Command {}
 
-    record Partir() implements Command {
-    }
+    record Partir() implements Command {}
 
     static class SaluerHandler implements CommandHandler<Saluer> {
         String recu;
@@ -54,14 +52,14 @@ class SpringCommandBusTest {
         CommandBus bus = new SpringCommandBus(List.of());
 
         assertThatThrownBy(() -> bus.dispatch(new Saluer("Rémy")))
-            .isInstanceOf(HandlerNotFoundException.class)
-            .hasMessageContaining("Saluer");
+                .isInstanceOf(HandlerNotFoundException.class)
+                .hasMessageContaining("Saluer");
     }
 
     @Test
     void echoue_au_demarrage_si_deux_handlers_visent_la_meme_commande() {
         assertThatThrownBy(() -> new SpringCommandBus(List.of(new SaluerHandler(), new SaluerHandler())))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Saluer");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Saluer");
     }
 }

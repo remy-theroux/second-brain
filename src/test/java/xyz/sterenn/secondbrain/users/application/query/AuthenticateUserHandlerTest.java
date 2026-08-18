@@ -54,7 +54,7 @@ class AuthenticateUserHandlerTest {
     @Test
     void delivre_un_jeton_au_compte_verifie_qui_donne_le_bon_mot_de_passe() {
         UUID compte = AccountFixture.registerVerified(
-            commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
 
         AccessTokenView vue = queryBus.ask(new AuthenticateUser("alice@exemple.fr", MOT_DE_PASSE));
 
@@ -64,8 +64,7 @@ class AuthenticateUserHandlerTest {
 
     @Test
     void accepte_un_email_saisi_avec_une_casse_differente() {
-        AccountFixture.registerVerified(
-            commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
 
         AccessTokenView vue = queryBus.ask(new AuthenticateUser("ALICE@Exemple.FR", MOT_DE_PASSE));
 
@@ -74,17 +73,16 @@ class AuthenticateUserHandlerTest {
 
     @Test
     void refuse_un_mot_de_passe_incorrect() {
-        AccountFixture.registerVerified(
-            commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
 
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("alice@exemple.fr", "chevalpile43")))
-            .isInstanceOf(InvalidCredentialsException.class);
+                .isInstanceOf(InvalidCredentialsException.class);
     }
 
     @Test
     void refuse_un_email_inconnu() {
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("inconnu@exemple.fr", MOT_DE_PASSE)))
-            .isInstanceOf(InvalidCredentialsException.class);
+                .isInstanceOf(InvalidCredentialsException.class);
     }
 
     @Test
@@ -92,27 +90,25 @@ class AuthenticateUserHandlerTest {
         // Pas d'InvalidEmailException ici : du dehors, une saisie mal formée est un
         // identifiant qui ne correspond à rien, pas une panne à distinguer.
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("pas-un-email", MOT_DE_PASSE)))
-            .isInstanceOf(InvalidCredentialsException.class);
+                .isInstanceOf(InvalidCredentialsException.class);
     }
 
     @Test
     void refuse_un_compte_dont_l_adresse_n_est_pas_verifiee() {
-        AccountFixture.register(
-            commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
+        AccountFixture.register(commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
 
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("bob@exemple.fr", MOT_DE_PASSE)))
-            .isInstanceOf(UnverifiedAccountException.class)
-            .hasMessageContaining("vérifié");
+                .isInstanceOf(UnverifiedAccountException.class)
+                .hasMessageContaining("vérifié");
     }
 
     @Test
     void ne_revele_pas_qu_un_compte_existe_a_qui_ignore_le_mot_de_passe() {
         // Le contrôle de vérification vient APRÈS celui du mot de passe : sans le bon mot
         // de passe, le refus est le même que pour un compte inexistant.
-        AccountFixture.register(
-            commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
+        AccountFixture.register(commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
 
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("bob@exemple.fr", "chevalpile43")))
-            .isInstanceOf(InvalidCredentialsException.class);
+                .isInstanceOf(InvalidCredentialsException.class);
     }
 }

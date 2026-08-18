@@ -59,8 +59,8 @@ class JpaUserRepositoryAdapterTest {
         userRepository.save(User.register(new Email("dave@example.com"), "empreinte"));
 
         assertThat(userRepository.findByEmail(new Email("dave@example.com")))
-            .isPresent()
-            .hasValueSatisfying(user -> assertThat(user.isVerified()).isFalse());
+                .isPresent()
+                .hasValueSatisfying(user -> assertThat(user.isVerified()).isFalse());
         assertThat(userRepository.findByEmail(new Email("inconnu@example.com"))).isEmpty();
     }
 
@@ -72,8 +72,8 @@ class JpaUserRepositoryAdapterTest {
         userRepository.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
 
         assertThat(jdbcTemplate.queryForObject(
-            "SELECT email FROM users_users WHERE email = ?", String.class, "frank@example.com"))
-            .isEqualTo("frank@example.com");
+                        "SELECT email FROM users_users WHERE email = ?", String.class, "frank@example.com"))
+                .isEqualTo("frank@example.com");
     }
 
     @Test
@@ -81,7 +81,7 @@ class JpaUserRepositoryAdapterTest {
         userRepository.save(User.register(new Email("erin@example.com"), "empreinte"));
 
         assertThatThrownBy(() -> userRepository.save(User.register(new Email("erin@example.com"), "autre")))
-            .isInstanceOf(EmailAlreadyUsedException.class);
+                .isInstanceOf(EmailAlreadyUsedException.class);
     }
 
     @Test
@@ -99,7 +99,7 @@ class JpaUserRepositoryAdapterTest {
         email.set(autre, new Email("gina@example.com"));
 
         assertThatThrownBy(() -> userRepository.save(autre))
-            .isInstanceOf(DataIntegrityViolationException.class)
-            .isNotInstanceOf(EmailAlreadyUsedException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .isNotInstanceOf(EmailAlreadyUsedException.class);
     }
 }

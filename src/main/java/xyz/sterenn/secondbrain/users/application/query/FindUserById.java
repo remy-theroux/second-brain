@@ -11,5 +11,4 @@ import xyz.sterenn.secondbrain.shared.bus.Query;
  *
  * @param id identifiant du compte
  */
-public record FindUserById(UUID id) implements Query<Optional<UserView>> {
-}
+public record FindUserById(UUID id) implements Query<Optional<UserView>> {}

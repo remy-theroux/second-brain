@@ -19,11 +19,10 @@ class EmailNotificationSenderTest {
     private static final UUID COMPTE = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private final EmailNotificationSender sender =
-        new EmailNotificationSender(null, "http://localhost:8080", "no-reply@second-brain.localhost");
+            new EmailNotificationSender(null, "http://localhost:8080", "no-reply@second-brain.localhost");
 
     private SimpleMailMessage message(RawVerificationToken jeton) {
-        return sender.buildMessage(
-            new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton));
+        return sender.buildMessage(new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton));
     }
 
     @Test
@@ -36,8 +35,7 @@ class EmailNotificationSenderTest {
 
     @Test
     void annonce_la_verification_dans_le_sujet() {
-        assertThat(message(RawVerificationToken.generate()).getSubject())
-            .isEqualTo("Vérifiez votre adresse email");
+        assertThat(message(RawVerificationToken.generate()).getSubject()).isEqualTo("Vérifiez votre adresse email");
     }
 
     @Test
@@ -45,9 +43,9 @@ class EmailNotificationSenderTest {
         RawVerificationToken jeton = RawVerificationToken.generate();
 
         assertThat(message(jeton).getText())
-            .contains("http://localhost:8080/verification"
-                + "?compte=11111111-1111-1111-1111-111111111111"
-                + "&jeton=" + jeton.value());
+                .contains("http://localhost:8080/verification"
+                        + "?compte=11111111-1111-1111-1111-111111111111"
+                        + "&jeton=" + jeton.value());
     }
 
     @Test

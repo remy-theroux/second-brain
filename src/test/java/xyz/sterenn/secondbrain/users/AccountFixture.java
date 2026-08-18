@@ -27,8 +27,7 @@ public final class AccountFixture {
             CommandBus commandBus,
             RecordingNotificationSender recordingNotificationSender,
             String email,
-            String rawPassword
-    ) {
+            String rawPassword) {
         commandBus.dispatch(new RegisterUser(email, rawPassword));
         return recordingNotificationSender.derniere().accountId();
     }
@@ -38,12 +37,11 @@ public final class AccountFixture {
             CommandBus commandBus,
             RecordingNotificationSender recordingNotificationSender,
             String email,
-            String rawPassword
-    ) {
+            String rawPassword) {
         commandBus.dispatch(new RegisterUser(email, rawPassword));
         VerificationNotification notification = recordingNotificationSender.derniere();
-        commandBus.dispatch(
-            new VerifyAccount(notification.accountId().toString(), notification.rawToken().value()));
+        commandBus.dispatch(new VerifyAccount(
+                notification.accountId().toString(), notification.rawToken().value()));
         return notification.accountId();
     }
 }

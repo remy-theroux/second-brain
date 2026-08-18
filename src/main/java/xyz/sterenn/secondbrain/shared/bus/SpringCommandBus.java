@@ -26,9 +26,9 @@ public class SpringCommandBus implements CommandBus {
             Class<?> commandType = commandTypeOf(handler);
             CommandHandler<?> previous = handlers.put(commandType, handler);
             if (previous != null) {
-                throw new IllegalStateException(
-                    "Deux handlers déclarés pour la commande " + commandType.getSimpleName()
-                        + " : " + previous.getClass().getName() + " et " + handler.getClass().getName());
+                throw new IllegalStateException("Deux handlers déclarés pour la commande " + commandType.getSimpleName()
+                        + " : " + previous.getClass().getName() + " et "
+                        + handler.getClass().getName());
             }
         }
     }
@@ -47,11 +47,10 @@ public class SpringCommandBus implements CommandBus {
     }
 
     private static Class<?> commandTypeOf(CommandHandler<?> handler) {
-        Class<?>[] arguments =
-            GenericTypeResolver.resolveTypeArguments(handler.getClass(), CommandHandler.class);
+        Class<?>[] arguments = GenericTypeResolver.resolveTypeArguments(handler.getClass(), CommandHandler.class);
         if (arguments == null || arguments.length != 1) {
             throw new IllegalStateException(
-                handler.getClass().getName() + " doit implémenter CommandHandler avec un type concret");
+                    handler.getClass().getName() + " doit implémenter CommandHandler avec un type concret");
         }
         return arguments[0];
     }

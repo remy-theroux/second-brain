@@ -1,0 +1,7 @@
+# Artefact de build.
+dist
+
+node_modules
+
+# npm le réécrit à sa façon : le formater ferait un aller-retour à chaque `npm install`.
+package-lock.json

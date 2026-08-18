@@ -6,6 +6,9 @@
 springBoot = "4.0.7"
 dependencyManagement = "1.1.7"
 springdoc = "3.0.3"
+spotless = "8.10.0"
+# Version du formateur lui-même : Spotless la résout à part, aucun BOM ne la porte.
+palantirJavaFormat = "2.78.0"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -18,3 +21,4 @@ springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-u
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 dependency-management = { id = "io.spring.dependency-management", version.ref = "dependencyManagement" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

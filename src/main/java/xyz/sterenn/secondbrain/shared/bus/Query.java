@@ -6,5 +6,4 @@ package xyz.sterenn.secondbrain.shared.bus;
  *
  * @param <R> type du résultat
  */
-public interface Query<R> {
-}
+public interface Query<R> {}

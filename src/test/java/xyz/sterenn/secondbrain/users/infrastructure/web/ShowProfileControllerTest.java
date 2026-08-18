@@ -66,8 +66,7 @@ class ShowProfileControllerTest {
 
     @Test
     void refuse_l_acces_sans_jeton() throws Exception {
-        mockMvc.perform(get("/api/profile"))
-            .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/profile")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -75,14 +74,15 @@ class ShowProfileControllerTest {
         // Tolérance d'horloge du décodeur : 60 s. On date donc deux heures en arrière.
         Instant ilYaDeuxHeures = Instant.now().minus(Duration.ofHours(2));
         JwtClaimsSet revendications = JwtClaimsSet.builder()
-            .subject(UUID.randomUUID().toString())
-            .issuedAt(ilYaDeuxHeures)
-            .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
-            .build();
-        String jetonExpire = jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+                .subject(UUID.randomUUID().toString())
+                .issuedAt(ilYaDeuxHeures)
+                .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
+                .build();
+        String jetonExpire =
+                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonExpire))
-            .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -90,68 +90,67 @@ class ShowProfileControllerTest {
         // Protège la garantie centrale du porteur : un jeton ne peut pas être forgé sans le
         // secret. Les revendications sont par ailleurs valides en tout point (sub, iat, exp
         // cohérents) pour que seule la signature explique le refus.
-        JwtEncoder encodeurEtranger = NimbusJwtEncoder.withSecretKey(
-                new SecretKeySpec(
-                    "une-autre-cle-de-signature-32-octets-au-moins".getBytes(StandardCharsets.UTF_8),
-                    "HmacSHA256"))
-            .build();
+        JwtEncoder encodeurEtranger = NimbusJwtEncoder.withSecretKey(new SecretKeySpec(
+                        "une-autre-cle-de-signature-32-octets-au-moins".getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
+                .build();
         Instant maintenant = Instant.now();
         JwtClaimsSet revendications = JwtClaimsSet.builder()
-            .subject(UUID.randomUUID().toString())
-            .issuedAt(maintenant)
-            .expiresAt(maintenant.plus(Duration.ofHours(1)))
-            .build();
-        String jetonForge = encodeurEtranger.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+                .subject(UUID.randomUUID().toString())
+                .issuedAt(maintenant)
+                .expiresAt(maintenant.plus(Duration.ofHours(1)))
+                .build();
+        String jetonForge = encodeurEtranger
+                .encode(JwtEncoderParameters.from(revendications))
+                .getTokenValue();
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonForge))
-            .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void refuse_un_jeton_bien_signe_dont_le_compte_n_existe_pas() throws Exception {
         Instant maintenant = Instant.now();
         String jeton = accessTokenIssuer
-            .issue(UUID.randomUUID(), maintenant, maintenant.plus(Duration.ofHours(1)))
-            .value();
+                .issue(UUID.randomUUID(), maintenant, maintenant.plus(Duration.ofHours(1)))
+                .value();
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
-            .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void rend_le_profil_du_porteur_du_jeton() throws Exception {
         UUID compte = AccountFixture.registerVerified(
-            commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
         Instant maintenant = Instant.now();
         String jeton = accessTokenIssuer
-            .issue(compte, maintenant, maintenant.plus(Duration.ofHours(1)))
-            .value();
+                .issue(compte, maintenant, maintenant.plus(Duration.ofHours(1)))
+                .value();
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.email").value("alice@exemple.fr"))
-            .andExpect(jsonPath("$.verified").value(true))
-            .andExpect(jsonPath("$.id").value(compte.toString()));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("alice@exemple.fr"))
+                .andExpect(jsonPath("$.verified").value(true))
+                .andExpect(jsonPath("$.id").value(compte.toString()));
     }
 
     @Test
     void bout_en_bout_de_la_connexion_au_profil() throws Exception {
-        AccountFixture.registerVerified(
-            commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
 
         String corps = mockMvc.perform(post("/api/token")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .param("grant_type", "password")
-                .param("username", "alice@exemple.fr")
-                .param("password", MOT_DE_PASSE))
-            .andExpect(status().isOk())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "password")
+                        .param("username", "alice@exemple.fr")
+                        .param("password", MOT_DE_PASSE))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
         String jeton = JsonPath.read(corps, "$.access_token");
 
         mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.email").value("alice@exemple.fr"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("alice@exemple.fr"));
     }
 }

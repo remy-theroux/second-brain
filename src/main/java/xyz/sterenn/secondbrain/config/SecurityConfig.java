@@ -31,23 +31,26 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                // La route de délivrance de jeton doit rester anonyme : un 401 ici serait
-                // une boucle sans issue.
-                .requestMatchers("/api/token").permitAll()
-                // Créer un compte doit rester accessible à un visiteur anonyme : sans cette
-                // ligne, le refus par défaut sous /api rendrait l'inscription impossible à
-                // qui n'a pas déjà de compte.
-                .requestMatchers(HttpMethod.POST, "/api/registrations").permitAll()
-                // Refus par défaut sous /api : une future route protégée l'est sans que
-                // personne ait à y penser, et une route publique doit se déclarer ici.
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().permitAll())
-            // Prend le bean JwtDecoder de JwtConfiguration.
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        http.csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // La route de délivrance de jeton doit rester anonyme : un 401 ici serait
+                        // une boucle sans issue.
+                        .requestMatchers("/api/token")
+                        .permitAll()
+                        // Créer un compte doit rester accessible à un visiteur anonyme : sans cette
+                        // ligne, le refus par défaut sous /api rendrait l'inscription impossible à
+                        // qui n'a pas déjà de compte.
+                        .requestMatchers(HttpMethod.POST, "/api/registrations")
+                        .permitAll()
+                        // Refus par défaut sous /api : une future route protégée l'est sans que
+                        // personne ait à y penser, et une route publique doit se déclarer ici.
+                        .requestMatchers("/api/**")
+                        .authenticated()
+                        .anyRequest()
+                        .permitAll())
+                // Prend le bean JwtDecoder de JwtConfiguration.
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
         return http.build();
     }

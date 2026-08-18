@@ -31,7 +31,8 @@ class BCryptTokenHasherTest {
     void refuse_un_autre_jeton() {
         String empreinte = hasher.hash(RawVerificationToken.generate().value());
 
-        assertThat(hasher.matches(RawVerificationToken.generate().value(), empreinte)).isFalse();
+        assertThat(hasher.matches(RawVerificationToken.generate().value(), empreinte))
+                .isFalse();
     }
 
     @Test

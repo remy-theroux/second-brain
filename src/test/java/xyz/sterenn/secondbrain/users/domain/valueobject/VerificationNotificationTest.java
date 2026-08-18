@@ -14,7 +14,7 @@ class VerificationNotificationTest {
         RawVerificationToken jeton = RawVerificationToken.generate();
 
         VerificationNotification notification =
-            new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
+                new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
 
         assertThat(notification.recipient()).isEqualTo(new Email("alice@example.com"));
         assertThat(notification.accountId()).isEqualTo(COMPTE);
@@ -26,7 +26,7 @@ class VerificationNotificationTest {
         RawVerificationToken jeton = RawVerificationToken.generate();
 
         VerificationNotification notification =
-            new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
+                new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
 
         assertThat(notification.toString()).doesNotContain(jeton.value());
     }
@@ -34,8 +34,7 @@ class VerificationNotificationTest {
     @Test
     void est_bien_une_notification() {
         Notification notification =
-            new VerificationNotification(new Email("alice@example.com"), COMPTE,
-                RawVerificationToken.generate());
+                new VerificationNotification(new Email("alice@example.com"), COMPTE, RawVerificationToken.generate());
 
         assertThat(notification.recipient()).isEqualTo(new Email("alice@example.com"));
     }

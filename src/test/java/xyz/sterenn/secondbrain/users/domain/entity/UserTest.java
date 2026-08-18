@@ -9,7 +9,8 @@ class UserTest {
 
     @Test
     void nait_non_verifie() {
-        assertThat(User.register(new Email("alice@example.com"), "empreinte").isVerified()).isFalse();
+        assertThat(User.register(new Email("alice@example.com"), "empreinte").isVerified())
+                .isFalse();
     }
 
     @Test

@@ -48,6 +48,6 @@ class FindUserByEmailHandlerTest {
     @Test
     void refuse_un_email_mal_forme() {
         assertThatThrownBy(() -> queryBus.ask(new FindUserByEmail("pas-un-email")))
-            .isInstanceOf(InvalidEmailException.class);
+                .isInstanceOf(InvalidEmailException.class);
     }
 }

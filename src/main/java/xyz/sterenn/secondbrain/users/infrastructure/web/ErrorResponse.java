@@ -6,5 +6,4 @@ package xyz.sterenn.secondbrain.users.infrastructure.web;
  *
  * @param message message affichable tel quel
  */
-public record ErrorResponse(String message) {
-}
+public record ErrorResponse(String message) {}

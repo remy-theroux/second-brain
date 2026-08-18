@@ -35,8 +35,7 @@ public class JwtConfiguration {
     public JwtConfiguration(@Value("${secondbrain.jwt.secret}") String secret) {
         byte[] octets = secret.getBytes(StandardCharsets.UTF_8);
         if (octets.length < MIN_SECRET_LENGTH) {
-            throw new IllegalStateException(
-                "secondbrain.jwt.secret doit faire au moins " + MIN_SECRET_LENGTH
+            throw new IllegalStateException("secondbrain.jwt.secret doit faire au moins " + MIN_SECRET_LENGTH
                     + " octets pour signer en HS256 ; " + octets.length + " reçus");
         }
         this.secretKey = new SecretKeySpec(octets, "HmacSHA256");
@@ -57,6 +56,8 @@ public class JwtConfiguration {
      */
     @Bean
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(secretKey).macAlgorithm(MacAlgorithm.HS256).build();
+        return NimbusJwtDecoder.withSecretKey(secretKey)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
     }
 }

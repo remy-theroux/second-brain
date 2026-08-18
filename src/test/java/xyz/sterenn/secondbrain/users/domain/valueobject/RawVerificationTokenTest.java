@@ -40,8 +40,7 @@ class RawVerificationTokenTest {
 
     @Test
     void refuse_un_jeton_vide() {
-        assertThatThrownBy(() -> new RawVerificationToken("  "))
-            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RawVerificationToken("  ")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

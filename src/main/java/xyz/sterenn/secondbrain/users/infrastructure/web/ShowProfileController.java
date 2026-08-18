@@ -45,7 +45,7 @@ public class ShowProfileController {
         }
 
         return queryBus.ask(new FindUserById(accountId))
-            .map(ResponseEntity::ok)
-            .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 }

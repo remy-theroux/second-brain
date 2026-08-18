@@ -10,7 +10,7 @@ public class TestSecondBrainApplication {
 
     public static void main(String[] args) {
         SpringApplication.from(SecondBrainApplication::main)
-            .with(TestcontainersConfiguration.class)
-            .run(args);
+                .with(TestcontainersConfiguration.class)
+                .run(args);
     }
 }

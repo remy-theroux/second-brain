@@ -53,14 +53,13 @@ class CommandBusTransactionTest {
     @Test
     void annule_les_ecritures_quand_le_handler_echoue() {
         assertThatThrownBy(() -> commandBus.dispatch(new EchouerApresEcriture("frank@example.com")))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessage("échec volontaire");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("échec volontaire");
 
         assertThat(userRepository.existsByEmail(new Email("frank@example.com"))).isFalse();
     }
 
-    record EchouerApresEcriture(String email) implements Command {
-    }
+    record EchouerApresEcriture(String email) implements Command {}
 
     /**
      * Écrit puis lève une {@link RuntimeException} : seules les exceptions non checked

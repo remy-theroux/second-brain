@@ -21,17 +21,16 @@ public final class PasswordPolicy {
      * le contrôle de longueur les rejette déjà.
      */
     private static final Set<String> BLOCKLIST = Set.of(
-        "password1234",
-        "passwordpassword",
-        "motdepasse12",
-        "motdepasse123",
-        "123456789012",
-        "1234567890123",
-        "azertyuiopqs",
-        "qwertyuiopas",
-        "administrator",
-        "secondbrain1"
-    );
+            "password1234",
+            "passwordpassword",
+            "motdepasse12",
+            "motdepasse123",
+            "123456789012",
+            "1234567890123",
+            "azertyuiopqs",
+            "qwertyuiopas",
+            "administrator",
+            "secondbrain1");
 
     private PasswordPolicy() {
         // classe utilitaire

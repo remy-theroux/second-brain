@@ -100,6 +100,14 @@ assumé documenté dans `CLAUDE.md`.
   s'exécute sous l'UID de l'utilisateur : sans cela, `npm install` écrit `node_modules/` en
   `root` dans le dépôt.
 - `package-lock.json` est versionné, la CI fait `npm ci`.
+- **Le style est décidé par Prettier** (`frontend/.prettierrc.json` : pas de
+  point-virgule, guillemets simples, 100 colonnes) : `make format-front` avant de
+  committer, et ne pas défaire son travail à la main. `npm run format:check` est une étape
+  bloquante de la CI. Prettier s'installe comme toute dépendance, par
+  `gfront npm install -D`, jamais en éditant `package.json`.
+- Le périmètre de Prettier s'arrête à `frontend/`. `CLAUDE.md`, `README.md` et les autres
+  Markdown de la racine sont rédigés à la main et `package-lock.json` est réécrit par npm :
+  les trois sont hors de sa portée, le dernier par `.prettierignore`.
 - Les dépendances s'installent par `gfront npm install <paquet>`, jamais en éditant
   `package.json` à la main : les versions résolues doivent atterrir dans le lock.
 - `npm run build` produit ce que sert l'image nginx : ce n'est plus seulement un contrôle

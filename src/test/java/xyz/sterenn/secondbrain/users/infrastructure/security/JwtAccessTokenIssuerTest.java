@@ -53,14 +53,14 @@ class JwtAccessTokenIssuerTest {
         assertThat(jeton.expiresAt()).isEqualTo(expiration);
         // Les revendications JWT sont datées à la seconde : on compare au même grain.
         assertThat(jwtDecoder.decode(jeton.value()).getExpiresAt().getEpochSecond())
-            .isEqualTo(expiration.getEpochSecond());
+                .isEqualTo(expiration.getEpochSecond());
     }
 
     @Test
     void n_ecrit_aucune_revendication_sur_l_email() {
         // Décision 3 du design : le jeton ne transporte pas de donnée personnelle.
-        AccessToken jeton = accessTokenIssuer.issue(UUID.randomUUID(), Instant.now(),
-            Instant.now().plusSeconds(3600));
+        AccessToken jeton = accessTokenIssuer.issue(
+                UUID.randomUUID(), Instant.now(), Instant.now().plusSeconds(3600));
 
         assertThat(jwtDecoder.decode(jeton.value()).getClaims()).doesNotContainKey("email");
     }

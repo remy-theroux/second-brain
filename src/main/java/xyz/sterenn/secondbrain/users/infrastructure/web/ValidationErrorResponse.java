@@ -12,5 +12,4 @@ import java.util.Map;
  *
  * @param errors nom du champ → message de refus
  */
-public record ValidationErrorResponse(Map<String, String> errors) {
-}
+public record ValidationErrorResponse(Map<String, String> errors) {}
