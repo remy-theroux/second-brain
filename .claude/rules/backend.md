@@ -19,6 +19,7 @@ Avant d'écrire une classe, décider de sa couche :
 | Implémente un port avec une techno concrète | `<contexte>/infrastructure/<techno>/` |
 | Projette un type du domaine sur une colonne (`AttributeConverter`) | `<contexte>/infrastructure/persistence/` |
 | Traduit HTTP en commande/query | `<contexte>/infrastructure/web/` |
+| Est une forme de réponse d'erreur commune à toutes les routes | `shared/web/` |
 | Sert plusieurs contextes sans logique métier | `shared/` |
 
 - **Le domaine n'importe jamais `org.springframework.*` ni `…infrastructure.*`.**
@@ -116,6 +117,15 @@ Avant d'écrire une classe, décider de sa couche :
 - Ne pas dupliquer une règle du domaine dans la validation du formulaire — les deux
   divergeraient. `@NotBlank` côté form, format et robustesse côté domaine.
 - Après un POST réussi : redirect-after-post.
+- **Une route qui reçoit un multipart exige `spring.servlet.multipart.resolve-lazily=true`.**
+  Sans lui, `MaxUploadSizeExceededException` est levée par `DispatcherServlet.checkMultipart`,
+  donc **avant** qu'un contrôleur soit désigné : aucun `@ExceptionHandler` de contrôleur ne
+  la voit, et il faudrait un `@RestControllerAdvice` global — ce que ce projet refuse. Avec
+  lui, la résolution a lieu au binding de l'argument, et le refus se traduit auprès de sa
+  route.
+- Un refus qui doit transporter plus qu'une phrase mérite son propre record de réponse
+  (`DuplicateDocumentResponse` porte l'identifiant du doublon). Noyer un identifiant dans un
+  message le rend inexploitable par l'appelant.
 
 ## Base de données
 
@@ -146,6 +156,27 @@ Avant d'écrire une classe, décider de sa couche :
 - Noms de méthodes de test en français avec des underscores :
   `refuse_un_email_deja_utilise`. Assertions AssertJ.
 - Un test par scénario Gherkin du ticket, au niveau où le scénario est observable.
+- **Dans un test `@Transactional`, un appel HTTP refusé doit être le dernier du test.**
+  L'exception métier traverse le proxy transactionnel du bus et marque la transaction
+  englobante « rollback-only » ; la requête suivante échouerait sur une
+  `UnexpectedRollbackException` sans rien apprendre sur la route. Ce qu'il reste à vérifier
+  après un refus se lit **par le port**, dans la transaction du test, pas par une seconde
+  requête.
+- **`@Transactional` annule la base, jamais le disque.** Un test qui écrit un fichier le
+  nettoie explicitement en `@AfterEach`, sans quoi il laisse derrière lui un état qu'aucune
+  ligne ne désigne — et que le refus d'écrasement de l'adapter de stockage transformera en
+  échec lors d'une exécution ultérieure.
+- **MockMvc ne traverse aucun analyseur multipart** : un `MockMultipartFile` est déjà
+  découpé, et `MaxUploadSizeExceededException` n'y sera jamais levée. Ce qui dépend de
+  l'analyse réelle du corps se teste sur un vrai serveur (`webEnvironment = RANDOM_PORT` et
+  `RestTestClient.bindToServer()`, qui vient de `spring-test` et ne demande aucune
+  dépendance de plus).
+- **Un corps volumineux exige `RestTestClient.bindToServer(new SimpleClientHttpRequestFactory())`.**
+  La fabrique par défaut s'appuie sur le client HTTP du JDK, qui émet en
+  `Transfer-Encoding: chunked` et abandonne sur une `IOException` — « chunked transfer
+  encoding, state: READING_LENGTH » — plutôt que de lire la réponse que le serveur a
+  pourtant déjà envoyée. Le test échoue alors que la route répond correctement : vérifier
+  au `curl` avant de conclure que le code est en cause.
 - Un mapping qui ne tient qu'à un scan de packages se vérifie **en intégration**. Un test
   unitaire d'`EmailAttributeConverter` passerait au vert même si Hibernate ne l'appliquait
   jamais ; ce qui fait foi, c'est `SecondBrainApplicationTests` pour la découverte, et

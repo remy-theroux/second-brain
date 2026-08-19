@@ -60,6 +60,7 @@ services:
       SPRING_MAIL_PORT: 1025
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
+      SECONDBRAIN_ORIGINALS_PATH: /data/originals
     labels:
       - "traefik.enable=true"
       # /verification est hors /api à dessein : c'est une navigation, pas un appel XHR.
@@ -75,6 +76,9 @@ services:
       - ./:/workspace
       # Cache Gradle isolé dans un volume nommé (pas écrit sur l'hôte).
       - gradle-cache:/workspace/.gradle-cache
+      # Fichiers d'origine des documents. Dans un volume nommé et non dans le bind mount :
+      # ils ne sont pas du code, et ils survivent à un `up --build` sans polluer le dépôt.
+      - originals:/data/originals
     depends_on:
       db:
         condition: service_healthy
@@ -108,4 +112,5 @@ services:
 volumes:
   db-data:
   gradle-cache:
+  originals:
   frontend-node-modules:
