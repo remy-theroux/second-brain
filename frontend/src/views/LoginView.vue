@@ -1,6 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
+import Password from 'primevue/password'
 import { useAuthStore } from '@/stores/auth'
 
 // Le serveur redirige ici avec un code, pas un message : c'est une navigation, et faire
@@ -39,29 +43,67 @@ async function submit() {
 </script>
 
 <template>
-  <main>
+  <main class="login">
     <h1>Se connecter</h1>
 
-    <p v-if="verificationMessage" role="status">{{ verificationMessage }}</p>
+    <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
+    <Message v-if="verificationMessage" severity="success" role="status">
+      {{ verificationMessage }}
+    </Message>
 
-    <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+    <Message v-if="errorMessage" severity="error">{{ errorMessage }}</Message>
 
     <form @submit.prevent="submit">
-      <p>
-        <label for="email">Email</label><br />
-        <input id="email" v-model="email" type="email" autocomplete="username" />
-      </p>
-      <p>
-        <label for="password">Mot de passe</label><br />
-        <input id="password" v-model="password" type="password" autocomplete="current-password" />
-      </p>
-      <p>
-        <button type="submit">Se connecter</button>
-      </p>
+      <div class="field">
+        <label for="email">Email</label>
+        <InputText id="email" v-model="email" type="email" autocomplete="username" fluid />
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <Password
+          v-model="password"
+          input-id="password"
+          :feedback="false"
+          toggle-mask
+          fluid
+          :input-props="{ autocomplete: 'current-password' }"
+        />
+      </div>
+      <Button type="submit" label="Se connecter" fluid />
     </form>
 
-    <p>
+    <p class="switch">
       <RouterLink :to="{ name: 'register' }">Créer mon compte</RouterLink>
     </p>
   </main>
 </template>
+
+<style scoped>
+.login {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.switch {
+  margin: 0;
+  text-align: center;
+}
+</style>
