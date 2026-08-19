@@ -1,0 +1,29 @@
+/*
+ * Socle global minimal : le thème Aura porte le style des composants, ce fichier ne pose
+ * que ce qui n'appartient à aucun composant. Les couleurs passent par les design tokens
+ * `--p-*` pour suivre le thème clair/sombre du système sans double définition.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+}
