@@ -1,45 +1,16 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+// Le chargement du profil et la déconnexion vivent dans AuthenticatedLayout : la barre
+// latérale en a besoin sur toutes les pages connectées, celle-ci n'est que du contenu.
 const auth = useAuthStore()
-const router = useRouter()
-const errorMessage = ref('')
-
-// Le garde a laissé passer sur la foi de l'expiration mémorisée côté navigateur ; cet
-// appel demande au serveur ce qu'il en pense vraiment. Un 401 déconnecte (le store l'a déjà
-// fait) et renvoie vers la connexion. Toute autre panne (backend éteint, 500, proxy en
-// erreur) ne déconnecte pas : rediriger quand même laisserait une navigation dupliquée
-// silencieuse et l'utilisateur sur une page vide, sans explication. On affiche donc l'erreur
-// à la place.
-onMounted(async () => {
-  try {
-    await auth.loadProfile()
-  } catch (error) {
-    if (!auth.isAuthenticated()) {
-      await router.push({ name: 'login' })
-      return
-    }
-    errorMessage.value = error.message
-  }
-})
-
-async function logout() {
-  auth.logout()
-  await router.push({ name: 'login' })
-}
 </script>
 
 <template>
-  <main>
-    <h1>Second Brain</h1>
+  <section>
+    <h2>Accueil</h2>
 
-    <p v-if="auth.profile">Connecté avec l'adresse {{ auth.profile.email }}.</p>
-    <p v-else-if="errorMessage" role="alert">{{ errorMessage }}</p>
-
-    <p>
-      <button type="button" @click="logout">Se déconnecter</button>
-    </p>
-  </main>
+    <p v-if="auth.profile">Bienvenue dans votre espace, {{ auth.profile.email }}.</p>
+    <p v-else>Bienvenue dans votre espace.</p>
+  </section>
 </template>
