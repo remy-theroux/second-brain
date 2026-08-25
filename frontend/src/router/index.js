@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
+import DesignSystemView from '@/views/DesignSystemView.vue'
 
 export const routes = [
   // La racine ne porte rien : elle mène à l'espace connecté, qui renverra vers le login
@@ -11,6 +12,20 @@ export const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
   { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
   { path: '/home', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+  // Catalogue des tokens et des composants partagés, pour le passage humain dans un
+  // navigateur. Développement seulement : le spread conditionnel retire la route ET la vue
+  // du bundle de production, plutôt qu'un garde qui laisserait le code embarqué. Ni
+  // `guestOnly` ni `requiresAuth` : la page se regarde connecté ou non.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/design-system',
+          name: 'design-system',
+          component: DesignSystemView,
+          meta: { layout: 'bare' },
+        },
+      ]
+    : []),
 ]
 
 /**
