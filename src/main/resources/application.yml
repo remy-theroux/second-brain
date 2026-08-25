@@ -54,6 +54,24 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  rabbitmq:
+    # Même statut que la datasource : le défaut sert le développement hors conteneur,
+    # compose.yaml pose les vrais. Les identifiants par défaut de l'image officielle sont
+    # guest/guest, et ils ne sont acceptés que depuis localhost — un déploiement pose les
+    # siens par ces quatre variables.
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        # Un message dont le traitement lève une exception est rejeté SANS remise en file.
+        # Le défaut (true) le remettrait en tête de file et le retraiterait sans fin : un
+        # PDF qui fait planter l'extracteur bloquerait le worker pour toujours. Pas de
+        # dead-letter queue ni de retry (spec, décision 7) : un échec doit finir en FAILED
+        # sur le document, pas être rejoué.
+        default-requeue-rejected: false
+
 management:
   endpoints:
     web:
