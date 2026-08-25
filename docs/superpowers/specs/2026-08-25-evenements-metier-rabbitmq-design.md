@@ -173,9 +173,10 @@ n'y est pas déployé.
 
 Ce que le profil `worker` fait : `spring.main.web-application-type=none` dans
 `application-worker.yml` — pas de Tomcat, donc aucun contrôleur mappé, ni Swagger, ni
-actuator HTTP. `SecurityConfig` et `JwtConfiguration` portent `@Profile("!worker")` :
-elles réclament `HttpSecurity`, qui n'existe pas sans servlet. Les contrôleurs, eux,
-restent des beans inoffensifs sans mapping ; ils n'ont pas besoin d'annotation.
+actuator HTTP. `SecurityConfig` porte `@Profile("!worker")` : elle réclame
+`HttpSecurity`, qui n'existe pas sans servlet. `JwtConfiguration`, elle, reste dans les
+deux rôles — `JwtAccessTokenIssuer` en dépend et n'a rien de propre au web. Les
+contrôleurs restent des beans inoffensifs sans mapping ; ils n'ont pas besoin d'annotation.
 
 Ce que le profil `worker` active : les listeners, annotés `@Profile("worker")`. Dans le
 rôle API, ils n'existent pas — l'API publie, elle ne consomme jamais.
@@ -215,7 +216,7 @@ skill `worktree` apprend deux ports de plus dans son bloc décalé.
 xyz.sterenn.secondbrain
 ├── config/
 │   ├── SecurityConfig            @Profile("!worker")
-│   ├── JwtConfiguration          @Profile("!worker")
+│   ├── JwtConfiguration          commune aux deux rôles (JwtAccessTokenIssuer en dépend)
 │   └── ...
 ├── shared/
 │   ├── bus/                      inchangé
@@ -232,7 +233,8 @@ xyz.sterenn.secondbrain
     ├── application/command/
     │   └── UploadDocumentHandler publie DocumentUploaded en dernière étape
     └── infrastructure/messaging/
-        ├── ExtractionQueueConfiguration     queue knowledge.extraction + binding
+        ├── KnowledgeMessagingConfiguration  catalogue des événements du contexte,
+        │                                    queue knowledge.extraction + binding
         └── DocumentUploadedListener         @RabbitListener @Profile("worker")
 
 src/main/resources/
@@ -289,9 +291,10 @@ sur un FQCN.
 l'`ObjectMapper` Jackson 3 de Boot (`tools.jackson`, `JavaTimeModule` inclus pour
 `Instant`), et le `RabbitTemplate` qui l'utilise.
 
-`ExtractionQueueConfiguration` — `Queue("knowledge.extraction", durable)` et son binding
-sur `knowledge.DocumentUploaded`. Dans `knowledge`, parce que la queue appartient au
-consommateur. Déclarée dans les deux rôles.
+`KnowledgeMessagingConfiguration` — la déclaration des événements du contexte
+(`DomainEventRegistration`, lue par `AmqpConfiguration`), la `Queue("knowledge.extraction",
+durable)` et son binding sur `knowledge.DocumentUploaded`. Dans `knowledge`, parce que la
+queue appartient au consommateur. Déclarée dans les deux rôles.
 
 `DocumentUploadedListener` — `@Component @Profile("worker")`,
 `@RabbitListener(queues = "knowledge.extraction")`, méthode
@@ -334,9 +337,9 @@ pas sur `RabbitTemplate` :
     publie puis lève ; après le refus, la queue reste vide sur le délai d'attente.
   - `publie_immediatement_hors_transaction` : `publish` appelé hors bus ; le message
     arrive.
-- `DocumentUploadedListenerTest` — `@SpringBootTest` + `@ActiveProfiles("worker")` : un
-  contexte **sans Tomcat**, ce qui vérifie du même coup que le rôle démarre (donc que
-  `SecurityConfig` et `JwtConfiguration` s'effacent bien). Envoie un message sur la queue
+- `DocumentUploadedListenerTest` — `@SpringBootTest(webEnvironment = NONE)` +
+  `@ActiveProfiles("worker")` : un contexte **sans Tomcat**, ce qui vérifie du même coup
+  que le rôle démarre (donc que `SecurityConfig` s'efface bien). Envoie un message sur la queue
   et vérifie la journalisation avec `OutputCaptureExtension`. Le plan d'extraction
   remplacera l'assertion sur le journal par une assertion sur le statut du document.
 - `SecondBrainApplicationTests` reste tel quel : le rôle API par défaut démarre avec
@@ -361,8 +364,7 @@ que le conteneur `worker` reçoit bien l'événement d'un dépôt fait dans le n
 
 ## Pointeurs
 
-- `docs/superpowers/plans/2026-08-25-evenements-metier-rabbitmq.md` — le plan, quand il
-  sera écrit.
+- `docs/superpowers/plans/2026-08-25-evenements-metier-rabbitmq.md` — le plan.
 - Spec de l'extraction, à venir : `docs/superpowers/specs/2026-08-25-extraction-texte-design.md`.
 - `CLAUDE.md`, « La transaction vit dans le bus » — pourquoi la publication ne peut pas se
   faire dans la transaction.
