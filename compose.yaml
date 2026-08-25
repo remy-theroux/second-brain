@@ -49,6 +49,13 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
+    environment:
+      # Compte administrateur du broker, créé au premier démarrage à la place de `guest`
+      # (l'image ne crée pas `guest` quand ces deux variables sont posées). L'image rend
+      # le compte joignable depuis tout le réseau, et Docker publie les ports sur toutes
+      # les interfaces : c'est un secret de développement, du même rang que POSTGRES_PASSWORD.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-second_brain}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-second_brain}
     ports:
       # AMQP pour l'application, console de gestion pour voir passer les messages. Même
       # statut que Mailpit : un outil de développement, pas routé par Traefik.
@@ -72,6 +79,8 @@ services:
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-second_brain}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-second_brain}
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals
@@ -134,6 +143,8 @@ services:
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-second_brain}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-second_brain}
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals

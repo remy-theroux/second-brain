@@ -56,9 +56,10 @@ spring:
 
   rabbitmq:
     # Même statut que la datasource : le défaut sert le développement hors conteneur,
-    # compose.yaml pose les vrais. Les identifiants par défaut de l'image officielle sont
-    # guest/guest, et ils ne sont acceptés que depuis localhost — un déploiement pose les
-    # siens par ces quatre variables.
+    # compose.yaml pose les vrais. guest/guest sont les identifiants par défaut de l'image
+    # officielle — qui les accepte depuis tout le réseau, pas seulement en loopback — et ils
+    # n'existent plus dès que le broker est créé avec les siens, ce que compose.yaml fait :
+    # un déploiement pose les quatre variables, sans quoi rien ne se connecte.
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}

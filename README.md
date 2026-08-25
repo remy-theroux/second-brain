@@ -43,7 +43,7 @@ port.
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Mailpit (mails capturés en dev) | http://localhost:8025 — aucun mail ne sort de la machine |
-| Console RabbitMQ (messages en dev) | http://localhost:15672 — guest / guest |
+| Console RabbitMQ (messages en dev) | http://localhost:15672 — `RABBITMQ_USER` / `RABBITMQ_PASSWORD` du `.env` (`second_brain` / `second_brain` par défaut) |
 
 Health et Swagger ne sont routés qu'en développement : en production, le proxy n'expose que
 `/api` et `/verification`.
@@ -140,12 +140,17 @@ développement, voir `compose.yaml`) :
 | `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
 | `SPRING_RABBITMQ_HOST` | Broker des événements métier | `localhost` |
 | `SPRING_RABBITMQ_PORT` | Broker des événements métier | `5672` |
-| `SPRING_RABBITMQ_USERNAME` | Broker des événements métier | `guest` |
+| `SPRING_RABBITMQ_USERNAME` | Broker des événements métier — un utilisateur **dédié**, pas l'administrateur : l'application déclare son exchange, sa queue et son binding, puis publie et consomme, donc les permissions `configure` / `write` / `read` sur le vhost suffisent | `guest` — le compte par défaut de l'image, qui n'existe plus dès que le broker est créé avec ses propres identifiants |
 | `SPRING_RABBITMQ_PASSWORD` | Broker des événements métier | `guest` |
 
 Le worker se déploie **depuis la même image**, avec `SPRING_PROFILES_ACTIVE=worker` et les
 mêmes variables que l'API (base, mail, stockage, secret JWT, RabbitMQ). Il n'expose aucun
 port : ne pas lui donner de domaine. Sans lui, les documents déposés restent `PENDING`.
+
+Le broker lui-même se crée avec ses propres identifiants (`RABBITMQ_DEFAULT_USER` /
+`RABBITMQ_DEFAULT_PASS` sur l'image officielle) et **sans console de gestion exposée** —
+l'image sans suffixe `-management` suffit. L'administrateur ainsi créé sert à créer
+l'utilisateur dédié de l'application ; il n'est jamais celui que l'application utilise.
 
 Le déploiement suppose un **reverse proxy devant les deux images**, qui route `/api` et
 `/verification` vers l'API et tout le reste vers le front — c'est ce qui donne au navigateur

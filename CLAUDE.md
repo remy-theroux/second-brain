@@ -630,7 +630,8 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
-RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`guest`/`guest`), et un
+RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
+`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), et un
 conteneur `worker` de la même image que `app`.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport

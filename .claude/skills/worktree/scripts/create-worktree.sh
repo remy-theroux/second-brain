@@ -152,7 +152,7 @@ Worktree prêt.
   Application http://localhost:$((8080 + index))
   Mailpit     http://localhost:$((8025 + index))
   PostgreSQL  localhost:$((5432 + index))
-  RabbitMQ    http://localhost:$((15672 + index))  (console, guest/guest)
+  RabbitMQ    http://localhost:$((15672 + index))  (console, RABBITMQ_USER/RABBITMQ_PASSWORD du .env)
 
 Démarrer la pile :
 
