@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -22,7 +23,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.context.WebApplicationContext;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
-import xyz.sterenn.secondbrain.shared.event.amqp.AmqpConfiguration;
 
 /**
  * Le rôle worker, démarré comme en production : profil {@code worker}, aucun serveur HTTP.
@@ -32,15 +32,17 @@ import xyz.sterenn.secondbrain.shared.event.amqp.AmqpConfiguration;
  * environnement servlet simulé, et le test vérifierait un contexte que le worker ne
  * construit jamais.
  *
- * <p>Le troisième scénario du socle : un événement publié est reçu par le worker. Tant
- * qu'aucune commande d'extraction n'existe, la réception se constate dans le journal ; le
- * plan d'extraction remplacera cette assertion par une lecture du statut du document.
+ * <p>Le troisième scénario du socle : un événement publié est reçu par le worker. La queue
+ * {@code domain.knowledge.events} reçoit tout le contexte ({@code knowledge.#}), et c'est
+ * l'en-tête de type qui désigne le handler. Tant qu'aucune commande d'extraction n'existe,
+ * la réception se constate dans le journal ; le plan d'extraction remplacera cette
+ * assertion par une lecture du statut du document.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")
 @ExtendWith(OutputCaptureExtension.class)
-class DocumentUploadedListenerTest {
+class KnowledgeEventListenerTest {
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -48,12 +50,22 @@ class DocumentUploadedListenerTest {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private AmqpAdmin amqpAdmin;
+
+    @Test
+    void declare_la_queue_du_contexte() {
+        // Nom littéral à dessein, comme la clé de routage plus bas : c'est le contrat sur le
+        // fil que le test fige, pas la constante.
+        assertThat(amqpAdmin.getQueueInfo("domain.knowledge.events")).isNotNull();
+    }
+
     @Test
     void le_role_worker_demarre_sans_serveur_http_ni_filtre_de_securite() {
         assertThat(applicationContext).isNotInstanceOf(WebApplicationContext.class);
         assertThat(applicationContext.getBeanNamesForType(SecurityFilterChain.class))
                 .isEmpty();
-        assertThat(applicationContext.getBeanNamesForType(DocumentUploadedListener.class))
+        assertThat(applicationContext.getBeanNamesForType(KnowledgeEventListener.class))
                 .hasSize(1);
     }
 
@@ -61,16 +73,16 @@ class DocumentUploadedListenerTest {
     void recoit_l_evenement_publie(CapturedOutput sortie) {
         UUID document = UUID.randomUUID();
 
-        // Clé de routage littérale à dessein : le test fige le contrat sur le fil. Passer
-        // par DomainEventNames.of le rendrait tautologique — il vérifierait que le code
-        // s'accorde avec lui-même.
+        // Exchange et clé de routage littéraux à dessein : le test fige le contrat sur le
+        // fil. Passer par les constantes ou DomainEventNames.of le rendrait tautologique —
+        // il vérifierait que le code s'accorde avec lui-même.
         rabbitTemplate.convertAndSend(
-                AmqpConfiguration.EVENTS_EXCHANGE,
-                "knowledge.DocumentUploaded",
+                "domain.events",
+                "knowledge.document.uploaded",
                 new DocumentUploaded(document, UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z")));
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(sortie)
-                .contains("Événement knowledge.DocumentUploaded reçu pour le document " + document));
+                .contains("Événement knowledge.document.uploaded reçu pour le document " + document));
     }
 
     @Test
@@ -84,20 +96,22 @@ class DocumentUploadedListenerTest {
                 .toMessage(
                         new DocumentUploaded(document, UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z")),
                         new MessageProperties());
-        message.getMessageProperties().setHeader("__TypeId__", "knowledge.Inconnu");
+        message.getMessageProperties().setHeader("__TypeId__", "knowledge.inconnu.survenu");
 
-        rabbitTemplate.send(AmqpConfiguration.EVENTS_EXCHANGE, "knowledge.DocumentUploaded", message);
+        // Clé de routage d'un autre événement du contexte : la queue est liée sur
+        // `knowledge.#`, elle reçoit tout le contexte, et c'est l'en-tête qui est jugé.
+        rabbitTemplate.send("domain.events", "knowledge.inconnu.survenu", message);
 
         await().atMost(Duration.ofSeconds(5))
-                .untilAsserted(() -> assertThat(sortie).contains("knowledge.Inconnu"));
+                .untilAsserted(() -> assertThat(sortie).contains("knowledge.inconnu.survenu"));
         // Le listener n'a pas été appelé : la conversion échoue avant lui.
         assertThat(sortie).doesNotContain("reçu pour le document " + document);
 
         // Et le message n'est pas remis en file (`default-requeue-rejected=false`) : sans
         // ça, un message toxique tournerait en boucle et le journal grossirait sans fin.
-        int occurrences = occurrencesDe("knowledge.Inconnu", sortie);
+        int occurrences = occurrencesDe("knowledge.inconnu.survenu", sortie);
         Thread.sleep(1000);
-        assertThat(occurrencesDe("knowledge.Inconnu", sortie)).isEqualTo(occurrences);
+        assertThat(occurrencesDe("knowledge.inconnu.survenu", sortie)).isEqualTo(occurrences);
     }
 
     private int occurrencesDe(String motif, CapturedOutput sortie) {

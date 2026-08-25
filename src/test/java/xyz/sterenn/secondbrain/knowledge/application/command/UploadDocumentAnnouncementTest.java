@@ -78,7 +78,7 @@ class UploadDocumentAnnouncementTest {
                 OBSERVATION,
                 Binding.DestinationType.QUEUE,
                 AmqpConfiguration.EVENTS_EXCHANGE,
-                "knowledge.DocumentUploaded",
+                "knowledge.document.uploaded",
                 null));
     }
 

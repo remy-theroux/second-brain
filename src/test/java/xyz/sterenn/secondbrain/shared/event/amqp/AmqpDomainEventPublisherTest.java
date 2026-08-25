@@ -81,9 +81,9 @@ class AmqpDomainEventPublisherTest {
         Message message = rabbitTemplate.receive(OBSERVATION, ATTENTE_MS);
 
         assertThat(message).isNotNull();
-        assertThat(message.getMessageProperties().getReceivedRoutingKey()).isEqualTo("knowledge.DocumentUploaded");
+        assertThat(message.getMessageProperties().getReceivedRoutingKey()).isEqualTo("knowledge.document.uploaded");
         assertThat(message.getMessageProperties().getHeaders())
-                .containsEntry("__TypeId__", "knowledge.DocumentUploaded");
+                .containsEntry("__TypeId__", "knowledge.document.uploaded");
         assertThat(rabbitTemplate.getMessageConverter().fromMessage(message)).isEqualTo(evenement);
     }
 

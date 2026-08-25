@@ -28,7 +28,7 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 @Configuration
 public class AmqpConfiguration {
 
-    public static final String EVENTS_EXCHANGE = "second-brain.events";
+    public static final String EVENTS_EXCHANGE = "domain.events";
 
     @Bean
     public TopicExchange domainEventsExchange() {

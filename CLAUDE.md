@@ -193,8 +193,9 @@ xyz.sterenn.secondbrain
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
-│       └── messaging/       ADAPTER entrant : queue knowledge.extraction, listener
-│                            DocumentUploaded (profil worker), catalogue des événements
+│       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
+│                            KnowledgeEventListener (profil worker), catalogue des
+│                            événements
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy,
     │   │                    AccessTokenPolicy)
@@ -434,8 +435,10 @@ restent techniques.
 
 L'adapter (`shared/event/amqp/`) n'envoie qu'**après le commit** de la transaction ouverte
 par le bus : un rollback n'annonce rien. L'inverse n'est pas garanti — voir l'écart n° 22.
-Le transport est RabbitMQ : un exchange topic `second-brain.events`, une clé de routage
-dérivée de la classe (`knowledge.DocumentUploaded`), un corps JSON, et cette même chaîne en
+Le transport est RabbitMQ : un exchange topic `domain.events`, une clé de routage
+`<contexte>.<objet>.<fait>` dérivée de la classe (`knowledge.document.uploaded` pour
+`DocumentUploaded` — le contexte vient du package, l'objet et le fait du nom simple découpé
+sur ses majuscules, le dernier mot étant le fait), un corps JSON, et cette même chaîne en
 en-tête de type — jamais le nom qualifié. Le domaine ne nomme rien.
 
 **La consommation vit dans un processus à part.** Le profil Spring `worker` coupe Tomcat
@@ -446,8 +449,13 @@ développement, `compose.yaml` lance `app` et `worker` ; en production, deux dé
 Coolify de la même image, le second avec `SPRING_PROFILES_ACTIVE=worker`.
 
 Un listener (`<contexte>/infrastructure/messaging/`) est un adapter entrant au même titre
-qu'un contrôleur : une classe, une queue, une commande dispatchée sur le bus, aucune règle
-métier. Chaque consommateur déclare **sa** queue et son binding, dans les deux rôles. Une
+qu'un contrôleur : il dispatche une commande sur le bus, aucune règle métier. **Une queue par
+contexte, un seul listener par contexte** : la queue `domain.<contexte>.events` est liée sur
+`<contexte>.#` et reçoit tout ce que le contexte annonce ; le listener porte `@RabbitListener`
+sur la classe et un `@RabbitHandler` par événement, l'en-tête de type choisissant la méthode.
+Deux classes `@RabbitListener` sur la même queue se disputeraient les messages, et celle qui
+ne connaît pas le type le rejetterait — l'événement serait perdu. La queue et son binding sont
+déclarés dans les deux rôles. Une
 exception dans un listener rejette le message **sans remise en file**
 (`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
 boucle. Pas de dead-letter queue, pas de retry : un échec doit finir en `FAILED` sur le

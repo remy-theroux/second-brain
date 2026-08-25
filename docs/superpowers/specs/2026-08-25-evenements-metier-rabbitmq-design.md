@@ -400,6 +400,15 @@ tout tenait à un détail que l'écriture a fait apparaître.
   doit faire échouer la commande avant le commit, pas remonter après.
 - **Deux isolations Gradle pour le worker**, pas une (décision 9) : `--project-cache-dir`
   *et* un `GRADLE_USER_HOME` propre.
+- **Le vocabulaire du transport a été renommé après coup**, et les décisions 4 et 5
+  ci-dessus se lisent avec ce renommage : l'exchange est `domain.events`, la queue du
+  contexte `domain.knowledge.events`, liée sur `knowledge.#` et non sur une clé exacte, et
+  la clé de routage suit la forme `<contexte>.<objet>.<fait>` — `knowledge.document.uploaded`,
+  dérivée du nom simple découpé sur ses majuscules, le dernier mot étant le fait. La
+  dérivation reste dans l'adapter (`DomainEventNames`) : le domaine ne nomme toujours rien.
+  Conséquence sur la décision 6 : une queue par contexte impose un seul listener par
+  contexte (`KnowledgeEventListener`, `@RabbitListener` sur la classe, un `@RabbitHandler`
+  par événement), deux classes sur la même queue se disputant les messages.
 
 ## Pointeurs
 

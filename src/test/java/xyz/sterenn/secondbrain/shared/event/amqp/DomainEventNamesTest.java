@@ -8,13 +8,29 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.event.TestEvents;
 import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 
 class DomainEventNamesTest {
 
     @Test
-    void nomme_par_le_contexte_borne_et_la_classe() {
-        assertThat(DomainEventNames.of(DocumentUploaded.class)).isEqualTo("knowledge.DocumentUploaded");
+    void nomme_par_le_contexte_l_objet_et_le_fait() {
+        assertThat(DomainEventNames.of(DocumentUploaded.class)).isEqualTo("knowledge.document.uploaded");
+    }
+
+    @Test
+    void joint_les_mots_de_l_objet_par_un_tiret() {
+        // Le dernier mot est le fait ; tout ce qui précède est l'objet, et l'objet reste un
+        // seul segment : la clé garde ses trois segments quel que soit le nombre de mots.
+        assertThat(DomainEventNames.of(TestEvents.DocumentTextExtracted.class))
+                .isEqualTo("knowledge.document-text.extracted");
+    }
+
+    @Test
+    void refuse_un_nom_sans_objet() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DomainEventNames.of(TestEvents.Uploaded.class))
+                .withMessageContaining("objet");
     }
 
     @Test
@@ -49,14 +65,14 @@ class DomainEventNamesTest {
     @Test
     void construit_la_table_des_noms_connus() {
         assertThat(DomainEventNames.mappingOf(List.of(DocumentUploaded.class)))
-                .containsExactly(java.util.Map.entry("knowledge.DocumentUploaded", DocumentUploaded.class));
+                .containsExactly(java.util.Map.entry("knowledge.document.uploaded", DocumentUploaded.class));
     }
 
     @Test
     void refuse_deux_classes_du_meme_nom() {
         assertThatIllegalStateException()
                 .isThrownBy(() -> DomainEventNames.mappingOf(List.of(DocumentUploaded.class, DocumentUploaded.class)))
-                .withMessageContaining("knowledge.DocumentUploaded");
+                .withMessageContaining("knowledge.document.uploaded");
     }
 
     record HorsContexte(Instant occurredAt) implements DomainEvent {}
