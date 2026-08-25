@@ -4,6 +4,8 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Password from 'primevue/password'
+import FormField from '@/components/FormField.vue'
+import PageTitle from '@/components/PageTitle.vue'
 import { register, ValidationError } from '@/api/client'
 
 const email = ref('')
@@ -30,8 +32,8 @@ async function submit() {
 </script>
 
 <template>
-  <main class="register">
-    <h1>Créer mon compte</h1>
+  <main class="guest-form">
+    <PageTitle>Créer mon compte</PageTitle>
 
     <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
     <Message v-if="registered" severity="success" role="status">
@@ -42,8 +44,7 @@ async function submit() {
       <Message v-if="errorMessage" severity="error">{{ errorMessage }}</Message>
 
       <form @submit.prevent="submit">
-        <div class="field">
-          <label for="email">Email</label>
+        <FormField id="email" label="Email" :error="fieldErrors.email">
           <InputText
             id="email"
             v-model="email"
@@ -52,12 +53,8 @@ async function submit() {
             :invalid="!!fieldErrors.email"
             fluid
           />
-          <Message v-if="fieldErrors.email" severity="error" size="small" variant="simple">
-            {{ fieldErrors.email }}
-          </Message>
-        </div>
-        <div class="field">
-          <label for="password">Mot de passe</label>
+        </FormField>
+        <FormField id="password" label="Mot de passe" :error="fieldErrors.password">
           <Password
             v-model="password"
             input-id="password"
@@ -67,46 +64,13 @@ async function submit() {
             fluid
             :input-props="{ autocomplete: 'new-password' }"
           />
-          <Message v-if="fieldErrors.password" severity="error" size="small" variant="simple">
-            {{ fieldErrors.password }}
-          </Message>
-        </div>
+        </FormField>
         <Button type="submit" label="Créer mon compte" fluid />
       </form>
     </template>
 
-    <p class="switch">
+    <p class="guest-switch">
       <RouterLink :to="{ name: 'login' }">J'ai déjà un compte</RouterLink>
     </p>
   </main>
 </template>
-
-<style scoped>
-.register {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.switch {
-  margin: 0;
-  text-align: center;
-}
-</style>

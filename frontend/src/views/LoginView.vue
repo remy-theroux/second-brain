@@ -5,6 +5,8 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Password from 'primevue/password'
+import FormField from '@/components/FormField.vue'
+import PageTitle from '@/components/PageTitle.vue'
 import { useAuthStore } from '@/stores/auth'
 
 // Le serveur redirige ici avec un code, pas un message : c'est une navigation, et faire
@@ -43,8 +45,8 @@ async function submit() {
 </script>
 
 <template>
-  <main class="login">
-    <h1>Se connecter</h1>
+  <main class="guest-form">
+    <PageTitle>Se connecter</PageTitle>
 
     <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
     <Message v-if="verificationMessage" severity="success" role="status">
@@ -54,12 +56,10 @@ async function submit() {
     <Message v-if="errorMessage" severity="error">{{ errorMessage }}</Message>
 
     <form @submit.prevent="submit">
-      <div class="field">
-        <label for="email">Email</label>
+      <FormField id="email" label="Email">
         <InputText id="email" v-model="email" type="email" autocomplete="username" fluid />
-      </div>
-      <div class="field">
-        <label for="password">Mot de passe</label>
+      </FormField>
+      <FormField id="password" label="Mot de passe">
         <Password
           v-model="password"
           input-id="password"
@@ -68,42 +68,12 @@ async function submit() {
           fluid
           :input-props="{ autocomplete: 'current-password' }"
         />
-      </div>
+      </FormField>
       <Button type="submit" label="Se connecter" fluid />
     </form>
 
-    <p class="switch">
+    <p class="guest-switch">
       <RouterLink :to="{ name: 'register' }">Créer mon compte</RouterLink>
     </p>
   </main>
 </template>
-
-<style scoped>
-.login {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.switch {
-  margin: 0;
-  text-align: center;
-}
-</style>

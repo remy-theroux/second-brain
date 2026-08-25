@@ -84,15 +84,15 @@ async function logout() {
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 17rem;
+  width: var(--sb-sidebar-width);
   flex-shrink: 0;
-  padding: 1.25rem 1rem;
+  padding: var(--sb-space-lg) var(--sb-space-md);
   border-right: 1px solid var(--p-content-border-color);
 }
 
 .app-title {
-  margin: 0 0 1.5rem;
-  font-size: 1.25rem;
+  margin: 0 0 var(--sb-space-lg);
+  font-size: var(--sb-section-title-size);
 }
 
 /* Pousse la zone compte en bas de la barre. */
@@ -105,8 +105,8 @@ async function logout() {
 .account {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--sb-space-sm);
+  padding-top: var(--sb-space-md);
   border-top: 1px solid var(--p-content-border-color);
 }
 
@@ -114,12 +114,12 @@ async function logout() {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.875rem;
+  font-size: var(--sb-text-small);
   color: var(--p-text-muted-color);
 }
 
 .content {
   flex: 1;
-  padding: 2rem;
+  padding: var(--sb-space-xl);
 }
 </style>

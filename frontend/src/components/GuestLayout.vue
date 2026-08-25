@@ -18,11 +18,11 @@ import Card from 'primevue/card'
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 1rem;
+  padding: var(--sb-space-md);
 }
 
 .guest-card {
   width: 100%;
-  max-width: 26rem;
+  max-width: var(--sb-guest-width);
 }
 </style>
