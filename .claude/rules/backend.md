@@ -66,6 +66,26 @@ Avant d'écrire une classe, décider de sa couche :
   laisser fuiter le clair dans un log ou un message d'échec d'assertion
   (voir `RegisterUser`).
 
+## Événements métier
+
+- Un événement est un **record au passé** dans `<contexte>/domain/event/`, implémente
+  `DomainEvent` (`shared/event/`), n'importe rien de Spring, et porte des identifiants —
+  pas l'état. Le consommateur relit.
+- **C'est le handler qui publie**, par le port `DomainEventPublisher`, en dernière étape.
+  Pas depuis l'agrégat, pas depuis un adapter, pas depuis un contrôleur.
+- Jamais d'`ApplicationEventPublisher` de Spring pour un fait métier : les deux familles
+  d'événements restent séparées.
+- Un nouvel événement se **déclare** dans le `DomainEventRegistration` de son contexte
+  (`<contexte>/infrastructure/messaging/`), sinon le convertisseur ne le connaît pas et la
+  désérialisation le refuse — c'est voulu, un `Class.forName` sur un nom venu du réseau
+  n'est pas une option.
+- Un listener est un **adapter entrant** dans `<contexte>/infrastructure/messaging/` :
+  `@Profile("worker")`, une classe, une queue, une commande dispatchée sur le bus. Aucune
+  règle métier, aucun accès direct à un repository.
+- Un test qui observe une publication observe un **commit** : pas de `@Transactional`
+  sur la classe, nettoyage explicite en `@AfterEach`. Un test du rôle worker pose
+  `@ActiveProfiles("worker")` **et** `webEnvironment = NONE`.
+
 ## Domaine
 
 - Un value object valide et normalise **dans son constructeur compact** : il doit être

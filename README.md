@@ -12,10 +12,12 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Base de données | PostgreSQL 17 |
 | Migrations | Flyway (SQL versionné) |
 | Sécurité | Spring Security (jeton d'accès JWT HS256, resource server) |
+| Événements | RabbitMQ 4 (Spring AMQP) |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
 | Formatage | Spotless + palantir-java-format (back), Prettier (front) |
 | Front | Vue 3 + Vite + vue-router + pinia (dossier frontend/, hors build Gradle) |
+| Application | un processus API et un processus worker, même image, profil `worker` |
 
 ## Prérequis
 
@@ -25,7 +27,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 
 ```bash
 cp .env.example .env          # ajuster si besoin
-docker compose up --build     # démarre PostgreSQL, Mailpit, l'app et le front (hot reload)
+docker compose up --build     # démarre PostgreSQL, Mailpit, RabbitMQ, l'app, le worker et le front
 ```
 
 Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (toolchain) — c'est un peu long, ensuite c'est mis en cache.
@@ -41,6 +43,7 @@ port.
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | Mailpit (mails capturés en dev) | http://localhost:8025 — aucun mail ne sort de la machine |
+| Console RabbitMQ (messages en dev) | http://localhost:15672 — guest / guest |
 
 Health et Swagger ne sont routés qu'en développement : en production, le proxy n'expose que
 `/api` et `/verification`.
@@ -135,6 +138,14 @@ développement, voir `compose.yaml`) :
 | `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
 | `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
 | `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
+| `SPRING_RABBITMQ_HOST` | Broker des événements métier | `localhost` |
+| `SPRING_RABBITMQ_PORT` | Broker des événements métier | `5672` |
+| `SPRING_RABBITMQ_USERNAME` | Broker des événements métier | `guest` |
+| `SPRING_RABBITMQ_PASSWORD` | Broker des événements métier | `guest` |
+
+Le worker se déploie **depuis la même image**, avec `SPRING_PROFILES_ACTIVE=worker` et les
+mêmes variables que l'API (base, mail, stockage, secret JWT, RabbitMQ). Il n'expose aucun
+port : ne pas lui donner de domaine. Sans lui, les documents déposés restent `PENDING`.
 
 Le déploiement suppose un **reverse proxy devant les deux images**, qui route `/api` et
 `/verification` vers l'API et tout le reste vers le front — c'est ce qui donne au navigateur

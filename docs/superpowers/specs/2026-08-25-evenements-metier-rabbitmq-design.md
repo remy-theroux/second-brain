@@ -194,14 +194,18 @@ seul build : ce qui distingue les rôles tient en un fichier de profil et deux a
 `compose.yaml` gagne deux services : `rabbitmq` et `worker`. Le worker utilise
 `Dockerfile.dev`, `SPRING_PROFILES_ACTIVE=dev,worker`, les mêmes volumes que `app` —
 **mais pas de compilateur continu** : il s'appuie sur le `-t classes` du conteneur `app`,
-et DevTools redémarre le worker au même `.class` modifié. Il lui faut un
-`--project-cache-dir` propre (`.gradle-worker`, ignoré par git) pour ne pas bloquer sur le
-verrou Gradle du conteneur `app`.
+et DevTools redémarre le worker au même `.class` modifié. Il lui faut **deux** isolations
+Gradle, pas une : un `--project-cache-dir` propre (`.gradle-worker/`, ignoré par git) pour
+le `.gradle/` du projet, et un `GRADLE_USER_HOME` propre (`.gradle-cache-worker/`, volume
+nommé `gradle-cache-worker`) — deux conteneurs qui partagent un `GRADLE_USER_HOME` se
+bloquent sur ses verrous, la contention Gradle passant par un port local invisible de
+l'autre conteneur. Prix : un second téléchargement des dépendances au premier démarrage de
+la pile.
 
-**À valider en première tâche du plan.** Repli si le verrou bloque quand même : en
-développement, le conteneur `app` porte les deux profils (`dev,worker`) et la séparation
-des processus n'est exercée qu'en production. Le repli est documenté comme tel s'il est
-pris.
+**Validé sur la pile** (plan, tâche 7) : la première tentative, avec le seul
+`--project-cache-dir`, a échoué sur « Timeout waiting to lock journal cache » ; la seconde
+isolation l'a réglé, et le repli (un seul conteneur portant `dev,worker`) n'a pas été
+nécessaire.
 
 ### 10. La console RabbitMQ a son port, comme Mailpit
 

@@ -108,6 +108,15 @@ derniers ne sont routés qu'en développement.
 Mailpit garde son port propre : <http://localhost:8025>, où tous les mails émis en
 développement sont capturés, aucun ne sortant de la machine.
 
+Le worker est un conteneur à part : `docker compose logs -f worker` montre les événements
+reçus. Il n'a pas de compilateur continu — celui de `app` recompile, DevTools redémarre les
+deux. Il tient sa place à côté de `app` sur le même bind mount grâce à deux isolations
+Gradle : un `--project-cache-dir` propre (`.gradle-worker/`) pour le `.gradle/` du projet,
+et son propre `GRADLE_USER_HOME` (`.gradle-cache-worker/`, volume `gradle-cache-worker`) —
+deux conteneurs qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même
+« Timeout waiting to lock » qu'entre `gtest` et la pile. Le prix est un second
+téléchargement des dépendances au premier démarrage.
+
 Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
 échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
 `docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
@@ -159,6 +168,9 @@ xyz.sterenn.secondbrain
 │                            ClockConfiguration — transverse
 ├── shared/
 │   ├── bus/                 socle CQRS, aucune dépendance métier
+│   ├── event/               DomainEvent, port DomainEventPublisher — sans Spring
+│   │   └── amqp/            ADAPTER RabbitMQ : publication après commit, nommage,
+│   │                        convertisseur JSON, exchange
 │   └── web/                 formes d'erreur communes à toutes les routes
 │                            (ErrorResponse, ValidationErrorResponse)
 ├── knowledge/               bounded context — base de connaissance
@@ -166,15 +178,18 @@ xyz.sterenn.secondbrain
 │   │   ├── entity/          Document
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus
 │   │   ├── port/            DocumentRepository, DocumentStorage
-│   │   └── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │                        UnsupportedDocumentFormatException
+│   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
+│   │   │                    UnsupportedDocumentFormatException
+│   │   └── event/           DocumentUploaded
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
-│       └── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
+│       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
+│       └── messaging/       ADAPTER entrant : queue knowledge.extraction, listener
+│                            DocumentUploaded (profil worker), catalogue des événements
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy,
     │   │                    AccessTokenPolicy)
@@ -398,6 +413,40 @@ Conséquences directes, détaillées dans les règles backend : **jamais de
 `@Transactional` sur un handler**, et **toutes les exceptions métier héritent de
 `RuntimeException`** (une exception checked ne déclenche pas de rollback par défaut).
 
+### Les événements métier (`shared/event`) et le rôle worker
+
+Un handler qui a quelque chose à annoncer publie un **événement métier** par le port
+`DomainEventPublisher` — en dernière étape, et explicitement : `UploadDocumentHandler`
+publie `DocumentUploaded` après avoir conservé l'original. Les événements sont des records
+au passé dans `<contexte>/domain/event/`, avec un seul contrat (`occurredAt`), sans import
+Spring. **Ce ne sont pas des `ApplicationEvent`** : les événements techniques de Spring
+restent techniques.
+
+L'adapter (`shared/event/amqp/`) n'envoie qu'**après le commit** de la transaction ouverte
+par le bus : un rollback n'annonce rien. L'inverse n'est pas garanti — voir l'écart n° 22.
+Le transport est RabbitMQ : un exchange topic `second-brain.events`, une clé de routage
+dérivée de la classe (`knowledge.DocumentUploaded`), un corps JSON, et cette même chaîne en
+en-tête de type — jamais le nom qualifié. Le domaine ne nomme rien.
+
+**La consommation vit dans un processus à part.** Le profil Spring `worker` coupe Tomcat
+(`spring.main.web-application-type=none`, donc ni contrôleurs, ni Swagger, ni actuator
+HTTP), efface `SecurityConfig` (`@Profile("!worker")`) et fait exister les listeners
+(`@Profile("worker")`). Sans profil, le processus est l'API. Même image, même jar : en
+développement, `compose.yaml` lance `app` et `worker` ; en production, deux déploiements
+Coolify de la même image, le second avec `SPRING_PROFILES_ACTIVE=worker`.
+
+Un listener (`<contexte>/infrastructure/messaging/`) est un adapter entrant au même titre
+qu'un contrôleur : une classe, une queue, une commande dispatchée sur le bus, aucune règle
+métier. Chaque consommateur déclare **sa** queue et son binding, dans les deux rôles. Une
+exception dans un listener rejette le message **sans remise en file**
+(`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
+boucle. Pas de dead-letter queue, pas de retry : un échec doit finir en `FAILED` sur le
+document, pas être rejoué.
+
+Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
+en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
+`webEnvironment = NONE`.
+
 ### Persistance
 
 Flyway est **maître du schéma** ; Hibernate tourne en `ddl-auto: validate` et se
@@ -477,7 +526,10 @@ transaction (écart n° 19).
     nginx servant `dist`), mais **rien dans le dépôt ne décrit son déploiement**. Le
     routage de production — `/api` et `/verification` vers le back, tout le reste vers le
     front, ni Swagger ni actuator exposés — vit dans la configuration Coolify, hors du
-    dépôt. Deux configurations de routage doivent donc rester cohérentes à la main.
+    dépôt. Deux configurations de routage doivent donc rester cohérentes à la main — et
+    depuis les événements métier, le service RabbitMQ et le déploiement du worker (même
+    image, `SPRING_PROFILES_ACTIVE=worker`, variables `SPRING_RABBITMQ_*`) vivent eux aussi
+    dans Coolify, hors du dépôt.
 13. `/api/profile` sérialise directement le modèle de lecture `UserView` (dont
     `createdAt`). La forme de l'API est donc couplée à celle de la query. Acceptable pour
     une projection dédiée aux écrans ; le jour où l'API et un écran divergeront, il faudra
@@ -534,12 +586,20 @@ transaction (écart n° 19).
     `DocumentStatus` sans mise à jour du front ne casse rien de visible : le premier reste
     déposable en changeant le filtre du sélecteur, le second s'affiche par son code. Même
     nature d'écart que le n° 16, et aucun test ne surveille la divergence.
+22. **La publication d'un événement métier n'est pas garantie.** L'adapter envoie dans
+    `afterCommit` : la base a commité, et si RabbitMQ est injoignable à cet instant,
+    l'écriture est acquise mais l'événement est perdu — un document resterait `PENDING`
+    sans que rien ne le reprenne. Les deux parades (outbox en base avec relais, balayage
+    périodique des `PENDING`) ont été étudiées et écartées : on fait confiance au broker.
+    Condition de bascule : un événement sans état observable derrière lui, ou une perte
+    constatée. `DomainEventPublisher` est un port ; l'outbox serait une implémentation de
+    plus, aucun handler ne changerait.
 
 ## Stack et versions
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
-Validation, Mail) · Flyway · PostgreSQL 17 · springdoc-openapi · JUnit 5 +
-AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
+Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
+JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
@@ -547,6 +607,8 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
+RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`guest`/`guest`), et un
+conteneur `worker` de la même image que `app`.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit
