@@ -26,6 +26,10 @@ import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
  *
  * <p>Hors transaction, l'envoi est immédiat et une panne du broker remonte à l'appelant :
  * il n'y a rien d'acquis à protéger.
+ *
+ * <p>Le nom de l'événement est dérivé dans {@code publish}, avant tout enregistrement :
+ * un événement hors de tout contexte borné est une erreur de programmation, et elle doit
+ * faire échouer la commande avant le commit — pas remonter à l'appelant après.
  */
 @Component
 public class AmqpDomainEventPublisher implements DomainEventPublisher {
@@ -40,19 +44,22 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
 
     @Override
     public void publish(DomainEvent event) {
+        // Dérivé ici et non dans afterCommit : un événement hors de tout contexte borné est
+        // une erreur de programmation, elle doit faire échouer la commande AVANT le commit.
+        String name = DomainEventNames.of(event.getClass());
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            send(event);
+            send(name, event);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
-                    send(event);
+                    send(name, event);
                 } catch (AmqpException e) {
                     log.error(
                             "Événement {} perdu : le broker n'a pas pu être joint après le commit ({})",
-                            DomainEventNames.of(event.getClass()),
+                            name,
                             e.getMessage(),
                             e);
                 }
@@ -60,8 +67,7 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
         });
     }
 
-    private void send(DomainEvent event) {
-        String name = DomainEventNames.of(event.getClass());
+    private void send(String name, DomainEvent event) {
         rabbitTemplate.convertAndSend(AmqpConfiguration.EVENTS_EXCHANGE, name, event);
         log.debug("Événement {} publié", name);
     }

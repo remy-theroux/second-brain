@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.shared.event.amqp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.time.Duration;
@@ -20,6 +21,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
 /**
@@ -107,4 +109,16 @@ class AmqpDomainEventPublisherTest {
 
         assertThat(rabbitTemplate.receive(OBSERVATION, SILENCE_MS)).isNull();
     }
+
+    @Test
+    void refuse_avant_le_commit_un_evenement_hors_d_un_contexte_borne() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> transactionTemplate.executeWithoutResult(statut ->
+                        domainEventPublisher.publish(new HorsContexte(Instant.parse("2026-08-25T10:00:00Z")))))
+                .withMessageContaining(HorsContexte.class.getName());
+
+        assertThat(rabbitTemplate.receive(OBSERVATION, SILENCE_MS)).isNull();
+    }
+
+    record HorsContexte(Instant occurredAt) implements DomainEvent {}
 }
