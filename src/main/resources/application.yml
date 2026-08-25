@@ -63,6 +63,16 @@ spring:
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    # Le client RabbitMQ attend 60 s avant d'abandonner une connexion morte, et la
+    # publication tourne dans afterCommit — AVANT que la connexion JDBC soit rendue au pool.
+    # Dix dépôts contre un broker injoignable figeraient le pool Hikari une minute entière,
+    # exactement la panne que les timeouts du bloc mail ci-dessus évitent déjà.
+    connection-timeout: 5s
+    template:
+      retry:
+        # Explicite parce que l'écart n° 22 de CLAUDE.md en dépend : pas de nouvel essai,
+        # un événement que le broker n'a pas reçu est perdu, et c'est assumé.
+        enabled: false
     listener:
       simple:
         # Un message dont le traitement lève une exception est rejeté SANS remise en file.
@@ -82,6 +92,13 @@ management:
       probes:
         enabled: true
       show-details: when-authorized
+  health:
+    rabbit:
+      # Le broker n'entre pas dans /actuator/health : redémarrer l'API ne répare pas un
+      # broker, et l'API sert tout le reste sans lui. Une panne se voit dans les logs
+      # (ERROR à chaque publication perdue) et dans les documents qui restent PENDING —
+      # voir l'écart n° 22 de CLAUDE.md.
+      enabled: false
 
 springdoc:
   swagger-ui:
