@@ -635,7 +635,11 @@ import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
  *
  * <p>Pas de {@code @Transactional} sur la classe : le test observe des commits, une
  * transaction englobante les masquerait. Rien n'est écrit en base ; la seule chose à
- * nettoyer est la queue d'observation, déclarée exclusive et auto-effacée.
+ * nettoyer est la queue d'observation, effacée en {@code @AfterEach}.
+ *
+ * <p>La queue est <em>durable</em> et non exclusive, à dessein : RabbitMQ 4 refuse par
+ * défaut une queue transiente non exclusive ({@code transient_nonexcl_queues}, dépréciée),
+ * et une queue exclusive ne se lirait que depuis la connexion qui l'a déclarée.
  *
  * <p>La queue d'observation est liée sur {@code knowledge.#} : c'est le <em>port</em> qui
  * est vérifié, par ce qui arrive sur l'exchange, pas l'adapter par ses appels internes.
@@ -664,7 +668,7 @@ class AmqpDomainEventPublisherTest {
 
     @BeforeEach
     void ouvre_une_queue_d_observation() {
-        amqpAdmin.declareQueue(new Queue(OBSERVATION, false, false, true));
+        amqpAdmin.declareQueue(new Queue(OBSERVATION));
         amqpAdmin.declareBinding(new Binding(
                 OBSERVATION, Binding.DestinationType.QUEUE, AmqpConfiguration.EVENTS_EXCHANGE, "knowledge.#", null));
         amqpAdmin.purgeQueue(OBSERVATION);
@@ -900,7 +904,7 @@ class UploadDocumentAnnouncementTest {
     void prepare_un_compte_et_une_queue_d_observation() {
         recordingNotificationSender.clear();
         compte = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, "chevalpile42");
-        amqpAdmin.declareQueue(new Queue(OBSERVATION, false, false, true));
+        amqpAdmin.declareQueue(new Queue(OBSERVATION));
         amqpAdmin.declareBinding(new Binding(
                 OBSERVATION,
                 Binding.DestinationType.QUEUE,
