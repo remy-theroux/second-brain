@@ -1,0 +1,10 @@
+# Profil `worker` : le même jar, sans serveur HTTP. Activé par SPRING_PROFILES_ACTIVE=worker
+# (`dev,worker` dans compose.yaml). Sans profil, le processus est l'API — rien ne change pour
+# un déploiement existant.
+#
+# Couper Tomcat retire les contrôleurs du routage, Swagger et l'actuator HTTP. Ce qui reste
+# est commun aux deux rôles : bus, JPA, Flyway, stockage, mail, publication d'événements. Et
+# c'est ici, et seulement ici, que les listeners `@Profile("worker")` existent.
+spring:
+  main:
+    web-application-type: none
