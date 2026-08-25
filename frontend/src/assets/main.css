@@ -1,0 +1,99 @@
+/*
+ * Socle global minimal : le thème Aura porte le style des composants, ce fichier ne pose
+ * que ce qui n'appartient à aucun composant.
+ *
+ * Deux familles de variables cohabitent, et la frontière est nette :
+ * - `--p-*` : les design tokens d'Aura. Toutes les COULEURS passent par eux, pour suivre
+ *   le thème clair/sombre du système sans double définition. Aucune couleur n'est
+ *   définie ici.
+ * - `--sb-*` : les tokens du projet — espacements, largeurs, tailles de titre. Un
+ *   composant n'écrit jamais un `rem` nu : il nomme le token, et la valeur ne vit qu'ici.
+ *
+ * La page /design-system (développement seulement) rend chacun de ces tokens avec sa
+ * valeur : c'est là que se voit l'effet d'un changement.
+ */
+
+:root {
+  /* Échelle d'espacement : gap, padding, margin. */
+  --sb-space-xs: 0.5rem;
+  --sb-space-sm: 0.75rem;
+  --sb-space-md: 1rem;
+  --sb-space-lg: 1.5rem;
+  --sb-space-xl: 2rem;
+
+  /* Largeurs de mise en page. */
+  --sb-sidebar-width: 17rem;
+  --sb-guest-width: 26rem;
+
+  /* Typographie : les titres seulement, le reste est la taille du navigateur. */
+  --sb-title-size: 1.5rem;
+  --sb-section-title-size: 1.25rem;
+  --sb-text-small: 0.875rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+}
+
+/*
+ * Colonne d'un écran invité (connexion, inscription) : titre, messages, formulaire et
+ * lien vers l'autre écran, empilés. Posée ici et non en `scoped` parce que les deux
+ * vues la partagent à l'identique — un `<style scoped>` copié-collé dans chacune
+ * était la forme précédente.
+ */
+.guest-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space-md);
+}
+
+.guest-form form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space-md);
+}
+
+/* Lien de bas d'écran vers l'écran invité voisin. */
+.guest-switch {
+  margin: 0;
+  text-align: center;
+}
+
+/*
+ * Tableau des documents (DocumentsView, et sa copie dans le design system). Ces classes se
+ * posent sur des lignes et des colonnes rendues par DataTable, hors de portée d'un
+ * `<style scoped>` : partagées par deux vues, elles vivent ici plutôt qu'en `:deep()`
+ * recopié dans chacune.
+ */
+
+/* La ligne du doublon désigné par le serveur : un repère, pas une couleur de plus. */
+.table-duplicate-row {
+  font-weight: bold;
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
+}
+
+/* Colonne des actions, réduite au bouton qu'elle porte. */
+.table-actions {
+  width: 1%;
+  text-align: right;
+}

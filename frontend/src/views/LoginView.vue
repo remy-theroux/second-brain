@@ -1,6 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
+import Password from 'primevue/password'
+import FormField from '@/components/FormField.vue'
+import PageTitle from '@/components/PageTitle.vue'
 import { useAuthStore } from '@/stores/auth'
 
 // Le serveur redirige ici avec un code, pas un message : c'est une navigation, et faire
@@ -39,28 +45,34 @@ async function submit() {
 </script>
 
 <template>
-  <main>
-    <h1>Se connecter</h1>
+  <main class="guest-form">
+    <PageTitle>Se connecter</PageTitle>
 
-    <p v-if="verificationMessage" role="status">{{ verificationMessage }}</p>
+    <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
+    <Message v-if="verificationMessage" severity="success" role="status">
+      {{ verificationMessage }}
+    </Message>
 
-    <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+    <Message v-if="errorMessage" severity="error">{{ errorMessage }}</Message>
 
     <form @submit.prevent="submit">
-      <p>
-        <label for="email">Email</label><br />
-        <input id="email" v-model="email" type="email" autocomplete="username" />
-      </p>
-      <p>
-        <label for="password">Mot de passe</label><br />
-        <input id="password" v-model="password" type="password" autocomplete="current-password" />
-      </p>
-      <p>
-        <button type="submit">Se connecter</button>
-      </p>
+      <FormField id="email" label="Email">
+        <InputText id="email" v-model="email" type="email" autocomplete="username" fluid />
+      </FormField>
+      <FormField id="password" label="Mot de passe">
+        <Password
+          v-model="password"
+          input-id="password"
+          :feedback="false"
+          toggle-mask
+          fluid
+          :input-props="{ autocomplete: 'current-password' }"
+        />
+      </FormField>
+      <Button type="submit" label="Se connecter" fluid />
     </form>
 
-    <p>
+    <p class="guest-switch">
       <RouterLink :to="{ name: 'register' }">Créer mon compte</RouterLink>
     </p>
   </main>

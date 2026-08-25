@@ -18,11 +18,60 @@ couture qu'on a supprimée.
 
 - **JavaScript, pas TypeScript.** Aucun `tsconfig`, aucune dépendance de types. Le jour où
   le front justifiera TypeScript, ce sera un ticket, pas une dérive.
-- **Aucun CSS, aucune bibliothèque de composants.** Le HTML est nu. C'est le ticket
-  « interface » qui tranchera.
+- **PrimeVue 4 avec le thème Aura, tel quel.** Pas de `definePreset`, pas de couleur
+  primaire du projet : une identité visuelle sera un ticket, avec une charte. Les
+  composants s'importent un par un (`import Button from 'primevue/button'`), jamais par
+  enregistrement global — l'arbre des dépendances de chaque vue se lit dans ses imports.
 - Alias d'import `@` → `frontend/src`. Pas de chemins relatifs qui remontent (`../../`).
 - `<script setup>` pour tous les composants, `ref` plutôt que `reactive`.
 - Un composant par fichier, une vue par route, dans `src/views/`.
+
+## Style et tokens
+
+Deux familles de variables CSS, et la frontière ne se négocie pas :
+
+- **`--p-*` : les design tokens d'Aura. Toutes les couleurs passent par eux**
+  (`--p-text-color`, `--p-text-muted-color`, `--p-content-background`,
+  `--p-content-border-color`, `--p-primary-color`). Ils suivent le thème clair/sombre du
+  système ; une couleur en dur ne le suivrait pas. Aucune couleur n'est définie dans le
+  projet.
+- **`--sb-*` : les tokens du projet**, définis dans `src/assets/main.css` et nulle part
+  ailleurs — espacements (`--sb-space-xs` à `-xl`), largeurs (`--sb-sidebar-width`,
+  `--sb-guest-width`), tailles de titre (`--sb-title-size`, `--sb-section-title-size`,
+  `--sb-text-small`). **Un composant n'écrit jamais un `rem` nu** : il nomme le token.
+  Avant ces tokens, `LoginView` et `RegisterView` portaient le même `<style scoped>` à
+  l'octet près, et changer un espacement demandait de le retrouver dans chaque fichier.
+- `main.css` ne pose que ce qui n'appartient à aucun composant : reset, police, et les
+  classes partagées par plusieurs vues à l'identique (`.guest-form`, `.guest-switch`,
+  `.table-duplicate-row`, `.table-actions`). Tout le reste est `<style scoped>`. Une classe
+  posée sur un élément rendu par un composant PrimeVue (`row-class` d'un `DataTable`) est
+  hors de portée d'un `<style scoped>` : si deux vues en ont besoin, elle va dans
+  `main.css`, pas en `:deep()` recopié dans chacune.
+
+## Composants partagés et design system
+
+- `src/components/` porte ce qui sert plusieurs vues : les deux layouts
+  (`GuestLayout`, `AuthenticatedLayout`), `FormField` (libellé + slot pour l'input +
+  message d'erreur) et `PageTitle` (le `h1` d'un écran). Un motif copié d'une vue à
+  l'autre est un composant qui n'a pas encore été extrait.
+- `FormField` ne rend **pas** l'input : il vient par le slot, avec ses attributs (`id` ou
+  `input-id` selon le composant PrimeVue, `invalid`, `autocomplete`). La prop `id` du
+  champ sert au `for` du libellé ; la vue repose le même identifiant sur l'input. Le
+  composant ne devine pas comment son enfant s'identifie.
+- **`/design-system` est le catalogue** : `src/views/DesignSystemView.vue` rend chaque
+  token avec sa valeur effective (lue par `getComputedStyle`, pas recopiée), chaque
+  composant partagé dans chacun de ses états, et les composants PrimeVue tels qu'on les
+  emploie. **Tout composant partagé nouveau ou tout token nouveau y apparaît dans le même
+  commit.** Un composant absent de la page n'est pas partagé.
+- La route n'existe qu'en développement : `import.meta.env.DEV` en spread conditionnel
+  dans `routes`, ce qui retire la route **et** la vue du bundle de production. Vitest
+  tourne avec `DEV` à `true`, donc `router/index.spec.js` vérifie la présence de la route ;
+  son absence en production ne se vérifie que sur `dist/`
+  (`grep -l "Tokens du projet" dist/assets/*.js` doit ne rien trouver).
+- La méta `layout: 'bare'` désactive tout layout dans `App.vue`. Elle n'existe que pour le
+  design system, trop large pour la carte invité ; un troisième layout pour une seule page
+  serait de trop. Ne pas l'étendre sans y réfléchir : une page connectée sans barre
+  latérale est une page sans déconnexion.
 
 ## Découpage
 
@@ -32,7 +81,7 @@ couture qu'on a supprimée.
 | Détient un état partagé entre écrans | `src/stores/` (pinia) |
 | Décrit les routes et le garde | `src/router/` |
 | Est l'écran d'une route | `src/views/` |
-| Est réutilisé par plusieurs vues | `src/components/` (n'existe pas encore) |
+| Est réutilisé par plusieurs vues | `src/components/` |
 
 - **`src/api/` est le seul endroit qui appelle `fetch`.** Un composant qui appelle une URL
   en direct est un bug : les en-têtes d'authentification et la traduction des erreurs
@@ -82,6 +131,16 @@ porte les libellés. Un message en query string atterrirait dans l'historique du
 et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger — est un écart
 assumé documenté dans `CLAUDE.md`.
 
+Ce qui n'est **pas** un message d'erreur peut se traduire côté front : le libellé d'une
+énumération sérialisée par l'API (`STATUS_LABELS` dans `DocumentsView.vue`) est une affaire
+d'écran. Et un filtre de sélecteur de fichiers (`ACCEPTED_EXTENSIONS`) n'est pas une règle :
+la règle est au serveur, dont le `415` énonce la liste qui fait foi. Les deux copies sont
+l'écart n° 21 de `CLAUDE.md`.
+
+Le dépôt d'un fichier passe par `FileUpload` en `custom-upload` : le composant ne connaît
+aucune URL, et l'appel part de `src/api/` comme tout le reste. Poser un `Content-Type` à la
+main sur un `FormData` casserait le multipart, le navigateur seul connaissant le boundary.
+
 ## Tests
 
 - **Vitest, environnement `jsdom`**, configuré dans `vite.config.js`. Fichiers `*.spec.js`
@@ -89,7 +148,8 @@ assumé documenté dans `CLAUDE.md`.
 - On teste **ce qui peut casser silencieusement** : le store d'authentification, le garde
   de route, et la traduction des réponses d'erreur dans `src/api/`. Pas de test de rendu de
   composant, pas de `@vue/test-utils`, pas de navigateur. Un formulaire cassé se voit ; une
-  session qui ne s'invalide pas ou un `422` mal lu, non.
+  session qui ne s'invalide pas ou un `422` mal lu, non. C'est `/design-system` qui tient
+  lieu de test de rendu : le passage humain se fait là, sur tous les états d'un coup.
 - `fetch` est bouché par `vi.stubGlobal`, jamais par une vraie requête.
 - `setActivePinia(createPinia())` et `localStorage.clear()` en `beforeEach` : un store est
   un singleton, et `localStorage` survit d'un test à l'autre.

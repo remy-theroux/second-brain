@@ -1,5 +1,11 @@
 <script setup>
 import { ref } from 'vue'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
+import Password from 'primevue/password'
+import FormField from '@/components/FormField.vue'
+import PageTitle from '@/components/PageTitle.vue'
 import { register, ValidationError } from '@/api/client'
 
 const email = ref('')
@@ -26,34 +32,44 @@ async function submit() {
 </script>
 
 <template>
-  <main>
-    <h1>Créer mon compte</h1>
+  <main class="guest-form">
+    <PageTitle>Créer mon compte</PageTitle>
 
-    <p v-if="registered" role="status">
+    <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
+    <Message v-if="registered" severity="success" role="status">
       Votre compte est créé. Un lien de vérification vient de vous être envoyé par email.
-    </p>
+    </Message>
 
     <template v-else>
-      <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+      <Message v-if="errorMessage" severity="error">{{ errorMessage }}</Message>
 
       <form @submit.prevent="submit">
-        <p>
-          <label for="email">Email</label><br />
-          <input id="email" v-model="email" type="email" autocomplete="username" />
-          <span v-if="fieldErrors.email" role="alert">{{ fieldErrors.email }}</span>
-        </p>
-        <p>
-          <label for="password">Mot de passe</label><br />
-          <input id="password" v-model="password" type="password" autocomplete="new-password" />
-          <span v-if="fieldErrors.password" role="alert">{{ fieldErrors.password }}</span>
-        </p>
-        <p>
-          <button type="submit">Créer mon compte</button>
-        </p>
+        <FormField id="email" label="Email" :error="fieldErrors.email">
+          <InputText
+            id="email"
+            v-model="email"
+            type="email"
+            autocomplete="username"
+            :invalid="!!fieldErrors.email"
+            fluid
+          />
+        </FormField>
+        <FormField id="password" label="Mot de passe" :error="fieldErrors.password">
+          <Password
+            v-model="password"
+            input-id="password"
+            :feedback="false"
+            toggle-mask
+            :invalid="!!fieldErrors.password"
+            fluid
+            :input-props="{ autocomplete: 'new-password' }"
+          />
+        </FormField>
+        <Button type="submit" label="Créer mon compte" fluid />
       </form>
     </template>
 
-    <p>
+    <p class="guest-switch">
       <RouterLink :to="{ name: 'login' }">J'ai déjà un compte</RouterLink>
     </p>
   </main>

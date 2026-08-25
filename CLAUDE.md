@@ -199,10 +199,14 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 │                            en autonomie
 ├── Dockerfile               build npm puis nginx qui sert dist
 ├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
+├── src/assets/main.css      reset, police, tokens du projet (--sb-*), classes partagées
 ├── src/api/                 seul module qui parle HTTP
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
-└── src/views/               un composant par écran (LoginView, RegisterView, HomeView)
+├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle
+└── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
+                             DocumentsView, DesignSystemView — catalogue, développement
+                             seulement)
 ```
 
 `src/main/resources/templates/` n'existe plus : **aucune vue n'est rendue par le
@@ -361,6 +365,18 @@ une ligne qui n'existe pas (écart n° 19).
 mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
 `ON DELETE CASCADE`.
 
+Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
+les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
+`custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`, jamais par
+l'URL du composant —, la liste dans un `DataTable`, et la suppression derrière un
+`ConfirmPopup` (d'où `ConfirmationService` dans `main.js`). Le `201` n'ayant pas de corps,
+chaque dépôt et chaque suppression relisent `GET /api/documents`. Le `409` est traduit en
+`DuplicateDocumentError`, dont l'`existingDocumentId` sert à mettre en évidence la ligne du
+doublon plutôt que de laisser l'utilisateur la chercher. Aucun plafond de taille n'est
+posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
+Aucun store : aucun autre écran ne partage cet état, la vue appelle `src/api/` directement,
+et c'est elle qui déconnecte sur un `401`, comme le layout le fait pour le profil.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -469,15 +485,19 @@ transaction (écart n° 19).
 14. `FindUserByEmail` reste sans écran (voir l'écart n° 3) : le profil lit par identifiant,
     puisque c'est l'identifiant que le jeton porte. Chercher par email quand on détient un
     UUID immuable serait un contresens.
-15. `LoginView.vue`, `RegisterView.vue` et `HomeView.vue` ne sont couverts par aucun test
-    automatisé. Le choix
-    délibéré a été de tester le store d'authentification et le garde de route — les deux
-    endroits où un échec passerait silencieusement — et non le rendu des composants. La
-    correction des deux écrans repose donc sur `npm run build` (qui compile les templates
-    sans rien affirmer sur leur comportement) et sur un passage humain dans un navigateur.
-    Conséquence directe : un gestionnaire d'événement mal relié ou un nom de champ mal
-    orthographié passerait au vert. Le passage humain n'est donc pas une étape facultative
-    mais une condition avant toute mise en production.
+15. Aucune vue ni aucun composant de `src/components/` n'est couvert par un test de rendu.
+    Le choix délibéré a été de tester le store d'authentification et le garde de route —
+    les deux endroits où un échec passerait silencieusement — et non le rendu des
+    composants. La correction des écrans repose donc sur `npm run build` (qui compile les
+    templates sans rien affirmer sur leur comportement) et sur un passage humain dans un
+    navigateur. Conséquence directe : un gestionnaire d'événement mal relié ou un nom de
+    champ mal orthographié passerait au vert. Le passage humain n'est donc pas une étape
+    facultative mais une condition avant toute mise en production — et il a un lieu :
+    `/design-system`, servi par la pile `docker compose` seulement, qui rend chaque token et
+    chaque composant partagé dans tous ses états. Les vues `LoginView`, `RegisterView` et
+    `DocumentsView` restent à parcourir en plus, puisque leur logique de soumission n'y est
+    pas — pour la dernière, avec un vrai fichier : le dépôt, le doublon, le format refusé et
+    la suppression.
 16. Les libellés de refus de vérification existent en deux endroits : les exceptions du
     domaine (`InvalidVerificationLinkException` et ses sœurs) et `VERIFICATION_MESSAGES`
     dans `LoginView.vue`, qui traduit les codes portés par la redirection. Ils peuvent
@@ -507,6 +527,13 @@ transaction (écart n° 19).
     ne limite le nombre de dépôts simultanés. Le jour où le plafond monterait, ou où
     plusieurs utilisateurs déposeraient ensemble, il faudra écrire le flux sur disque en
     calculant l'empreinte au fil de l'eau, et ne relire que pour vérifier.
+21. `DocumentsView` recopie deux choses que le back possède : la liste des extensions
+    acceptées (`ACCEPTED_EXTENSIONS`, qui ne sert qu'à filtrer le sélecteur de fichiers du
+    navigateur) et le libellé des statuts (`STATUS_LABELS`, qui traduit l'énumération
+    `DocumentStatus`). Un format ajouté à `DocumentFormat` ou un statut ajouté à
+    `DocumentStatus` sans mise à jour du front ne casse rien de visible : le premier reste
+    déposable en changeant le filtre du sélecteur, le second s'affiche par son code. Même
+    nature d'écart que le n° 16, et aucun test ne surveille la divergence.
 
 ## Stack et versions
 

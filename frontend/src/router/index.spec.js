@@ -95,3 +95,53 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('register')
   })
 })
+
+describe('page des documents', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it("renvoie vers le login quand aucun jeton n'est détenu", async () => {
+    const router = createTestRouter()
+
+    await router.push('/documents')
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it('laisse atteindre les documents avec un jeton valable', async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/documents')
+
+    expect(router.currentRoute.value.name).toBe('documents')
+  })
+})
+
+describe('page de design system', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  // Vitest tourne avec import.meta.env.DEV à true : c'est la présence de la route qui est
+  // vérifiée ici, pas son absence en production, que seul le build peut établir.
+  it("est atteignable par un visiteur anonyme en développement, sans passer par l'espace connecté", async () => {
+    const router = createTestRouter()
+
+    await router.push('/design-system')
+
+    expect(router.currentRoute.value.name).toBe('design-system')
+  })
+
+  it('ne renvoie pas un utilisateur connecté vers son espace', async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/design-system')
+
+    expect(router.currentRoute.value.name).toBe('design-system')
+  })
+})
