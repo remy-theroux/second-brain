@@ -109,18 +109,23 @@ Mailpit garde son port propre : <http://localhost:8025>, où tous les mails émi
 développement sont capturés, aucun ne sortant de la machine.
 
 Le worker est un conteneur à part : `docker compose logs -f worker` montre les événements
-reçus. Il n'a pas de compilateur continu — celui de `app` recompile, DevTools redémarre les
-deux. Il tient sa place à côté de `app` sur le même bind mount grâce à deux isolations
-Gradle : un `--project-cache-dir` propre (`.gradle-worker/`) pour le `.gradle/` du projet,
-et son propre `GRADLE_USER_HOME` (`.gradle-cache-worker/`, volume `gradle-cache-worker`) —
-deux conteneurs qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même
-« Timeout waiting to lock » qu'entre `gtest` et la pile. Le prix est un second
-téléchargement des dépendances au premier démarrage.
+reçus. Il **ne compile jamais** — son `bootRun` porte `-x compileJava -x processResources`,
+donc `build/` n'est écrit que par `app`, dont le compilateur continu recompile et dont
+DevTools redémarre les deux conteneurs. Il ne démarre qu'une fois `app` **sain** (son
+healthcheck : Tomcat écoute, donc `build/classes` est compilé et chargé), ce qui met la
+course « Main class name has not been configured » ci-dessous hors de sa portée. Il tient sa
+place à côté de `app` sur le même bind mount grâce à deux isolations Gradle : un
+`--project-cache-dir` propre (`.gradle-worker/`) pour le `.gradle/` du projet, et son propre
+`GRADLE_USER_HOME` (`.gradle-cache-worker/`, volume `gradle-cache-worker`) — deux conteneurs
+qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même « Timeout waiting
+to lock » qu'entre `gtest` et la pile. Le prix est un second téléchargement des dépendances
+au premier démarrage.
 
 Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
 échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
 `docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
-`docker compose up -d app` règle le cas.
+`docker compose up -d app` règle le cas. Ça ne vaut que pour `app` : le worker attend son
+healthcheck.
 
 **`gtest` et `docker compose up` ne cohabitent pas** : les deux verrouillent `.gradle/` du
 même répertoire, et `gtest` échoue sur « Timeout waiting to lock Build Output Cleanup

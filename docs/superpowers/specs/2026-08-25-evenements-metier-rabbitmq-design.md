@@ -207,6 +207,11 @@ la pile.
 isolation l'a réglé, et le repli (un seul conteneur portant `dev,worker`) n'a pas été
 nécessaire.
 
+La revue de branche a resserré l'ordonnancement : le worker ne compile plus du tout
+(`bootRun -x compileJava -x processResources`, donc `build/` n'a qu'un seul écrivain,
+`app`), et il attend que `app` soit **sain** — healthcheck TCP sur son port 8080 — et non
+plus simplement démarré, ce qui garantit `build/classes` peuplé avant son premier `bootRun`.
+
 ### 10. La console RabbitMQ a son port, comme Mailpit
 
 `rabbitmq:4-management-alpine`, AMQP sur `${RABBITMQ_PORT:-5672}`, console sur

@@ -93,6 +93,14 @@ services:
       # Fichiers d'origine des documents. Dans un volume nommé et non dans le bind mount :
       # ils ne sont pas du code, et ils survivent à un `up --build` sans polluer le dépôt.
       - originals:/data/originals
+    healthcheck:
+      # Sain = Tomcat écoute, donc build/classes est compilé et chargé. Bash et /dev/tcp
+      # plutôt que curl, que l'image temurin n'embarque pas forcément. Le premier démarrage
+      # télécharge Gradle et les dépendances : retries généreux plutôt qu'un start_period.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 90
     depends_on:
       db:
         condition: service_healthy
@@ -105,14 +113,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    # Même image que `app`, second processus, rôle décidé par le profil. Pas de compilateur
-    # continu ici : celui de `app` recompile vers build/classes, que DevTools surveille dans
-    # ce conteneur aussi — un .java modifié redémarre les deux. Le --project-cache-dir isole
-    # le répertoire de projet .gradle/ que `app` verrouille (spec, décision 9) ; ça ne suffit
-    # pas seul, parce que les deux conteneurs partageraient encore GRADLE_USER_HOME
-    # (gradle-cache) et se bloqueraient sur son verrou de journal — la contention passe par
-    # un port local, invisible de l'autre conteneur. D'où le second volume ci-dessous.
-    command: ["./gradlew", "--no-daemon", "--project-cache-dir", ".gradle-worker", "bootRun"]
+    # Même image que `app`, second processus, rôle décidé par le profil. Le worker ne compile
+    # JAMAIS : `-x compileJava -x processResources` retire les seules tâches qui écriraient
+    # dans build/. C'est `app` qui écrit ce répertoire, en continu, et le worker s'y contente
+    # de lire — les deux processus Gradle ne partagent donc plus aucune sortie modifiable, et
+    # DevTools redémarre le worker sur le .class que `app` vient de recompiler.
+    # Le --project-cache-dir isole le répertoire de projet .gradle/ que `app` verrouille
+    # (spec, décision 9) ; ça ne suffit pas seul, parce que les deux conteneurs partageraient
+    # encore GRADLE_USER_HOME (gradle-cache) et se bloqueraient sur son verrou de journal —
+    # la contention passe par un port local, invisible de l'autre conteneur. D'où le second
+    # volume ci-dessous. Enfin, `app` sain (voir son healthcheck) garantit que build/classes
+    # existe avant que le worker démarre : la course « Main class name has not been
+    # configured » ne peut plus l'atteindre.
+    command: ["./gradlew", "--no-daemon", "--project-cache-dir", ".gradle-worker", "bootRun", "-x", "compileJava", "-x", "processResources"]
     environment:
       SPRING_PROFILES_ACTIVE: dev,worker
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-second_brain}
@@ -138,7 +151,7 @@ services:
       rabbitmq:
         condition: service_healthy
       app:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     image: node:24-alpine
