@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -59,6 +61,9 @@ class DocumentUploadedListenerTest {
     void recoit_l_evenement_publie(CapturedOutput sortie) {
         UUID document = UUID.randomUUID();
 
+        // Clé de routage littérale à dessein : le test fige le contrat sur le fil. Passer
+        // par DomainEventNames.of le rendrait tautologique — il vérifierait que le code
+        // s'accorde avec lui-même.
         rabbitTemplate.convertAndSend(
                 AmqpConfiguration.EVENTS_EXCHANGE,
                 "knowledge.DocumentUploaded",
@@ -66,5 +71,42 @@ class DocumentUploadedListenerTest {
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(sortie)
                 .contains("Événement knowledge.DocumentUploaded reçu pour le document " + document));
+    }
+
+    @Test
+    void rejette_un_evenement_non_declare_sans_le_retraiter(CapturedOutput sortie) throws InterruptedException {
+        UUID document = UUID.randomUUID();
+        // Un corps parfaitement valide, mais annoncé sous un nom que personne n'a déclaré.
+        // C'est l'en-tête de type qui gouverne (TypePrecedence.TYPE_ID) : le convertisseur
+        // ne cherche pas le nom hors de ses paquets de confiance, il refuse.
+        Message message = rabbitTemplate
+                .getMessageConverter()
+                .toMessage(
+                        new DocumentUploaded(document, UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z")),
+                        new MessageProperties());
+        message.getMessageProperties().setHeader("__TypeId__", "knowledge.Inconnu");
+
+        rabbitTemplate.send(AmqpConfiguration.EVENTS_EXCHANGE, "knowledge.DocumentUploaded", message);
+
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(sortie).contains("knowledge.Inconnu"));
+        // Le listener n'a pas été appelé : la conversion échoue avant lui.
+        assertThat(sortie).doesNotContain("reçu pour le document " + document);
+
+        // Et le message n'est pas remis en file (`default-requeue-rejected=false`) : sans
+        // ça, un message toxique tournerait en boucle et le journal grossirait sans fin.
+        int occurrences = occurrencesDe("knowledge.Inconnu", sortie);
+        Thread.sleep(1000);
+        assertThat(occurrencesDe("knowledge.Inconnu", sortie)).isEqualTo(occurrences);
+    }
+
+    private int occurrencesDe(String motif, CapturedOutput sortie) {
+        int total = 0;
+        int index = sortie.getOut().indexOf(motif);
+        while (index >= 0) {
+            total++;
+            index = sortie.getOut().indexOf(motif, index + motif.length());
+        }
+        return total;
     }
 }

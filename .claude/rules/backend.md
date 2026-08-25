@@ -77,8 +77,15 @@ Avant d'écrire une classe, décider de sa couche :
   d'événements restent séparées.
 - Un nouvel événement se **déclare** dans le `DomainEventRegistration` de son contexte
   (`<contexte>/infrastructure/messaging/`), sinon le convertisseur ne le connaît pas et la
-  désérialisation le refuse — c'est voulu, un `Class.forName` sur un nom venu du réseau
-  n'est pas une option.
+  désérialisation le refuse. Ce refus tient à un réglage précis : le mapper de types est en
+  `TypePrecedence.TYPE_ID`, donc c'est l'en-tête `__TypeId__` du message qui gouverne, dans
+  les deux sens. En `INFERRED` — le défaut de Spring AMQP — la réception déduirait le type
+  du paramètre du listener et **ne consulterait jamais l'en-tête** : un `on(DocumentUploaded)`
+  désérialiserait n'importe quel corps en `DocumentUploaded`, et un événement non déclaré
+  partirait à l'envoi sous son nom qualifié de classe. Un nom absent de la table est confronté
+  aux paquets de confiance du mapper (`java.lang`, `java.util`) **avant** tout
+  `ClassUtils.forName`, qui n'est donc tenté que pour un nom déjà jugé sûr : c'est ce filtre
+  qui refuse — « The class '…' is not in the trusted packages » — pas l'absence de tentative.
 - Un listener est un **adapter entrant** dans `<contexte>/infrastructure/messaging/` :
   `@Profile("worker")`, une classe, une queue, une commande dispatchée sur le bus. Aucune
   règle métier, aucun accès direct à un repository.
