@@ -199,10 +199,13 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 │                            en autonomie
 ├── Dockerfile               build npm puis nginx qui sert dist
 ├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
+├── src/assets/main.css      reset, police, tokens du projet (--sb-*)
 ├── src/api/                 seul module qui parle HTTP
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
-└── src/views/               un composant par écran (LoginView, RegisterView, HomeView)
+├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle
+└── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
+                             DesignSystemView — catalogue, développement seulement)
 ```
 
 `src/main/resources/templates/` n'existe plus : **aucune vue n'est rendue par le
@@ -469,15 +472,17 @@ transaction (écart n° 19).
 14. `FindUserByEmail` reste sans écran (voir l'écart n° 3) : le profil lit par identifiant,
     puisque c'est l'identifiant que le jeton porte. Chercher par email quand on détient un
     UUID immuable serait un contresens.
-15. `LoginView.vue`, `RegisterView.vue` et `HomeView.vue` ne sont couverts par aucun test
-    automatisé. Le choix
-    délibéré a été de tester le store d'authentification et le garde de route — les deux
-    endroits où un échec passerait silencieusement — et non le rendu des composants. La
-    correction des deux écrans repose donc sur `npm run build` (qui compile les templates
-    sans rien affirmer sur leur comportement) et sur un passage humain dans un navigateur.
-    Conséquence directe : un gestionnaire d'événement mal relié ou un nom de champ mal
-    orthographié passerait au vert. Le passage humain n'est donc pas une étape facultative
-    mais une condition avant toute mise en production.
+15. Aucune vue ni aucun composant de `src/components/` n'est couvert par un test de rendu.
+    Le choix délibéré a été de tester le store d'authentification et le garde de route —
+    les deux endroits où un échec passerait silencieusement — et non le rendu des
+    composants. La correction des écrans repose donc sur `npm run build` (qui compile les
+    templates sans rien affirmer sur leur comportement) et sur un passage humain dans un
+    navigateur. Conséquence directe : un gestionnaire d'événement mal relié ou un nom de
+    champ mal orthographié passerait au vert. Le passage humain n'est donc pas une étape
+    facultative mais une condition avant toute mise en production — et il a un lieu :
+    `/design-system`, servi par la pile `docker compose` seulement, qui rend chaque token et
+    chaque composant partagé dans tous ses états. Les vues `LoginView` et `RegisterView`
+    restent à parcourir en plus, puisque leur logique de soumission n'y est pas.
 16. Les libellés de refus de vérification existent en deux endroits : les exceptions du
     domaine (`InvalidVerificationLinkException` et ses sœurs) et `VERIFICATION_MESSAGES`
     dans `LoginView.vue`, qui traduit les codes portés par la redirection. Ils peuvent
