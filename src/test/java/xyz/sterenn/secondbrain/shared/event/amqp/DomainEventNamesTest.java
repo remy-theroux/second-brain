@@ -27,6 +27,26 @@ class DomainEventNamesTest {
     }
 
     @Test
+    void refuse_une_lambda_ou_une_classe_anonyme() {
+        // `DomainEvent` n'a qu'une seule méthode abstraite, donc une lambda compile : c'est
+        // le cas à fermer. Ni elle ni une classe anonyme n'ont de nom simple exploitable.
+        DomainEvent lambda = () -> Instant.parse("2026-08-25T10:00:00Z");
+        DomainEvent anonyme = new DomainEvent() {
+            @Override
+            public Instant occurredAt() {
+                return Instant.parse("2026-08-25T10:00:00Z");
+            }
+        };
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DomainEventNames.of(lambda.getClass()))
+                .withMessageContaining("anonyme");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DomainEventNames.of(anonyme.getClass()))
+                .withMessageContaining("anonyme");
+    }
+
+    @Test
     void construit_la_table_des_noms_connus() {
         assertThat(DomainEventNames.mappingOf(List.of(DocumentUploaded.class)))
                 .containsExactly(java.util.Map.entry("knowledge.DocumentUploaded", DocumentUploaded.class));

@@ -2,7 +2,6 @@ package xyz.sterenn.secondbrain.shared.event.amqp;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -30,6 +29,12 @@ import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
  * <p>Le nom de l'événement est dérivé dans {@code publish}, avant tout enregistrement :
  * un événement hors de tout contexte borné est une erreur de programmation, et elle doit
  * faire échouer la commande avant le commit — pas remonter à l'appelant après.
+ *
+ * <p>Un {@code publish} appelé dans un bloc {@code PROPAGATION_REQUIRES_NEW} s'enregistre
+ * sur la transaction <em>interne</em> : l'événement part au commit de celle-ci, même si la
+ * transaction englobante est annulée ensuite. Aucun chemin du projet ne fait ça — le bus
+ * n'ouvre qu'une transaction par commande — et la note est là pour qu'on ne suppose pas le
+ * contraire le jour où une propagation le ferait.
  */
 @Component
 public class AmqpDomainEventPublisher implements DomainEventPublisher {
@@ -47,7 +52,14 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
         // Dérivé ici et non dans afterCommit : un événement hors de tout contexte borné est
         // une erreur de programmation, elle doit faire échouer la commande AVANT le commit.
         String name = DomainEventNames.of(event.getClass());
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+        // Les deux contrôles, et pas seulement le premier : une synchronisation peut être
+        // active sans qu'aucune transaction ne le soit (un `TransactionTemplate` en
+        // PROPAGATION_SUPPORTS hors transaction, un test qui l'ouvre à la main). Il n'y
+        // aurait alors jamais de commit, donc jamais d'afterCommit, et l'événement serait
+        // silencieusement perdu. C'est l'idiome de Spring lui-même, dans
+        // TransactionalApplicationListenerMethodAdapter.
+        if (!TransactionSynchronizationManager.isSynchronizationActive()
+                || !TransactionSynchronizationManager.isActualTransactionActive()) {
             send(name, event);
             return;
         }
@@ -56,7 +68,11 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
             public void afterCommit() {
                 try {
                     send(name, event);
-                } catch (AmqpException e) {
+                } catch (RuntimeException e) {
+                    // Toute exception, pas seulement une AmqpException : la Javadoc
+                    // ci-dessus promet qu'après un commit réussi rien ne fait échouer la
+                    // requête. Une sérialisation impossible ou une erreur du convertisseur
+                    // sortirait sinon d'afterCommit et remonterait à l'appelant.
                     log.error(
                             "Événement {} perdu : le broker n'a pas pu être joint après le commit ({})",
                             name,

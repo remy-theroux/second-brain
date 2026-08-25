@@ -29,9 +29,21 @@ public final class DomainEventNames {
     }
 
     /**
-     * @throws IllegalArgumentException si la classe n'est pas dans un contexte borné du projet
+     * @throws IllegalArgumentException si la classe n'est pas un record nommé d'un contexte
+     *     borné du projet
      */
     public static String of(Class<? extends DomainEvent> type) {
+        // `DomainEvent` n'a qu'une méthode abstraite : une lambda compile, et son nom simple
+        // est vide ou synthétique. Elle prendrait le nom de son package englobant et
+        // voyagerait sous un nom que rien ne peut redéserialiser. Refusé ici, à la
+        // publication, plutôt qu'illisible sur le transport.
+        if (type.isAnonymousClass()
+                || type.isLocalClass()
+                || type.isSynthetic()
+                || type.getSimpleName().isEmpty()) {
+            throw new IllegalArgumentException(
+                    type.getName() + " doit être un record nommé, pas une classe anonyme ou une lambda");
+        }
         String pkg = type.getPackageName();
         if (!pkg.startsWith(ROOT + ".")) {
             throw new IllegalArgumentException(type.getName() + " n'est pas dans un contexte borné de " + ROOT);
