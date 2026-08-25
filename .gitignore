@@ -1,6 +1,8 @@
 # Gradle
 .gradle/
 .gradle-cache/
+.gradle-worker/
+.gradle-cache-worker/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties

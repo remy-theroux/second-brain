@@ -54,7 +54,7 @@ documenté dans `CLAUDE.md`.
 | Ce qu'il pose | Pourquoi |
 |---|---|
 | `STACK_SUFFIX=-<slug>` dans le `.env` | Nomme le projet compose, donc sépare conteneurs, réseau et volumes |
-| Un bloc de ports d'indice N : `8080+N`, `5432+N`, `1025+N`, `8025+N` | Un seul décalage à retenir par feature |
+| Un bloc de ports d'indice N : `8080+N`, `5432+N`, `1025+N`, `8025+N`, `5672+N`, `15672+N` | Un seul décalage à retenir par feature |
 | Le `.env` généré depuis `.env.example` | Tout ajout au modèle atterrit dans les worktrees suivants |
 
 **Le `.env` d'un worktree fait foi une fois écrit.** Le script ne réalloue jamais un bloc
