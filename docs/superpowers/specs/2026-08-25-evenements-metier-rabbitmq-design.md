@@ -371,6 +371,36 @@ que le conteneur `worker` reçoit bien l'événement d'un dépôt fait dans le n
 - Plusieurs instances du worker : rien ne l'empêche (une queue, plusieurs consommateurs),
   rien ne le teste.
 
+## Écarts d'implémentation
+
+Ce que le code fait autrement que cette spec, et pourquoi. Rien qui change une décision ;
+tout tenait à un détail que l'écriture a fait apparaître.
+
+- **Image de test `rabbitmq:4-alpine`**, pas `4-management-alpine` : la console ne sert à
+  rien dans un conteneur jetable, et l'image sans elle démarre plus vite. `compose.yaml`
+  garde bien la variante management (décision 10).
+- **Le convertisseur construit son propre mapper Jackson** (`new JacksonJsonMessageConverter()`,
+  constructeur sans argument) plutôt que de recevoir l'`ObjectMapper` de Boot. Délibéré :
+  une personnalisation de la sérialisation HTTP ne doit pas changer la forme des messages en
+  vol. Jackson 3 y apporte le module `java.time`, donc les `Instant` partent en ISO-8601.
+- **`DefaultJacksonJavaTypeMapper` et non `DefaultClassMapper`**, avec
+  `TypePrecedence.TYPE_ID` : c'est l'en-tête `__TypeId__` qui gouverne dans les deux sens.
+  En `INFERRED` — le défaut — la réception déduirait le type du paramètre du listener et
+  n'ouvrirait jamais l'en-tête, ce qui viderait la table des noms de son sens à la réception.
+- **Le test de publication de la spec s'est scindé en deux** : `AmqpDomainEventPublisherTest`
+  vérifie le contrat du *port* — l'annonce part au commit, jamais avant, jamais après un
+  rollback — sur une queue d'observation liée à `knowledge.#` ; `UploadDocumentAnnouncementTest`
+  vérifie le chemin réel, `UploadDocument` dispatché sur le bus. Un seul test aurait mélangé
+  « l'annonce part au commit » et « le handler publie ».
+- **Queues d'observation durables** dans les tests : RabbitMQ 4 refuse par défaut une queue
+  transiente non exclusive (`transient_nonexcl_queues`, dépréciée), et une queue exclusive ne
+  se lirait que depuis la connexion qui l'a déclarée.
+- **Le nom de l'événement est dérivé dans `publish`**, avant l'enregistrement de la
+  synchronisation : un événement hors contexte borné est une erreur de programmation, elle
+  doit faire échouer la commande avant le commit, pas remonter après.
+- **Deux isolations Gradle pour le worker**, pas une (décision 9) : `--project-cache-dir`
+  *et* un `GRADLE_USER_HOME` propre.
+
 ## Pointeurs
 
 - `docs/superpowers/plans/2026-08-25-evenements-metier-rabbitmq.md` — le plan.

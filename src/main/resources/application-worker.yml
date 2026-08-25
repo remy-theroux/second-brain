@@ -5,6 +5,11 @@
 # Couper Tomcat retire les contrôleurs du routage, Swagger et l'actuator HTTP. Ce qui reste
 # est commun aux deux rôles : bus, JPA, Flyway, stockage, mail, publication d'événements. Et
 # c'est ici, et seulement ici, que les listeners `@Profile("worker")` existent.
+#
+# Sans Tomcat, ce qui garde la JVM en vie est le thread des conteneurs de listeners, qui
+# n'est pas un thread démon. S'il n'existait aucun listener sous ce profil — une faute de
+# frappe dans un `@Profile("worker")` suffit — le processus ne planterait pas : il
+# s'arrêterait juste après son démarrage, sans erreur. C'est le symptôme à reconnaître.
 spring:
   main:
     web-application-type: none

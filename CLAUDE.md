@@ -376,10 +376,15 @@ capterait — ce que ce projet évite, pour que la traduction des refus reste au
 route concernée. Avec lui, le multipart est résolu au moment où le contrôleur lit son
 argument, et l'`@ExceptionHandler` d'`UploadDocumentController` la voit.
 
-L'ordre des trois écritures est un choix : contrôle du doublon, écriture en base
-(`saveAndFlush`), puis fichier. Le fichier en dernier parce qu'**un système de fichiers ne
-participe à aucune transaction** — écrit avant, il survivrait à un rollback en désignant
-une ligne qui n'existe pas (écart n° 19).
+L'ordre des quatre étapes est un choix : contrôle du doublon, écriture en base
+(`saveAndFlush`), fichier, puis publication de `DocumentUploaded`. Le fichier avant la
+publication parce qu'**un système de fichiers ne participe à aucune transaction** — écrit
+après le commit, il manquerait au consommateur qui relit ; écrit avant la ligne, il
+survivrait à un rollback en désignant une ligne qui n'existe pas (écart n° 19). La
+publication, elle, est en dernier pour se lire comme ce qu'elle est, une annonce : sa place
+dans la séquence n'a aucune portée transactionnelle, puisqu'elle ne prend effet qu'**au
+commit** — un rollback n'annonce rien, et le broker injoignable à cet instant perd
+l'événement (écart n° 22).
 
 `DELETE /api/documents/{id}` efface la ligne puis l'original. Les extraits ne sont pas
 mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
@@ -450,7 +455,11 @@ document, pas être rejoué.
 
 Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
 en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
-`webEnvironment = NONE`.
+`webEnvironment = NONE`. Conséquence à connaître : la propriété qui **définit** le profil
+(`spring.main.web-application-type=none`) n'est vérifiée par aucun test — le test du worker
+force `webEnvironment = NONE` par construction, donc il obtiendrait un contexte sans Tomcat
+même si `application-worker.yml` ne posait rien. Seul le passage sur la pile
+`docker compose` constate que le conteneur `worker` démarre sans serveur HTTP.
 
 ### Persistance
 
@@ -599,6 +608,15 @@ transaction (écart n° 19).
     Condition de bascule : un événement sans état observable derrière lui, ou une perte
     constatée. `DomainEventPublisher` est un port ; l'outbox serait une implémentation de
     plus, aucun handler ne changerait.
+
+    Un broker **mal configuré** se perd exactement de la même façon, et plus discrètement :
+    les défauts d'`application.yml` sont `localhost`, `guest`, `guest` — un « défaut qui ment
+    en production » du même genre que `base-url` (écart n° 8). Un déploiement sans
+    `SPRING_RABBITMQ_HOST` démarre, sert toutes les routes, et perd chaque événement dans un
+    `ERROR` que personne ne lit. **`/actuator/health` ignore délibérément le broker**
+    (`management.health.rabbit.enabled: false`) : redémarrer l'API ne répare pas un broker,
+    et l'API sert tout le reste sans lui. Le symptôme à guetter est ailleurs — l'`ERROR` à
+    chaque publication perdue, et les documents qui restent `PENDING`.
 
 ## Stack et versions
 
