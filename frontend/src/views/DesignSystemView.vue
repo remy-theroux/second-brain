@@ -2,10 +2,15 @@
 import { onMounted, ref } from 'vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
+import Column from 'primevue/column'
+import ConfirmPopup from 'primevue/confirmpopup'
+import DataTable from 'primevue/datatable'
+import FileUpload from 'primevue/fileupload'
 import InputText from 'primevue/inputtext'
 import Menu from 'primevue/menu'
 import Message from 'primevue/message'
 import Password from 'primevue/password'
+import { useConfirm } from 'primevue/useconfirm'
 import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
 
@@ -42,8 +47,43 @@ const MESSAGE_SEVERITIES = ['success', 'info', 'warn', 'error', 'secondary', 'co
 
 const menuItems = [
   { label: 'Accueil', icon: 'pi pi-home' },
-  { label: 'Notes', icon: 'pi pi-file' },
+  { label: 'Documents', icon: 'pi pi-file' },
 ]
+
+// La liste des documents, telle que DocumentsView la rend : trois colonnes et une action.
+// La deuxième ligne porte la classe du doublon désigné par le serveur.
+const DOCUMENTS = [
+  {
+    id: 'a',
+    filename: 'notes-de-lecture.md',
+    status: 'En attente de traitement',
+    createdAt: '25 août 2026, 09:12',
+  },
+  {
+    id: 'b',
+    filename: 'rapport-annuel.pdf',
+    status: 'En attente de traitement',
+    createdAt: '24 août 2026, 18:40',
+  },
+  {
+    id: 'c',
+    filename: 'compte-rendu.docx',
+    status: 'En attente de traitement',
+    createdAt: '23 août 2026, 11:05',
+  },
+]
+
+const confirm = useConfirm()
+
+function showConfirmation(event) {
+  confirm.require({
+    target: event.currentTarget,
+    message: 'Supprimer « rapport-annuel.pdf » ?',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
+    acceptProps: { label: 'Supprimer', severity: 'danger' },
+  })
+}
 
 // Les valeurs sont lues sur le document une fois monté : c'est la valeur effective qui
 // est affichée, pas celle qu'on croit avoir écrite dans main.css.
@@ -235,6 +275,71 @@ onMounted(() => {
       <div class="sidebar-sample">
         <Menu :model="menuItems" class="sidebar-menu" />
       </div>
+    </section>
+
+    <section>
+      <h2>Dépôt de fichier — FileUpload</h2>
+      <p class="muted">
+        Mode <code>basic</code>, envoi automatique à la sélection, <code>custom-upload</code> :
+        l'appel HTTP part de <code>src/api/</code>, jamais du composant. Ici, la sélection ne fait
+        rien.
+      </p>
+      <div class="row">
+        <FileUpload
+          mode="basic"
+          custom-upload
+          auto
+          choose-label="Déposer un document"
+          choose-icon="pi pi-upload"
+        />
+        <FileUpload
+          mode="basic"
+          custom-upload
+          auto
+          choose-label="Désactivé pendant l'envoi"
+          choose-icon="pi pi-upload"
+          disabled
+        />
+      </div>
+    </section>
+
+    <section>
+      <h2>Tableau — DataTable</h2>
+      <p class="muted">
+        La liste des documents (<code>DocumentsView</code>). La ligne en gras, soulignée à gauche
+        par <code>--p-primary-color</code>, est le doublon que le serveur a désigné après un dépôt
+        refusé. Le bouton ouvre la confirmation (<code>ConfirmPopup</code>) qui précède toute
+        suppression.
+      </p>
+      <ConfirmPopup />
+      <DataTable
+        :value="DOCUMENTS"
+        data-key="id"
+        :row-class="(row) => (row.id === 'b' ? 'table-duplicate-row' : '')"
+      >
+        <Column field="filename" header="Fichier" />
+        <Column field="status" header="Statut" />
+        <Column field="createdAt" header="Déposé le" />
+        <Column class="table-actions">
+          <template #body="{ data }">
+            <Button
+              type="button"
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              rounded
+              :aria-label="`Supprimer ${data.filename}`"
+              @click="showConfirmation"
+            />
+          </template>
+        </Column>
+      </DataTable>
+      <DataTable :value="[]">
+        <template #empty>Aucun document pour l'instant.</template>
+        <Column header="Fichier" />
+        <Column header="Statut" />
+        <Column header="Déposé le" />
+      </DataTable>
     </section>
   </main>
 </template>

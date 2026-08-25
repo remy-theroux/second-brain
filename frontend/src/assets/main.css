@@ -78,3 +78,22 @@ body {
   margin: 0;
   text-align: center;
 }
+
+/*
+ * Tableau des documents (DocumentsView, et sa copie dans le design system). Ces classes se
+ * posent sur des lignes et des colonnes rendues par DataTable, hors de portée d'un
+ * `<style scoped>` : partagées par deux vues, elles vivent ici plutôt qu'en `:deep()`
+ * recopié dans chacune.
+ */
+
+/* La ligne du doublon désigné par le serveur : un repère, pas une couleur de plus. */
+.table-duplicate-row {
+  font-weight: bold;
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
+}
+
+/* Colonne des actions, réduite au bouton qu'elle porte. */
+.table-actions {
+  width: 1%;
+  text-align: right;
+}

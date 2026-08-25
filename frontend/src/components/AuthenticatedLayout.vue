@@ -11,9 +11,11 @@ const router = useRouter()
 const errorMessage = ref('')
 
 // Le menu principal ne porte que les actions de l'application, pas la gestion du compte,
-// qui vit dans la zone en bas de la barre. Une entrée aujourd'hui ; le modèle grandit avec
-// les features.
-const menuItems = [{ label: 'Accueil', icon: 'pi pi-home', route: { name: 'home' } }]
+// qui vit dans la zone en bas de la barre. Le modèle grandit avec les features.
+const menuItems = [
+  { label: 'Accueil', icon: 'pi pi-home', route: { name: 'home' } },
+  { label: 'Documents', icon: 'pi pi-file', route: { name: 'documents' } },
+]
 
 // Le garde a laissé passer sur la foi de l'expiration mémorisée côté navigateur ; cet
 // appel demande au serveur ce qu'il en pense vraiment. Un 401 déconnecte (le store l'a déjà

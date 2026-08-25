@@ -42,8 +42,11 @@ Deux familles de variables CSS, et la frontière ne se négocie pas :
   Avant ces tokens, `LoginView` et `RegisterView` portaient le même `<style scoped>` à
   l'octet près, et changer un espacement demandait de le retrouver dans chaque fichier.
 - `main.css` ne pose que ce qui n'appartient à aucun composant : reset, police, et les
-  classes partagées par plusieurs vues à l'identique (`.guest-form`, `.guest-switch`). Tout
-  le reste est `<style scoped>`.
+  classes partagées par plusieurs vues à l'identique (`.guest-form`, `.guest-switch`,
+  `.table-duplicate-row`, `.table-actions`). Tout le reste est `<style scoped>`. Une classe
+  posée sur un élément rendu par un composant PrimeVue (`row-class` d'un `DataTable`) est
+  hors de portée d'un `<style scoped>` : si deux vues en ont besoin, elle va dans
+  `main.css`, pas en `:deep()` recopié dans chacune.
 
 ## Composants partagés et design system
 
@@ -78,7 +81,7 @@ Deux familles de variables CSS, et la frontière ne se négocie pas :
 | Détient un état partagé entre écrans | `src/stores/` (pinia) |
 | Décrit les routes et le garde | `src/router/` |
 | Est l'écran d'une route | `src/views/` |
-| Est réutilisé par plusieurs vues | `src/components/` (n'existe pas encore) |
+| Est réutilisé par plusieurs vues | `src/components/` |
 
 - **`src/api/` est le seul endroit qui appelle `fetch`.** Un composant qui appelle une URL
   en direct est un bug : les en-têtes d'authentification et la traduction des erreurs
@@ -127,6 +130,16 @@ serveur envoie un code, pas un message.** `GET /verification` redirige vers
 porte les libellés. Un message en query string atterrirait dans l'historique du navigateur
 et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger — est un écart
 assumé documenté dans `CLAUDE.md`.
+
+Ce qui n'est **pas** un message d'erreur peut se traduire côté front : le libellé d'une
+énumération sérialisée par l'API (`STATUS_LABELS` dans `DocumentsView.vue`) est une affaire
+d'écran. Et un filtre de sélecteur de fichiers (`ACCEPTED_EXTENSIONS`) n'est pas une règle :
+la règle est au serveur, dont le `415` énonce la liste qui fait foi. Les deux copies sont
+l'écart n° 21 de `CLAUDE.md`.
+
+Le dépôt d'un fichier passe par `FileUpload` en `custom-upload` : le composant ne connaît
+aucune URL, et l'appel part de `src/api/` comme tout le reste. Poser un `Content-Type` à la
+main sur un `FormData` casserait le multipart, le navigateur seul connaissant le boundary.
 
 ## Tests
 

@@ -96,6 +96,30 @@ describe("garde d'authentification", () => {
   })
 })
 
+describe('page des documents', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it("renvoie vers le login quand aucun jeton n'est détenu", async () => {
+    const router = createTestRouter()
+
+    await router.push('/documents')
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it('laisse atteindre les documents avec un jeton valable', async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/documents')
+
+    expect(router.currentRoute.value.name).toBe('documents')
+  })
+})
+
 describe('page de design system', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

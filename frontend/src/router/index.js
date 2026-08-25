@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
+import DocumentsView from '@/views/DocumentsView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import DesignSystemView from '@/views/DesignSystemView.vue'
@@ -12,6 +13,7 @@ export const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
   { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
   { path: '/home', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+  { path: '/documents', name: 'documents', component: DocumentsView, meta: { requiresAuth: true } },
   // Catalogue des tokens et des composants partagés, pour le passage humain dans un
   // navigateur. Développement seulement : le spread conditionnel retire la route ET la vue
   // du bundle de production, plutôt qu'un garde qui laisserait le code embarqué. Ni
