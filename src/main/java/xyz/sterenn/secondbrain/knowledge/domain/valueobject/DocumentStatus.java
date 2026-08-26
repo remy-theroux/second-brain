@@ -3,13 +3,22 @@ package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 /**
  * Étape d'un document dans la chaîne d'ingestion.
  *
- * <p>Une seule valeur pour l'instant, et c'est volontaire : le dépôt ne déclenche aucun
- * traitement, donc rien ne fait aujourd'hui sortir un document de {@code PENDING}.
- * Déclarer d'avance les états que personne n'atteint ferait croire à un cycle de vie qui
- * n'existe pas. Le ticket qui orchestrera l'ingestion ajoutera les siens.
+ * <p>Trois valeurs, et c'est tout ce que ce ticket peut honnêtement porter : le texte est
+ * extrait, ou il ne l'est pas. RAG-6 ajoutera ce qui suit la vectorisation — probablement
+ * un {@code READY} après {@code EXTRACTED}. Ne pas le déclarer d'avance : un état que
+ * personne n'atteint fait croire à un cycle de vie qui n'existe pas.
+ *
+ * <p>{@code FAILED} n'est pas un état terminal. Une réextraction (RAG-7) en repart, et
+ * {@code markTextExtracted} efface alors le motif de l'échec précédent.
  */
 public enum DocumentStatus {
 
     /** Déposé, son fichier d'origine conservé, en attente de traitement. */
-    PENDING
+    PENDING,
+
+    /** Son texte a été extrait et rangé dans un {@code DocumentText}. */
+    EXTRACTED,
+
+    /** Le traitement a échoué ; le motif est lisible sur le document. */
+    FAILED
 }
