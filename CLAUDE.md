@@ -191,7 +191,8 @@ xyz.sterenn.secondbrain
 │   ├── domain/
 │   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
 │   │   ├── entity/          Document, DocumentText (le texte extrait, agrégat à part)
-│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus,
+│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
+│   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait)
 │   │   ├── port/            DocumentRepository, DocumentStorage, DocumentTextRepository,
 │   │   │                    DocumentTextExtractor
@@ -576,6 +577,7 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0026](docs/decisions/0026-un-extracteur-par-format-plutot-qu-apache-tika.md) | Un extracteur par format, plutôt qu'Apache Tika |
 | [0027](docs/decisions/0027-les-titres-d-un-pdf-sans-signets-sont-devines-a-la-taille-de-police.md) | Les titres d'un PDF sans signets sont devinés à la taille de police |
 | [0028](docs/decisions/0028-l-echec-d-extraction-s-ecrit-hors-de-la-transaction-annulee.md) | L'échec d'extraction s'écrit hors de la transaction annulée |
+| [0029](docs/decisions/0029-la-typologie-d-un-document-se-deduit-de-son-format.md) | La typologie d'un document se déduit de son format, elle n'est pas stockée |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se

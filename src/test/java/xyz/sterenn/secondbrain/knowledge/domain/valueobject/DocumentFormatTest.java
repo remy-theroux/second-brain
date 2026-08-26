@@ -59,4 +59,16 @@ class DocumentFormatTest {
         assertThatThrownBy(() -> DocumentFormat.fromFilename("rapport.pdfx"))
                 .isInstanceOf(UnsupportedDocumentFormatException.class);
     }
+
+    @Test
+    void chaque_format_annonce_sa_typologie() {
+        assertThat(DocumentFormat.values())
+                .allSatisfy(format -> assertThat(format.type()).isNotNull());
+    }
+
+    @Test
+    void les_quatre_formats_acceptes_se_decoupent_tous_en_texte() {
+        assertThat(DocumentFormat.of(DocumentType.TEXTUAL))
+                .containsExactly(DocumentFormat.PDF, DocumentFormat.MARKDOWN, DocumentFormat.TEXT, DocumentFormat.DOCX);
+    }
 }
