@@ -402,9 +402,17 @@ dans la séquence n'a aucune portée transactionnelle, puisqu'elle ne prend effe
 commit** — un rollback n'annonce rien, et le broker injoignable à cet instant perd
 l'événement (ADR-0023).
 
-`DELETE /api/documents/{id}` efface la ligne puis l'original. Les extraits ne sont pas
-mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
-`ON DELETE CASCADE`.
+`DELETE /api/documents/{id}` efface la ligne puis l'original. L'extraction n'est pas
+mentionnée, et ne le sera pas : les `ON DELETE CASCADE` de ses tables l'emportent avec le
+document, et ce handler n'a pas eu à changer quand elles sont arrivées.
+
+`GET /api/documents/{id}` rend un document **et ce qui en a été extrait** : le nom, le
+format, la typologie, le statut, le motif d'échec le cas échéant, et — quand elle existe —
+l'extraction propre à sa typologie. Une seule requête pour tout l'écran de détail, et non une
+route `/extraction` à part : celle-là aurait rendu `404` sur un document simplement en file
+d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le document
+d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
+rendant un `Optional` — une query ne lève pas.
 
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
 les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et

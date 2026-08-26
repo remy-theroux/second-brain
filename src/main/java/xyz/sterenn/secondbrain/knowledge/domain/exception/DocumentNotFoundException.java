@@ -9,7 +9,17 @@ package xyz.sterenn.secondbrain.knowledge.domain.exception;
  */
 public class DocumentNotFoundException extends RuntimeException {
 
+    /**
+     * Le refus, affichable tel quel.
+     *
+     * <p>Constante parce que <strong>deux routes le rendent</strong> : la suppression le
+     * traduit depuis l'exception, la lecture depuis un {@code Optional} vide — une query ne
+     * lève pas. Les deux doivent dire exactement la même chose, sans quoi l'utilisateur
+     * croirait à deux causes différentes.
+     */
+    public static final String MESSAGE = "Ce document est introuvable dans votre base de connaissance.";
+
     public DocumentNotFoundException() {
-        super("Ce document est introuvable dans votre base de connaissance.");
+        super(MESSAGE);
     }
 }
