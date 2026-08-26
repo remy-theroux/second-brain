@@ -23,8 +23,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
  * checked laisserait committer une ligne dont l'original n'a pas été écrit.
  *
  * <p><strong>Un système de fichiers ne participe à aucune transaction.</strong> Ce que
- * cette classe écrit survit à un rollback survenu après elle — écart assumé documenté dans
- * CLAUDE.md.
+ * cette classe écrit survit à un rollback survenu après elle — décision assumée (ADR-0020).
  */
 @Component
 public class FilesystemDocumentStorage implements DocumentStorage {

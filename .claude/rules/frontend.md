@@ -128,14 +128,14 @@ les réécrire côté front. Ça vaut pour `error_description` de `/api/token` c
 serveur envoie un code, pas un message.** `GET /verification` redirige vers
 `/login?verification=<code>` et c'est `VERIFICATION_MESSAGES` dans `LoginView.vue` qui
 porte les libellés. Un message en query string atterrirait dans l'historique du navigateur
-et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger — est un écart
-assumé documenté dans `CLAUDE.md`.
+et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger — est une
+décision assumée : ADR-0017.
 
 Ce qui n'est **pas** un message d'erreur peut se traduire côté front : le libellé d'une
 énumération sérialisée par l'API (`STATUS_LABELS` dans `DocumentsView.vue`) est une affaire
 d'écran. Et un filtre de sélecteur de fichiers (`ACCEPTED_EXTENSIONS`) n'est pas une règle :
 la règle est au serveur, dont le `415` énonce la liste qui fait foi. Les deux copies sont
-l'écart n° 21 de `CLAUDE.md`.
+assumées : ADR-0022.
 
 Le dépôt d'un fichier passe par `FileUpload` en `custom-upload` : le composant ne connaît
 aucune URL, et l'appel part de `src/api/` comme tout le reste. Poser un `Content-Type` à la

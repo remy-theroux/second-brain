@@ -28,7 +28,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
  * {@code DocumentStorage}, sous le nom de l'identifiant du document.
  *
  * <p>Les annotations JPA dans le domaine sont l'écart assumé déjà acté pour {@code User}
- * (voir « Écarts assumés » dans CLAUDE.md) : pas de classe miroir ni de mapper. L'écart
+ * (voir ADR-0002) : pas de classe miroir ni de mapper. L'écart
  * s'arrête là — l'entité ignore comment son {@link Checksum} atteint sa colonne.
  */
 @Entity

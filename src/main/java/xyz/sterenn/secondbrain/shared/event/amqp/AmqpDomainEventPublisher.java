@@ -21,7 +21,7 @@ import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
  * l'écriture est acquise et l'événement est perdu. L'exception est journalisée, pas
  * propagée — elle ne peut plus annuler le commit, et elle ne doit pas faire échouer une
  * requête dont l'écriture a réussi. Pas d'outbox, pas de rattrapage : décision 3 de la
- * spec, écart assumé dans CLAUDE.md.
+ * spec, ADR-0023.
  *
  * <p>Hors transaction, l'envoi est immédiat et une panne du broker remonte à l'appelant :
  * il n'y a rien d'acquis à protéger.

@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 // Filtre du sélecteur de fichiers, pas une règle : c'est le serveur qui refuse un format
 // (415) et son message énonce la liste qui fait foi, construite depuis `DocumentFormat`.
 // Cette copie ne sert qu'au confort du sélecteur et peut diverger sans qu'un test le voie —
-// même écart que `VERIFICATION_MESSAGES` dans LoginView.
+// même nature de copie que `VERIFICATION_MESSAGES` dans LoginView — ADR-0022.
 const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
 
 // Le statut voyage en code, comme tout ce que l'API sérialise d'une énumération ; le

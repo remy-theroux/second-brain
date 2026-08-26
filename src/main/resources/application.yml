@@ -71,7 +71,7 @@ spring:
     connection-timeout: 5s
     template:
       retry:
-        # Explicite parce que l'écart n° 22 de CLAUDE.md en dépend : pas de nouvel essai,
+        # Explicite parce qu'ADR-0023 en dépend : pas de nouvel essai,
         # un événement que le broker n'a pas reçu est perdu, et c'est assumé.
         enabled: false
     listener:
@@ -98,7 +98,7 @@ management:
       # Le broker n'entre pas dans /actuator/health : redémarrer l'API ne répare pas un
       # broker, et l'API sert tout le reste sans lui. Une panne se voit dans les logs
       # (ERROR à chaque publication perdue) et dans les documents qui restent PENDING —
-      # voir l'écart n° 22 de CLAUDE.md.
+      # voir ADR-0023.
       enabled: false
 
 springdoc:
@@ -119,6 +119,6 @@ secondbrain:
   jwt:
     # Volontairement sans valeur par défaut : un secret de signature par défaut serait
     # un secret public. Sans SECONDBRAIN_JWT_SECRET, l'application refuse de démarrer —
-    # à l'inverse de base-url ci-dessus, dont le défaut ment en production (écart n° 8).
+    # à l'inverse de base-url ci-dessus, dont le défaut ment en production (ADR-0009).
     # 32 octets minimum : HS256 exige une clé de 256 bits.
     secret: ${SECONDBRAIN_JWT_SECRET}

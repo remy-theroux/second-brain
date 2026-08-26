@@ -19,7 +19,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * {@code passwordHash} ne contient jamais le mot de passe en clair.
  *
  * <p>Les annotations JPA dans le domaine sont un écart assumé au profit du minimalisme
- * (pas de classe miroir ni de mapper) — voir « Écarts assumés » dans CLAUDE.md. L'écart
+ * (pas de classe miroir ni de mapper) — voir ADR-0002. L'écart
  * s'arrête là : l'entité ignore comment son {@link Email} atteint sa colonne.
  */
 @Entity
