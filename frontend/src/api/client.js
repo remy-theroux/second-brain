@@ -107,6 +107,29 @@ export async function listDocuments(token) {
 }
 
 /**
+ * Lit un document et ce qui en a été extrait. Le corps porte la typologie (`type`), qui dit
+ * quelle forme a `extraction` — absent tant que rien n'a été extrait.
+ */
+export async function fetchDocument(token, id) {
+  const response = await fetch(`/api/documents/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (response.ok) {
+    return response.json()
+  }
+
+  // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
+  // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+  const payload = await response.json().catch(() => null)
+  // Le 404 porte son message, affichable tel quel.
+  throw new Error(payload?.message ?? "Ce document n'a pas pu être chargé.")
+}
+
+/**
  * Dépose un document. Ne rend rien en cas de succès : le serveur répond 201 sans corps, et
  * c'est la liste qui donne l'état complet de la base.
  *

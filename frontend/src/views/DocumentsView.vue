@@ -9,6 +9,7 @@ import DataTable from 'primevue/datatable'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import {
   deleteDocument,
   DuplicateDocumentError,
@@ -24,17 +25,6 @@ import { useAuthStore } from '@/stores/auth'
 // Cette copie ne sert qu'au confort du sélecteur et peut diverger sans qu'un test le voie —
 // même nature de copie que `VERIFICATION_MESSAGES` dans LoginView — ADR-0022.
 const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
-
-// Le statut voyage en code, comme tout ce que l'API sérialise d'une énumération ; le
-// libellé est une affaire d'écran.
-// Le libellé d'une énumération sérialisée par l'API est une affaire d'écran, pas une règle
-// du serveur : ADR-0022 assume cette copie. Le motif d'échec, lui, vient du serveur et
-// s'affiche tel quel — c'est un message d'erreur, et le front n'en réécrit aucun.
-const STATUS_LABELS = {
-  PENDING: 'En attente de traitement',
-  EXTRACTED: 'Texte extrait',
-  FAILED: 'Traitement en échec',
-}
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -162,7 +152,7 @@ onMounted(load)
       <Column field="filename" header="Fichier" />
       <Column header="Statut">
         <template #body="{ data }">
-          {{ STATUS_LABELS[data.status] ?? data.status }}
+          <DocumentStatusTag :status="data.status" />
           <div v-if="data.errorMessage" class="document-error">{{ data.errorMessage }}</div>
         </template>
       </Column>
@@ -171,6 +161,14 @@ onMounted(load)
       </Column>
       <Column class="table-actions">
         <template #body="{ data }">
+          <Button
+            type="button"
+            icon="pi pi-eye"
+            text
+            rounded
+            :aria-label="`Voir ${data.filename}`"
+            @click="router.push({ name: 'document', params: { id: data.id } })"
+          />
           <Button
             type="button"
             icon="pi pi-trash"

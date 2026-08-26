@@ -13,6 +13,7 @@ import Password from 'primevue/password'
 import { useConfirm } from 'primevue/useconfirm'
 import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 
 // Catalogue statique : tout ce qui est partagé — tokens, composants du projet, composants
 // PrimeVue tels qu'on les emploie — dans chacun de ses états. Aucun store, aucun appel
@@ -52,23 +53,27 @@ const menuItems = [
 
 // La liste des documents, telle que DocumentsView la rend : trois colonnes et une action.
 // La deuxième ligne porte la classe du doublon désigné par le serveur.
+// Les statuts sont donnés en CODE, comme l'API les sérialise : c'est `DocumentStatusTag`
+// qui porte le libellé, et le catalogue doit montrer l'écran tel qu'il est.
+const DOCUMENT_STATUSES = ['PENDING', 'EXTRACTED', 'FAILED']
+
 const DOCUMENTS = [
   {
     id: 'a',
     filename: 'notes-de-lecture.md',
-    status: 'En attente de traitement',
+    status: 'EXTRACTED',
     createdAt: '25 août 2026, 09:12',
   },
   {
     id: 'b',
     filename: 'rapport-annuel.pdf',
-    status: 'En attente de traitement',
+    status: 'PENDING',
     createdAt: '24 août 2026, 18:40',
   },
   {
     id: 'c',
     filename: 'compte-rendu.docx',
-    status: 'En attente de traitement',
+    status: 'FAILED',
     createdAt: '23 août 2026, 11:05',
   },
 ]
@@ -304,6 +309,17 @@ onMounted(() => {
     </section>
 
     <section>
+      <h2>Statut de document — DocumentStatusTag</h2>
+      <p class="muted">
+        Le libellé et la sévérité d'un statut, au même endroit pour la liste et pour le détail. Le
+        code vient de l'API, le libellé est une affaire d'écran — ADR-0022.
+      </p>
+      <div class="row">
+        <DocumentStatusTag v-for="status in DOCUMENT_STATUSES" :key="status" :status="status" />
+      </div>
+    </section>
+
+    <section>
       <h2>Tableau — DataTable</h2>
       <p class="muted">
         La liste des documents (<code>DocumentsView</code>). La ligne en gras, soulignée à gauche
@@ -318,10 +334,19 @@ onMounted(() => {
         :row-class="(row) => (row.id === 'b' ? 'table-duplicate-row' : '')"
       >
         <Column field="filename" header="Fichier" />
-        <Column field="status" header="Statut" />
+        <Column header="Statut">
+          <template #body="{ data }"><DocumentStatusTag :status="data.status" /></template>
+        </Column>
         <Column field="createdAt" header="Déposé le" />
         <Column class="table-actions">
           <template #body="{ data }">
+            <Button
+              type="button"
+              icon="pi pi-eye"
+              text
+              rounded
+              :aria-label="`Voir ${data.filename}`"
+            />
             <Button
               type="button"
               icon="pi pi-trash"

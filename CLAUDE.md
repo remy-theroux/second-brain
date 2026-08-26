@@ -239,9 +239,11 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 ├── src/api/                 seul module qui parle HTTP
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
-├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle
+├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
+│                            DocumentStatusTag (libellé et sévérité d'un statut)
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
-                             DocumentsView, DesignSystemView — catalogue, développement
+                             DocumentsView, DocumentDetailView,
+                             DesignSystemView — catalogue, développement
                              seulement)
 ```
 
@@ -425,6 +427,15 @@ doublon plutôt que de laisser l'utilisateur la chercher. Aucun plafond de taill
 posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
 Aucun store : aucun autre écran ne partage cet état, la vue appelle `src/api/` directement,
 et c'est elle qui déconnecte sur un `401`, comme le layout le fait pour le profil.
+
+
+`DocumentDetailView` (`/documents/:id`, atteint par l'œil de chaque ligne) montre ce qui a
+été extrait : les métadonnées, le statut, le motif d'échec le cas échéant, puis les blocs
+titrés. L'écran est **adressable** — un texte extrait se relit, se partage par son URL et
+survit à un F5, ce qu'une modale sur la liste n'aurait pas offert. C'est `document.type`, la
+typologie, qui décide du rendu : une typologie sans affichage le dit plutôt que de rendre une
+page vide. `DocumentStatusTag` porte le libellé et la sévérité d'un statut pour les deux
+écrans — le motif était copié, il est devenu un composant.
 
 ### Le flux de l'extraction du texte
 

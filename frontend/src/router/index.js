@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
+import DocumentDetailView from '@/views/DocumentDetailView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import DesignSystemView from '@/views/DesignSystemView.vue'
@@ -14,6 +15,14 @@ export const routes = [
   { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
   { path: '/home', name: 'home', component: HomeView, meta: { requiresAuth: true } },
   { path: '/documents', name: 'documents', component: DocumentsView, meta: { requiresAuth: true } },
+  // Le détail est adressable : un texte extrait se relit, se partage par son URL et
+  // survit à un F5. Une modale sur la liste n'aurait rien de tout ça.
+  {
+    path: '/documents/:id',
+    name: 'document',
+    component: DocumentDetailView,
+    meta: { requiresAuth: true },
+  },
   // Catalogue des tokens et des composants partagés, pour le passage humain dans un
   // navigateur. Développement seulement : le spread conditionnel retire la route ET la vue
   // du bundle de production, plutôt qu'un garde qui laisserait le code embarqué. Ni

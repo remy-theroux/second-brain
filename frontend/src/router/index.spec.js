@@ -118,6 +118,24 @@ describe('page des documents', () => {
 
     expect(router.currentRoute.value.name).toBe('documents')
   })
+
+  it("renvoie au login le détail d'un document demandé sans jeton", async () => {
+    const router = createTestRouter()
+
+    await router.push('/documents/doc-1')
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it("ouvre le détail d'un document pour un porteur de jeton", async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/documents/doc-1')
+
+    expect(router.currentRoute.value.name).toBe('document')
+    expect(router.currentRoute.value.params.id).toBe('doc-1')
+  })
 })
 
 describe('page de design system', () => {
