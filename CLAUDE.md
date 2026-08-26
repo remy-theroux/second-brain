@@ -181,11 +181,14 @@ xyz.sterenn.secondbrain
 │                            (ErrorResponse, ValidationErrorResponse)
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
+│   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
 │   │   ├── entity/          Document
-│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus
+│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus,
+│   │   │                    TextBlock + ExtractedText (le format du texte extrait)
 │   │   ├── port/            DocumentRepository, DocumentStorage
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │   │                    UnsupportedDocumentFormatException
+│   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
+│   │   │                    et ses deux filles (Unreadable…, Unextractable…)
 │   │   └── event/           DocumentUploaded
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument
@@ -524,6 +527,8 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0021](docs/decisions/0021-le-contenu-depose-transite-entierement-en-memoire.md) | Le contenu déposé transite entièrement en mémoire |
 | [0022](docs/decisions/0022-le-front-recopie-ce-qui-n-est-pas-une-regle-du-serveur.md) | Le front recopie ce qui n'est pas une règle du serveur |
 | [0023](docs/decisions/0023-pas-d-outbox-on-fait-confiance-au-broker.md) | Pas d'outbox : on fait confiance au broker |
+| [0024](docs/decisions/0024-le-texte-extrait-est-une-suite-plate-de-blocs-titres.md) | Le texte extrait est une suite plate de blocs titrés |
+| [0025](docs/decisions/0025-un-plancher-de-caracteres-declare-un-document-inexploitable.md) | Un plancher de caractères déclare un document inexploitable |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
