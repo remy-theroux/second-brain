@@ -185,7 +185,8 @@ xyz.sterenn.secondbrain
 │   │   ├── entity/          Document, DocumentText (le texte extrait, agrégat à part)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait)
-│   │   ├── port/            DocumentRepository, DocumentStorage, DocumentTextRepository
+│   │   ├── port/            DocumentRepository, DocumentStorage, DocumentTextRepository,
+│   │   │                    DocumentTextExtractor
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…)
@@ -195,6 +196,7 @@ xyz.sterenn.secondbrain
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
+│       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
@@ -535,6 +537,7 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0023](docs/decisions/0023-pas-d-outbox-on-fait-confiance-au-broker.md) | Pas d'outbox : on fait confiance au broker |
 | [0024](docs/decisions/0024-le-texte-extrait-est-une-suite-plate-de-blocs-titres.md) | Le texte extrait est une suite plate de blocs titrés |
 | [0025](docs/decisions/0025-un-plancher-de-caracteres-declare-un-document-inexploitable.md) | Un plancher de caractères déclare un document inexploitable |
+| [0026](docs/decisions/0026-un-extracteur-par-format-plutot-qu-apache-tika.md) | Un extracteur par format, plutôt qu'Apache Tika |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
@@ -544,6 +547,7 @@ remplace — voir `.claude/rules/decisions.md`.
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
+commonmark-java ·
 JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 

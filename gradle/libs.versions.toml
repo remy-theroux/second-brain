@@ -9,6 +9,8 @@ springdoc = "3.0.3"
 spotless = "8.10.0"
 # Version du formateur lui-même : Spotless la résout à part, aucun BOM ne la porte.
 palantirJavaFormat = "2.78.0"
+# Extraction du texte : aucune de ces versions n'est portée par le BOM Spring Boot.
+commonmark = "0.24.0"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -17,6 +19,10 @@ palantirJavaFormat = "2.78.0"
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
 postgresql = { module = "org.postgresql:postgresql" }
 springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+# Markdown : le parseur de référence CommonMark en Java. Il donne les titres comme des
+# nœuds `Heading` avec leur niveau, là où une expression régulière sur `^#` prendrait pour
+# un titre le `#` d'un commentaire dans un bloc de code.
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

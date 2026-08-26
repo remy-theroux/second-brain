@@ -1,0 +1,8 @@
+Notes prises pendant la réunion du 12 mars.
+
+Rien de tout ceci n'est structuré : pas de titre, pas de numérotation, juste
+des paragraphes qui se suivent. C'est le cas le plus fréquent d'un fichier
+déposé à la volée depuis un bloc-notes.
+
+Le second paragraphe existe pour vérifier que la frontière entre paragraphes
+survit à la normalisation, parce que c'est elle que le découpage cherchera.

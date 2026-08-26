@@ -76,6 +76,11 @@ dependencies {
     // Documentation API
     implementation(libs.springdoc.openapi)
 
+    // Extraction du texte des documents. Un extracteur par format plutôt qu'Apache Tika,
+    // dont l'XHTML unifié aplatit précisément la sémantique qu'on cherche à garder
+    // (ADR-0026). Aucune de ces versions n'est couverte par le BOM Spring Boot.
+    implementation(libs.commonmark)
+
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).
     developmentOnly("org.springframework.boot:spring-boot-devtools")
