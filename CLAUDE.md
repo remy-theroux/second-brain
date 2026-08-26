@@ -497,8 +497,11 @@ ne connaît pas le type le rejetterait — l'événement serait perdu. La queue 
 déclarés dans les deux rôles. Une
 exception dans un listener rejette le message **sans remise en file**
 (`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
-boucle. Pas de dead-letter queue, pas de retry : un échec doit finir en `FAILED` sur le
-document, pas être rejoué.
+boucle. Pas de dead-letter queue, pas de retry : un échec finit en `FAILED` sur le document,
+pas rejoué. **Et il y finit depuis une seconde transaction** — `KnowledgeEventListener`
+rattrape l'exception, dispatche `MarkDocumentExtractionFailed`, puis acquitte. Un statut
+d'erreur écrit dans la transaction que le bus vient d'annuler disparaîtrait avec elle, et le
+document resterait éternellement en attente (ADR-0028).
 
 Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
 en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
@@ -572,6 +575,7 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0025](docs/decisions/0025-un-plancher-de-caracteres-declare-un-document-inexploitable.md) | Un plancher de caractères déclare un document inexploitable |
 | [0026](docs/decisions/0026-un-extracteur-par-format-plutot-qu-apache-tika.md) | Un extracteur par format, plutôt qu'Apache Tika |
 | [0027](docs/decisions/0027-les-titres-d-un-pdf-sans-signets-sont-devines-a-la-taille-de-police.md) | Les titres d'un PDF sans signets sont devinés à la taille de police |
+| [0028](docs/decisions/0028-l-echec-d-extraction-s-ecrit-hors-de-la-transaction-annulee.md) | L'échec d'extraction s'écrit hors de la transaction annulée |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
