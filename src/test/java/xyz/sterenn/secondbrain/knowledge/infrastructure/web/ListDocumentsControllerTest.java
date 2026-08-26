@@ -21,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.AccountFixture;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
@@ -51,6 +53,9 @@ class ListDocumentsControllerTest {
 
     @Autowired
     private AccessTokenIssuer accessTokenIssuer;
+
+    @Autowired
+    private DocumentRepository documentRepository;
 
     @Value("${secondbrain.storage.originals-path}")
     private String cheminDesOriginaux;
@@ -124,5 +129,28 @@ class ListDocumentsControllerTest {
     @Test
     void refuse_la_liste_sans_jeton() throws Exception {
         mockMvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void expose_le_motif_d_un_document_en_echec() throws Exception {
+        depose(jetonAlice, "scan.pdf", "un contenu quelconque");
+        Document document = documentRepository.findAllByOwnerId(alice).getFirst();
+        document.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        documentRepository.save(document);
+
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("FAILED"))
+                .andExpect(jsonPath("$[0].errorMessage").value("Ce document ne contient pas de texte exploitable."));
+    }
+
+    @Test
+    void n_expose_aucun_motif_pour_un_document_en_attente() throws Exception {
+        depose(jetonAlice, "notes.md", "un contenu quelconque");
+
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("PENDING"))
+                .andExpect(jsonPath("$[0].errorMessage").doesNotExist());
     }
 }

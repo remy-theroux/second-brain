@@ -27,8 +27,13 @@ const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
 
 // Le statut voyage en code, comme tout ce que l'API sérialise d'une énumération ; le
 // libellé est une affaire d'écran.
+// Le libellé d'une énumération sérialisée par l'API est une affaire d'écran, pas une règle
+// du serveur : ADR-0022 assume cette copie. Le motif d'échec, lui, vient du serveur et
+// s'affiche tel quel — c'est un message d'erreur, et le front n'en réécrit aucun.
 const STATUS_LABELS = {
   PENDING: 'En attente de traitement',
+  EXTRACTED: 'Texte extrait',
+  FAILED: 'Traitement en échec',
 }
 
 const auth = useAuthStore()
@@ -156,7 +161,10 @@ onMounted(load)
       <template #empty>Aucun document pour l'instant.</template>
       <Column field="filename" header="Fichier" />
       <Column header="Statut">
-        <template #body="{ data }">{{ STATUS_LABELS[data.status] ?? data.status }}</template>
+        <template #body="{ data }">
+          {{ STATUS_LABELS[data.status] ?? data.status }}
+          <div v-if="data.errorMessage" class="document-error">{{ data.errorMessage }}</div>
+        </template>
       </Column>
       <Column header="Déposé le">
         <template #body="{ data }">{{ formatDate(data.createdAt) }}</template>
@@ -180,6 +188,12 @@ onMounted(load)
 </template>
 
 <style scoped>
+.document-error {
+  margin-top: var(--sb-space-xs);
+  font-size: var(--sb-text-small);
+  color: var(--p-text-muted-color);
+}
+
 .documents {
   display: flex;
   flex-direction: column;
