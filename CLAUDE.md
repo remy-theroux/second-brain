@@ -65,6 +65,14 @@ gtest() {
 | Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
 | Compilation seule | `gtest compileJava` |
 | Build complet (ce que fait la CI) | `gtest build` |
+| Refabriquer les fixtures binaires d'extraction | `gtest generateFixtures` |
+
+`generateFixtures` écrit les documents d'essai binaires de `src/test/resources/fixtures/`
+et **son produit est versionné** : elle se lance à la main, pas à chaque build. Ces fichiers
+sont un socle fabriqué, pas de vrais documents — voir la spec d'extraction, décision 9.
+`gtest` tournant en `root`, les fichiers produits appartiennent à `root` : les rendre avant
+de committer, par
+`docker run --rm -v "$PWD/src/test/resources/fixtures":/f alpine chown -R "$(id -u):$(id -g)" /f`.
 
 **Il n'y a pas non plus de Node sur la machine hôte.** Pour le front, définir :
 
@@ -547,7 +555,7 @@ remplace — voir `.claude/rules/decisions.md`.
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
-commonmark-java ·
+commonmark-java · Apache POI ·
 JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 

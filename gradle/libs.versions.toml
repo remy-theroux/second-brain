@@ -11,6 +11,7 @@ spotless = "8.10.0"
 palantirJavaFormat = "2.78.0"
 # Extraction du texte : aucune de ces versions n'est portée par le BOM Spring Boot.
 commonmark = "0.24.0"
+poi = "5.5.1"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -23,6 +24,9 @@ springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-u
 # nœuds `Heading` avec leur niveau, là où une expression régulière sur `^#` prendrait pour
 # un titre le `#` d'un commentaire dans un bloc de code.
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+# DOCX : POI est la seule bibliothèque Java qui lise le style d'un paragraphe Word, donc
+# la seule qui distingue un titre d'un paragraphe en gras.
+poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
