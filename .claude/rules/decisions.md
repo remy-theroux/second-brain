@@ -12,7 +12,31 @@ pourquoi du dispositif est dans ADR-0001, qui est lui-même un ADR.
 - Si la condition de réouverture est remplie, on ne modifie pas l'ADR existant : on en
   écrit un nouveau qui le remplace (voir « Remplacer »).
 
+## Aucun ADR sans accord préalable
+
+**Ne jamais écrire un ADR sans me consulter d'abord.** Ni en cours de tâche, ni parce qu'un
+plan en annonçait un, ni parce que le choix paraît évidemment structurant.
+
+Un ADR n'est pas de la documentation : c'est une décision qui engage le projet, et qui,
+une fois acceptée, ne se modifie plus — elle se remplace. La rédiger seul revient à décider
+seul, puis à laisser une trace qui a l'autorité d'un arbitrage qui n'a pas eu lieu.
+
+La marche à suivre quand un ADR semble dû :
+
+1. Le signaler, en une phrase : la décision à prendre, et l'alternative qu'elle ferme.
+2. Attendre l'accord — sur le principe **et** sur l'option retenue.
+3. Écrire l'ADR ensuite, dans le commit du code qu'il justifie.
+
+Un plan d'implémentation peut **prévoir** qu'un ADR sera dû : il ne vaut pas accord pour
+l'écrire. L'accord se donne au moment de la décision, pas à l'approbation du plan.
+
+Si le travail ne peut pas attendre, écrire le code **sans** l'ADR et le dire : un ADR
+manquant se rattrape, un ADR écrit d'autorité oriente toutes les relectures qui suivent.
+
 ## Quand un ADR est dû
+
+Ces critères disent quand la question se pose. Ils ne dispensent pas de la poser — voir
+ci-dessus.
 
 - Quand un choix **ferme une alternative crédible** et qu'un lecteur futur pourrait
   raisonnablement proposer l'autre. C'est le seul critère.
