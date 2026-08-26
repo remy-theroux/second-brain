@@ -15,6 +15,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextExtractor;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentType;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
@@ -63,17 +64,33 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
 
     /**
      * Indexe les extracteurs, et <strong>fait échouer le démarrage</strong> si un format
-     * accepté au dépôt n'a pas le sien.
+     * <em>textuel</em> accepté au dépôt n'a pas le sien.
      *
      * <p>C'est la contrepartie du choix d'un extracteur par format (ADR-0026) : ajouter une
      * constante à {@link DocumentFormat} sans écrire son adapter serait, sinon, un document
      * accepté puis irrémédiablement en échec. Même dispositif que la table de routage des
      * bus : le défaut se voit au démarrage, pas en production.
+     *
+     * <p><strong>La boucle porte sur {@link DocumentType#TEXTUAL}, pas sur tous les
+     * formats.</strong> Un format d'une autre typologie — un enregistrement sonore, une
+     * image — ne se découpe pas en blocs titrés : lui réclamer un extracteur de texte
+     * empêcherait l'application de démarrer pour un besoin qui n'existe pas. Symétriquement,
+     * un extracteur de texte qui revendiquerait un format non textuel est un branchement
+     * faux, et il est refusé ici plutôt qu'au premier document traité.
+     *
+     * <p>Package-private plutôt que privée : c'est un contrôle, et un contrôle se teste.
+     * Voir {@code ExtractorCoverageTest}.
      */
-    private static Map<DocumentFormat, DocumentTextExtractor> indexeParFormat(
+    static Map<DocumentFormat, DocumentTextExtractor> indexeParFormat(
             List<DocumentTextExtractor> documentTextExtractors) {
         Map<DocumentFormat, DocumentTextExtractor> parFormat = new EnumMap<>(DocumentFormat.class);
         for (DocumentTextExtractor extracteur : documentTextExtractors) {
+            if (extracteur.format().type() != DocumentType.TEXTUAL) {
+                throw new IllegalStateException(
+                        "L'extracteur " + extracteur.getClass().getName()
+                                + " revendique le format " + extracteur.format()
+                                + ", qui n'est pas de typologie textuelle");
+            }
             DocumentTextExtractor precedent = parFormat.put(extracteur.format(), extracteur);
             if (precedent != null) {
                 throw new IllegalStateException("Deux extracteurs revendiquent le format " + extracteur.format() + " : "
@@ -81,7 +98,7 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
                         + extracteur.getClass().getName());
             }
         }
-        for (DocumentFormat format : DocumentFormat.values()) {
+        for (DocumentFormat format : DocumentFormat.of(DocumentType.TEXTUAL)) {
             if (!parFormat.containsKey(format)) {
                 throw new IllegalStateException(
                         "Aucun extracteur ne sait lire " + format + " : un format accepté au dépôt doit être lisible");
