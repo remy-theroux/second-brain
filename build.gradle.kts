@@ -81,6 +81,7 @@ dependencies {
     // (ADR-0026). Aucune de ces versions n'est couverte par le BOM Spring Boot.
     implementation(libs.commonmark)
     implementation(libs.poi.ooxml)
+    implementation(libs.pdfbox)
 
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).

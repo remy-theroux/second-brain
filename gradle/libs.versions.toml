@@ -12,6 +12,7 @@ palantirJavaFormat = "2.78.0"
 # Extraction du texte : aucune de ces versions n'est portée par le BOM Spring Boot.
 commonmark = "0.24.0"
 poi = "5.5.1"
+pdfbox = "3.0.7"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -27,6 +28,9 @@ commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" 
 # DOCX : POI est la seule bibliothèque Java qui lise le style d'un paragraphe Word, donc
 # la seule qui distingue un titre d'un paragraphe en gras.
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
+# PDF : PDFBox donne le sommaire du document et, à défaut, la taille de police de chaque
+# glyphe — les deux seules pistes de titre qu'un PDF puisse offrir (ADR-0027).
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

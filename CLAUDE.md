@@ -546,6 +546,7 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0024](docs/decisions/0024-le-texte-extrait-est-une-suite-plate-de-blocs-titres.md) | Le texte extrait est une suite plate de blocs titrés |
 | [0025](docs/decisions/0025-un-plancher-de-caracteres-declare-un-document-inexploitable.md) | Un plancher de caractères déclare un document inexploitable |
 | [0026](docs/decisions/0026-un-extracteur-par-format-plutot-qu-apache-tika.md) | Un extracteur par format, plutôt qu'Apache Tika |
+| [0027](docs/decisions/0027-les-titres-d-un-pdf-sans-signets-sont-devines-a-la-taille-de-police.md) | Les titres d'un PDF sans signets sont devinés à la taille de police |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
@@ -555,7 +556,7 @@ remplace — voir `.claude/rules/decisions.md`.
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
-commonmark-java · Apache POI ·
+commonmark-java · Apache POI · PDFBox ·
 JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 
