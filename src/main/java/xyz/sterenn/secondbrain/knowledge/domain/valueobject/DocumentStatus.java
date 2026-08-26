@@ -16,7 +16,7 @@ public enum DocumentStatus {
     /** Déposé, son fichier d'origine conservé, en attente de traitement. */
     PENDING,
 
-    /** Son texte a été extrait et rangé dans un {@code DocumentText}. */
+    /** Son texte a été extrait et rangé dans un {@code TextExtraction}. */
     EXTRACTED,
 
     /** Le traitement a échoué ; le motif est lisible sur le document. */

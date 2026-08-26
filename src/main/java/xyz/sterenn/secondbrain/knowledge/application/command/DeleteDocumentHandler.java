@@ -16,8 +16,12 @@ import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
  * mais celui-là ne se produit qu'en cas de panne, là où le premier se produirait à chaque
  * suppression échouée.
  *
- * <p>Les extraits ne sont pas mentionnés ici : la table n'existe pas encore. Le ticket qui
- * la créera posera un {@code ON DELETE CASCADE}, et cette méthode n'aura pas à changer.
+ * <p>L'extraction n'est pas mentionnée ici et ne le sera pas : le {@code ON DELETE CASCADE}
+ * de {@code knowledge_text_extractions} vers {@code knowledge_documents} l'emporte avec le
+ * document, et celui de {@code knowledge_text_blocks} vers l'extraction emporte les blocs.
+ * Cette méthode n'a pas eu à changer quand la table est arrivée, et n'aura pas à changer
+ * quand une deuxième typologie ajoutera les siennes — à condition qu'elles cascadent aussi
+ * (ADR-0030).
  */
 @Component
 public class DeleteDocumentHandler implements CommandHandler<DeleteDocument> {

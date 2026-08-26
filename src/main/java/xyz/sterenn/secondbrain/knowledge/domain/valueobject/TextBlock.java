@@ -24,7 +24,7 @@ import java.util.Objects;
  * <p>{@code @Embeddable} dans le domaine : c'est ADR-0002 — les entités JPA vivent dans le
  * domaine, sans classe miroir ni mapper — étendu à un objet-valeur possédé par une entité.
  * La position dans le document n'est <em>pas</em> un champ : elle appartient à la liste, et
- * c'est {@code @OrderColumn} qui la porte côté {@code DocumentText}.
+ * c'est {@code @OrderColumn} qui la porte côté {@code TextExtraction}.
  */
 @Embeddable
 public class TextBlock {

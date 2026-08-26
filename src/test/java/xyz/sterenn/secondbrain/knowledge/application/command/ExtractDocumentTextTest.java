@@ -18,7 +18,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnextractableDocumentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
-import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
@@ -47,7 +47,7 @@ class ExtractDocumentTextTest {
     private DocumentRepository documentRepository;
 
     @Autowired
-    private DocumentTextRepository documentTextRepository;
+    private TextExtractionRepository textExtractionRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -66,7 +66,7 @@ class ExtractDocumentTextTest {
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(documentTextRepository.findByDocumentId(document.getId()))
+        assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
                 .satisfies(texte -> assertThat(texte.getBlocks())
                         .extracting(TextBlock::getHeading)
@@ -81,7 +81,7 @@ class ExtractDocumentTextTest {
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(documentTextRepository.findByDocumentId(document.getId())).isPresent();
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isPresent();
     }
 
     @Test
@@ -90,7 +90,7 @@ class ExtractDocumentTextTest {
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(documentTextRepository.findByDocumentId(document.getId()))
+        assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
                 .satisfies(texte -> assertThat(texte.getBlocks()).hasSize(1));
     }

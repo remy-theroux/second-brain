@@ -26,6 +26,10 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
  * lui : il naît plus tard, et il est remplacé en entier à chaque réextraction. Les deux se
  * référencent donc par identifiant, jamais par {@code @ManyToOne} — ADR-0006.
  *
+ * <p><strong>C'est l'extraction de la typologie textuelle</strong>, et son nom le dit :
+ * {@code knowledge_text_extractions}, pas {@code knowledge_document_texts}. Une autre
+ * typologie aura ses propres tables et son propre agrégat — ADR-0030.
+ *
  * <p>Les blocs sont une {@code @ElementCollection} et non des entités : un bloc n'a pas
  * d'identité propre, il n'existe que par le texte qui le contient, et rien ne le désigne de
  * l'extérieur. Sa position est portée par {@code @OrderColumn} plutôt que par un champ de
@@ -33,12 +37,12 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
  * document reste le même bloc.
  *
  * <p>{@code EAGER}, à contre-courant de l'habitude : {@code open-in-view} est à {@code false}
- * et personne ne charge un {@code DocumentText} sans vouloir ses blocs. Une collection
+ * et personne ne charge un {@code TextExtraction} sans vouloir ses blocs. Une collection
  * paresseuse ne ferait que déplacer l'échec hors de la transaction du bus.
  */
 @Entity
-@Table(name = "knowledge_document_texts")
-public class DocumentText {
+@Table(name = "knowledge_text_extractions")
+public class TextExtraction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -52,19 +56,19 @@ public class DocumentText {
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
-            name = "knowledge_document_blocks",
-            joinColumns = @JoinColumn(name = "document_text_id", nullable = false))
+            name = "knowledge_text_blocks",
+            joinColumns = @JoinColumn(name = "text_extraction_id", nullable = false))
     @OrderColumn(name = "block_position")
     private List<TextBlock> blocks = new ArrayList<>();
 
     @Column(name = "extracted_at", nullable = false)
     private Instant extractedAt;
 
-    protected DocumentText() {
+    protected TextExtraction() {
         // requis par JPA
     }
 
-    private DocumentText(UUID documentId, List<TextBlock> blocks, Instant extractedAt) {
+    private TextExtraction(UUID documentId, List<TextBlock> blocks, Instant extractedAt) {
         this.documentId = documentId;
         this.blocks = blocks;
         this.extractedAt = extractedAt;
@@ -76,11 +80,11 @@ public class DocumentText {
      * <p>{@link ExtractedText} garantit déjà qu'il n'est ni vide ni sous le plancher : il n'y
      * a rien à revalider ici, seulement à recopier dans une liste que JPA peut gérer.
      */
-    public static DocumentText of(UUID documentId, ExtractedText text, Instant extractedAt) {
+    public static TextExtraction of(UUID documentId, ExtractedText text, Instant extractedAt) {
         Objects.requireNonNull(documentId, "Le document dont ce texte est extrait est obligatoire");
         Objects.requireNonNull(text, "Le texte extrait est obligatoire");
         Objects.requireNonNull(extractedAt, "L'instant de l'extraction est obligatoire");
-        return new DocumentText(documentId, new ArrayList<>(text.blocks()), extractedAt);
+        return new TextExtraction(documentId, new ArrayList<>(text.blocks()), extractedAt);
     }
 
     /** Le format du domaine, tel que RAG-5 le consommera. */

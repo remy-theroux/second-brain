@@ -6,14 +6,14 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
-import xyz.sterenn.secondbrain.knowledge.domain.entity.DocumentText;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnreadableDocumentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextExtractor;
-import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentType;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
@@ -42,7 +42,7 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
 
     private final DocumentRepository documentRepository;
     private final DocumentStorage documentStorage;
-    private final DocumentTextRepository documentTextRepository;
+    private final TextExtractionRepository textExtractionRepository;
     private final Map<DocumentFormat, DocumentTextExtractor> extractorsByFormat;
     private final DomainEventPublisher domainEventPublisher;
     private final Clock clock;
@@ -50,13 +50,13 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
     public ExtractDocumentTextHandler(
             DocumentRepository documentRepository,
             DocumentStorage documentStorage,
-            DocumentTextRepository documentTextRepository,
+            TextExtractionRepository textExtractionRepository,
             List<DocumentTextExtractor> documentTextExtractors,
             DomainEventPublisher domainEventPublisher,
             Clock clock) {
         this.documentRepository = documentRepository;
         this.documentStorage = documentStorage;
-        this.documentTextRepository = documentTextRepository;
+        this.textExtractionRepository = textExtractionRepository;
         this.extractorsByFormat = indexeParFormat(documentTextExtractors);
         this.domainEventPublisher = domainEventPublisher;
         this.clock = clock;
@@ -121,8 +121,8 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
 
         ExtractedText texte = extractorsByFormat.get(document.getFormat()).extract(contenu);
 
-        documentTextRepository.deleteByDocumentId(document.getId());
-        documentTextRepository.save(DocumentText.of(document.getId(), texte, clock.instant()));
+        textExtractionRepository.deleteByDocumentId(document.getId());
+        textExtractionRepository.save(TextExtraction.of(document.getId(), texte, clock.instant()));
 
         document.markTextExtracted();
         documentRepository.save(document);

@@ -17,7 +17,7 @@ import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
-import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
@@ -29,7 +29,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * réellement.
  *
  * <p><strong>Pas de {@code @Transactional} sur la classe, et c'est le tout.</strong> Dans une
- * transaction, Hibernate rendrait le {@code DocumentText} depuis son cache de premier niveau
+ * transaction, Hibernate rendrait le {@code TextExtraction} depuis son cache de premier niveau
  * sans jamais interroger la base : le test passerait au vert quelle que soit la migration, et
  * ne vérifierait rien. D'où le nettoyage explicite en {@code @AfterEach}.
  */
@@ -44,7 +44,7 @@ class DeleteDocumentCascadeTest {
     private DocumentRepository documentRepository;
 
     @Autowired
-    private DocumentTextRepository documentTextRepository;
+    private TextExtractionRepository textExtractionRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -68,13 +68,13 @@ class DeleteDocumentCascadeTest {
     void la_suppression_d_un_document_emporte_son_texte_extrait() {
         Document document = unDocumentDepose();
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
-        assertThat(documentTextRepository.findByDocumentId(document.getId())).isPresent();
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isPresent();
 
         commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
 
-        assertThat(documentTextRepository.findByDocumentId(document.getId())).isEmpty();
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
         // Les blocs partent avec leur texte : la seconde cascade, que le port ne montre pas.
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM knowledge_document_blocks", Integer.class))
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM knowledge_text_blocks", Integer.class))
                 .isZero();
     }
 

@@ -190,11 +190,11 @@ xyz.sterenn.secondbrain
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
 │   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
-│   │   ├── entity/          Document, DocumentText (le texte extrait, agrégat à part)
+│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait)
-│   │   ├── port/            DocumentRepository, DocumentStorage, DocumentTextRepository,
+│   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
 │   │   │                    DocumentTextExtractor
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
@@ -427,8 +427,9 @@ remplace le texte extrait, pose `EXTRACTED` et annonce `DocumentTextExtracted`.
 **Le format produit est le livrable durable de ce flux** : `ExtractedText`, une suite
 ordonnée de `TextBlock` portant chacun le titre de sa section, son niveau et son corps
 normalisé. Un bloc est une **section**, pas un paragraphe — un document sans titre rend un
-unique bloc (ADR-0024). Il vit dans deux tables cascadées, `knowledge_document_texts` et
-`knowledge_document_blocks`.
+unique bloc (ADR-0024). Il vit dans deux tables cascadées, `knowledge_text_extractions` et
+`knowledge_text_blocks`, **nommées par la typologie et non par le document** : une autre
+typologie aura les siennes (ADR-0030).
 
 Quatre extracteurs derrière un port, un par format, et non Apache Tika (ADR-0026) : les
 styles `Heading1..9` d'un DOCX et les `#` d'un Markdown sont le livrable, pas du balisage à
@@ -528,9 +529,11 @@ détail dans les règles backend, section « Adapters ».
 `knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
 tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
 
-Le texte extrait d'un document vit dans **deux tables**, `knowledge_document_texts` (une
-ligne par document, `document_id` `UNIQUE`) et `knowledge_document_blocks` (ses blocs, une
-`@ElementCollection` ordonnée par `block_position`). Les deux cascadent à la suppression du
+Le texte extrait d'un document vit dans **deux tables**, `knowledge_text_extractions` (une
+ligne par document, `document_id` `UNIQUE`) et `knowledge_text_blocks` (ses blocs, une
+`@ElementCollection` ordonnée par `block_position`, rattachés par `text_extraction_id`).
+Elles portent le nom de leur **typologie**, pas celui du document : une typologie sonore ou
+visuelle aura les siennes, d'une autre forme (ADR-0030). Les deux cascadent à la suppression du
 document — c'est le `ON DELETE CASCADE` que `DeleteDocumentHandler` annonçait, et il n'a
 rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
 
@@ -578,6 +581,7 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0027](docs/decisions/0027-les-titres-d-un-pdf-sans-signets-sont-devines-a-la-taille-de-police.md) | Les titres d'un PDF sans signets sont devinés à la taille de police |
 | [0028](docs/decisions/0028-l-echec-d-extraction-s-ecrit-hors-de-la-transaction-annulee.md) | L'échec d'extraction s'écrit hors de la transaction annulée |
 | [0029](docs/decisions/0029-la-typologie-d-un-document-se-deduit-de-son-format.md) | La typologie d'un document se déduit de son format, elle n'est pas stockée |
+| [0030](docs/decisions/0030-chaque-typologie-a-ses-propres-tables-d-extraction.md) | Chaque typologie de document a ses propres tables d'extraction |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se

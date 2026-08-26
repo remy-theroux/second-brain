@@ -34,7 +34,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
-import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentTextRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
@@ -78,7 +78,7 @@ class KnowledgeEventListenerTest {
     private DocumentRepository documentRepository;
 
     @Autowired
-    private DocumentTextRepository documentTextRepository;
+    private TextExtractionRepository textExtractionRepository;
 
     @Autowired
     private DocumentStorage documentStorage;
@@ -126,7 +126,7 @@ class KnowledgeEventListenerTest {
         publie(document);
 
         await().atMost(DELAI).untilAsserted(() -> {
-            assertThat(documentTextRepository.findByDocumentId(document.getId()))
+            assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .get()
                     .satisfies(texte -> assertThat(texte.getBlocks()).isNotEmpty());
             assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
@@ -143,7 +143,7 @@ class KnowledgeEventListenerTest {
             assertThat(statutDe(document)).isEqualTo(DocumentStatus.FAILED);
             assertThat(motifDe(document)).contains("pas de texte exploitable");
         });
-        assertThat(documentTextRepository.findByDocumentId(document.getId())).isEmpty();
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
     }
 
     @Test
@@ -167,7 +167,7 @@ class KnowledgeEventListenerTest {
 
         await().during(Duration.ofSeconds(2)).atMost(DELAI).untilAsserted(() -> {
             assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
-            assertThat(documentTextRepository.findByDocumentId(document.getId()))
+            assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .isPresent();
         });
     }

@@ -16,7 +16,7 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
  * précise : elle rend le journal du worker lisible sans requête, et RAG-5 saura d'un coup
  * d'œil s'il a affaire à un document d'une section ou de deux cents.
  *
- * <p>Son nom simple est {@code <Objet><Fait>} : {@code DocumentText} + {@code Extracted},
+ * <p>Son nom simple est {@code <Objet><Fait>} : {@code TextExtraction} + {@code Extracted},
  * d'où la clé {@code knowledge.document-text.extracted}, qu'un binding {@code knowledge.#}
  * voit comme tous les autres.
  */

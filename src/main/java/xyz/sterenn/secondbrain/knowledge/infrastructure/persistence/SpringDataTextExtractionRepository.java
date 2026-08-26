@@ -3,15 +3,15 @@ package xyz.sterenn.secondbrain.knowledge.infrastructure.persistence;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import xyz.sterenn.secondbrain.knowledge.domain.entity.DocumentText;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 
 /**
  * Détail Spring Data, volontairement package-private : rien hors de ce package ne doit en
  * dépendre.
  */
-interface SpringDataDocumentTextRepository extends JpaRepository<DocumentText, UUID> {
+interface SpringDataTextExtractionRepository extends JpaRepository<TextExtraction, UUID> {
 
-    Optional<DocumentText> findByDocumentId(UUID documentId);
+    Optional<TextExtraction> findByDocumentId(UUID documentId);
 
     /**
      * Suppression dérivée, et non un {@code @Modifying @Query} : elle charge l'entité avant
