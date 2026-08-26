@@ -198,9 +198,9 @@ xyz.sterenn.secondbrain
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…)
-│   │   └── event/           DocumentUploaded
+│   │   └── event/           DocumentUploaded, DocumentTextExtracted
 │   ├── application/
-│   │   ├── command/         UploadDocument, DeleteDocument
+│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
@@ -416,6 +416,31 @@ doublon plutôt que de laisser l'utilisateur la chercher. Aucun plafond de taill
 posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
 Aucun store : aucun autre écran ne partage cet état, la vue appelle `src/api/` directement,
 et c'est elle qui déconnecte sur un `401`, comme le layout le fait pour le profil.
+
+### Le flux de l'extraction du texte
+
+Le worker reçoit `DocumentUploaded` et dispatche `ExtractDocumentText`, qui relit le
+document, relit son original par le port de stockage, choisit l'extracteur de son format,
+remplace le texte extrait, pose `EXTRACTED` et annonce `DocumentTextExtracted`.
+
+**Le format produit est le livrable durable de ce flux** : `ExtractedText`, une suite
+ordonnée de `TextBlock` portant chacun le titre de sa section, son niveau et son corps
+normalisé. Un bloc est une **section**, pas un paragraphe — un document sans titre rend un
+unique bloc (ADR-0024). Il vit dans deux tables cascadées, `knowledge_document_texts` et
+`knowledge_document_blocks`.
+
+Quatre extracteurs derrière un port, un par format, et non Apache Tika (ADR-0026) : les
+styles `Heading1..9` d'un DOCX et les `#` d'un Markdown sont le livrable, pas du balisage à
+traverser. Un PDF, lui, ne porte aucune sémantique de titre : son sommaire d'abord, la
+taille de police en repli (ADR-0027), et les frontières de paragraphe y sont perdues — une
+section de PDF arrive à RAG-5 comme un seul paragraphe. **`ExtractDocumentTextHandler`
+refuse de démarrer si une constante de `DocumentFormat` n'a pas son extracteur** : un format
+accepté au dépôt doit être lisible.
+
+Un document dont il ne sort pas cinquante caractères **échoue explicitement** (ADR-0025) :
+c'est le cas du PDF numérisé, et le vide silencieux ne se verrait qu'à la première question
+restée sans réponse. L'effacement du texte précédent avant l'écriture n'est pas décoratif :
+AMQP livre au moins une fois et `document_id` est `UNIQUE`.
 
 ### Les deux bus (`shared/bus`)
 
