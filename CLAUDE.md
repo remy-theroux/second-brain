@@ -182,10 +182,10 @@ xyz.sterenn.secondbrain
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
 │   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
-│   │   ├── entity/          Document
+│   │   ├── entity/          Document, DocumentText (le texte extrait, agrégat à part)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait)
-│   │   ├── port/            DocumentRepository, DocumentStorage
+│   │   ├── port/            DocumentRepository, DocumentStorage, DocumentTextRepository
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…)
@@ -488,6 +488,12 @@ détail dans les règles backend, section « Adapters ».
 `Checksum` suit exactement le même chemin, par `ChecksumAttributeConverter` dans
 `knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
 tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
+
+Le texte extrait d'un document vit dans **deux tables**, `knowledge_document_texts` (une
+ligne par document, `document_id` `UNIQUE`) et `knowledge_document_blocks` (ses blocs, une
+`@ElementCollection` ordonnée par `block_position`). Les deux cascadent à la suppression du
+document — c'est le `ON DELETE CASCADE` que `DeleteDocumentHandler` annonçait, et il n'a
+rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent sur disque, un par
 document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
