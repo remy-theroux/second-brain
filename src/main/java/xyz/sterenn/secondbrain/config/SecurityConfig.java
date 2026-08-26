@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,8 +26,14 @@ import org.springframework.security.web.SecurityFilterChain;
  * n'est contrefaisable depuis un site tiers, et il n'existe aucun cookie
  * d'authentification à protéger. Le jour où l'authentification passera par un cookie,
  * CSRF redeviendra obligatoire.
+ *
+ * <p>Absente du rôle {@code worker} : cette configuration réclame {@code HttpSecurity}, qui
+ * n'existe pas sans servlet, et un processus qui n'écoute rien n'a rien à protéger.
+ * {@code JwtConfiguration}, elle, reste dans les deux rôles — {@code JwtAccessTokenIssuer}
+ * en dépend et n'a rien de propre au web.
  */
 @Configuration
+@Profile("!worker")
 public class SecurityConfig {
 
     @Bean

@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @.claude/rules/backend.md
 @.claude/rules/frontend.md
+@.claude/rules/decisions.md
 
 ## Langue
 
@@ -108,10 +109,24 @@ derniers ne sont routés qu'en développement.
 Mailpit garde son port propre : <http://localhost:8025>, où tous les mails émis en
 développement sont capturés, aucun ne sortant de la machine.
 
+Le worker est un conteneur à part : `docker compose logs -f worker` montre les événements
+reçus. Il **ne compile jamais** — son `bootRun` porte `-x compileJava -x processResources`,
+donc `build/` n'est écrit que par `app`, dont le compilateur continu recompile et dont
+DevTools redémarre les deux conteneurs. Il ne démarre qu'une fois `app` **sain** (son
+healthcheck : Tomcat écoute, donc `build/classes` est compilé et chargé), ce qui met la
+course « Main class name has not been configured » ci-dessous hors de sa portée. Il tient sa
+place à côté de `app` sur le même bind mount grâce à deux isolations Gradle : un
+`--project-cache-dir` propre (`.gradle-worker/`) pour le `.gradle/` du projet, et son propre
+`GRADLE_USER_HOME` (`.gradle-cache-worker/`, volume `gradle-cache-worker`) — deux conteneurs
+qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même « Timeout waiting
+to lock » qu'entre `gtest` et la pile. Le prix est un second téléchargement des dépendances
+au premier démarrage.
+
 Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
 échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
 `docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
-`docker compose up -d app` règle le cas.
+`docker compose up -d app` règle le cas. Ça ne vaut que pour `app` : le worker attend son
+healthcheck.
 
 **`gtest` et `docker compose up` ne cohabitent pas** : les deux verrouillent `.gradle/` du
 même répertoire, et `gtest` échoue sur « Timeout waiting to lock Build Output Cleanup
@@ -159,6 +174,9 @@ xyz.sterenn.secondbrain
 │                            ClockConfiguration — transverse
 ├── shared/
 │   ├── bus/                 socle CQRS, aucune dépendance métier
+│   ├── event/               DomainEvent, port DomainEventPublisher — sans Spring
+│   │   └── amqp/            ADAPTER RabbitMQ : publication après commit, nommage,
+│   │                        convertisseur JSON, exchange
 │   └── web/                 formes d'erreur communes à toutes les routes
 │                            (ErrorResponse, ValidationErrorResponse)
 ├── knowledge/               bounded context — base de connaissance
@@ -166,15 +184,19 @@ xyz.sterenn.secondbrain
 │   │   ├── entity/          Document
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus
 │   │   ├── port/            DocumentRepository, DocumentStorage
-│   │   └── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │                        UnsupportedDocumentFormatException
+│   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
+│   │   │                    UnsupportedDocumentFormatException
+│   │   └── event/           DocumentUploaded
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
-│       └── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
+│       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
+│       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
+│                            KnowledgeEventListener (profil worker), catalogue des
+│                            événements
 └── users/                   bounded context (gabarit pour les suivants)
     ├── domain/              règles métier pures et transverses (PasswordPolicy,
     │   │                    AccessTokenPolicy)
@@ -223,7 +245,7 @@ et à RFC 6749, pas au projet.
 
 **Sens des dépendances : `infrastructure` → `application` → `domain`.** Le domaine
 n'importe jamais `infrastructure` ni `org.springframework.*`. Une seule exception actée :
-l'entité `User` porte les annotations `jakarta.persistence` (voir « Écarts assumés »). Le
+l'entité `User` porte les annotations `jakarta.persistence` (voir ADR-0002). Le
 mapping du value object `Email` sur sa colonne, lui, est entièrement du côté infrastructure :
 `EmailAttributeConverter` est `autoApply`, donc `User` ne le nomme pas.
 
@@ -276,7 +298,7 @@ code vaut `ok`, `lien-invalide`, `lien-expire` ou `lien-deja-utilise`. Le `Locat
 aucune URL de front à connaître, et l'origine unique du reverse proxy suffit. Le front porte
 la rédaction française correspondante (`VERIFICATION_MESSAGES` dans `LoginView.vue`) : faire
 voyager le message en query string le collerait dans l'historique du navigateur et les logs
-du proxy, exactement le reproche fait au jeton lui-même (écart n° 6). `VerificationToken` porte les deux règles — expiration à 24 h et usage
+du proxy, exactement le reproche fait au jeton lui-même (ADR-0007). `VerificationToken` porte les deux règles — expiration à 24 h et usage
 unique — et lève lui-même le refus correspondant. Les trois façons de présenter un lien
 inexploitable (UUID illisible, compte inconnu, jeton faux) partagent volontairement un
 seul message : les distinguer ferait de la route un oracle d'existence de compte.
@@ -356,10 +378,15 @@ capterait — ce que ce projet évite, pour que la traduction des refus reste au
 route concernée. Avec lui, le multipart est résolu au moment où le contrôleur lit son
 argument, et l'`@ExceptionHandler` d'`UploadDocumentController` la voit.
 
-L'ordre des trois écritures est un choix : contrôle du doublon, écriture en base
-(`saveAndFlush`), puis fichier. Le fichier en dernier parce qu'**un système de fichiers ne
-participe à aucune transaction** — écrit avant, il survivrait à un rollback en désignant
-une ligne qui n'existe pas (écart n° 19).
+L'ordre des quatre étapes est un choix : contrôle du doublon, écriture en base
+(`saveAndFlush`), fichier, puis publication de `DocumentUploaded`. Le fichier avant la
+publication parce qu'**un système de fichiers ne participe à aucune transaction** — écrit
+après le commit, il manquerait au consommateur qui relit ; écrit avant la ligne, il
+survivrait à un rollback en désignant une ligne qui n'existe pas (ADR-0020). La
+publication, elle, est en dernier pour se lire comme ce qu'elle est, une annonce : sa place
+dans la séquence n'a aucune portée transactionnelle, puisqu'elle ne prend effet qu'**au
+commit** — un rollback n'annonce rien, et le broker injoignable à cet instant perd
+l'événement (ADR-0023).
 
 `DELETE /api/documents/{id}` efface la ligne puis l'original. Les extraits ne sont pas
 mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
@@ -398,6 +425,51 @@ Conséquences directes, détaillées dans les règles backend : **jamais de
 `@Transactional` sur un handler**, et **toutes les exceptions métier héritent de
 `RuntimeException`** (une exception checked ne déclenche pas de rollback par défaut).
 
+### Les événements métier (`shared/event`) et le rôle worker
+
+Un handler qui a quelque chose à annoncer publie un **événement métier** par le port
+`DomainEventPublisher` — en dernière étape, et explicitement : `UploadDocumentHandler`
+publie `DocumentUploaded` après avoir conservé l'original. Les événements sont des records
+au passé dans `<contexte>/domain/event/`, avec un seul contrat (`occurredAt`), sans import
+Spring. **Ce ne sont pas des `ApplicationEvent`** : les événements techniques de Spring
+restent techniques.
+
+L'adapter (`shared/event/amqp/`) n'envoie qu'**après le commit** de la transaction ouverte
+par le bus : un rollback n'annonce rien. L'inverse n'est pas garanti — voir ADR-0023.
+Le transport est RabbitMQ : un exchange topic `domain.events`, une clé de routage
+`<contexte>.<objet>.<fait>` dérivée de la classe (`knowledge.document.uploaded` pour
+`DocumentUploaded` — le contexte vient du package, l'objet et le fait du nom simple découpé
+sur ses majuscules, le dernier mot étant le fait), un corps JSON, et cette même chaîne en
+en-tête de type — jamais le nom qualifié. Le domaine ne nomme rien.
+
+**La consommation vit dans un processus à part.** Le profil Spring `worker` coupe Tomcat
+(`spring.main.web-application-type=none`, donc ni contrôleurs, ni Swagger, ni actuator
+HTTP), efface `SecurityConfig` (`@Profile("!worker")`) et fait exister les listeners
+(`@Profile("worker")`). Sans profil, le processus est l'API. Même image, même jar : en
+développement, `compose.yaml` lance `app` et `worker` ; en production, deux déploiements
+Coolify de la même image, le second avec `SPRING_PROFILES_ACTIVE=worker`.
+
+Un listener (`<contexte>/infrastructure/messaging/`) est un adapter entrant au même titre
+qu'un contrôleur : il dispatche une commande sur le bus, aucune règle métier. **Une queue par
+contexte, un seul listener par contexte** : la queue `domain.<contexte>.events` est liée sur
+`<contexte>.#` et reçoit tout ce que le contexte annonce ; le listener porte `@RabbitListener`
+sur la classe et un `@RabbitHandler` par événement, l'en-tête de type choisissant la méthode.
+Deux classes `@RabbitListener` sur la même queue se disputeraient les messages, et celle qui
+ne connaît pas le type le rejetterait — l'événement serait perdu. La queue et son binding sont
+déclarés dans les deux rôles. Une
+exception dans un listener rejette le message **sans remise en file**
+(`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
+boucle. Pas de dead-letter queue, pas de retry : un échec doit finir en `FAILED` sur le
+document, pas être rejoué.
+
+Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
+en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
+`webEnvironment = NONE`. Conséquence à connaître : la propriété qui **définit** le profil
+(`spring.main.web-application-type=none`) n'est vérifiée par aucun test — le test du worker
+force `webEnvironment = NONE` par construction, donc il obtiendrait un contexte sans Tomcat
+même si `application-worker.yml` ne posait rien. Seul le passage sur la pile
+`docker compose` constate que le conteneur `worker` démarre sans serveur HTTP.
+
 ### Persistance
 
 Flyway est **maître du schéma** ; Hibernate tourne en `ddl-auto: validate` et se
@@ -418,128 +490,50 @@ tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme po
 document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
 (`/data/originals`, un volume nommé en développement). Ce répertoire est un état à part
 entière : il ne se restaure pas avec un dump PostgreSQL, et rien ne l'annule avec une
-transaction (écart n° 19).
+transaction (ADR-0020).
 
-### Écarts assumés (documentés, ne pas « corriger » spontanément)
+### Décisions d'architecture (documentées, ne pas « corriger » spontanément)
 
-1. `User` est une `@Entity` située dans `domain/entity/` : pas de classe miroir ni de
-   mapper. L'hexagone fuit sur ce point précis, et sur lui seul — l'entité ne connaît même
-   pas le converter qui projette son `Email`, appliqué par `autoApply` depuis
-   l'infrastructure.
-2. CSRF désactivé et session `STATELESS` dans `SecurityConfig`. Ce n'était une dette que
-   tant qu'aucune authentification n'existait ; le ticket « login » l'a levée autrement
-   qu'annoncé — non pas en réactivant CSRF, mais en n'introduisant aucun cookie
-   d'authentification. L'identité voyage dans un en-tête `Authorization`, qu'un navigateur
-   n'envoie jamais spontanément : il n'y a rien à contrefaire depuis un site tiers. Le jour
-   où un cookie d'authentification apparaît, CSRF redevient obligatoire. L'origine unique,
-   elle, ne tient plus au proxy du serveur de développement mais au reverse proxy — Traefik
-   en développement, Coolify en production : la règle « aucune configuration CORS » est
-   désormais vraie partout, et non plus seulement en local.
-3. `FindUserByEmail` n'est consommée par aucun écran : elle existe pour que le query
-   bus soit livré testé, et sert de gabarit.
-4. BCrypt ignore les octets au-delà du 72e alors que la politique autorise 128
-   caractères. Comportement standard.
-5. `VerificationToken` référence son compte par un `UUID` et non par un `@ManyToOne` :
-   deux agrégats distincts ne se tiennent pas par une association JPA. La cohérence est
-   garantie par la clé étrangère en base, pas par le graphe d'objets.
-6. Le jeton de vérification voyage en query string. Il apparaît donc dans l'historique du
-   navigateur, dans les logs d'accès de tout reverse-proxy en amont (nginx et Traefik
-   journalisent la query string par défaut), et dans les logs applicatifs dès que
-   `org.springframework.web` passe en `DEBUG` — ce qui est le cas du profil `dev`. Le
-   masquage soigné des `toString()` ne couvre donc pas ce chemin-là. Acceptable pour un
-   jeton à usage unique et de courte durée ; à rediscuter si un jeton du même modèle sert
-   un jour à réinitialiser un mot de passe.
-7. L'usage unique n'est garanti que par un lire-puis-écrire. `VerificationToken` n'a pas
-   de `@Version` et la migration ne pose aucune contrainte sur `consumed_at` : deux clics
-   simultanés sur le même lien passeraient tous deux le contrôle avant que l'un ait
-   commité. Sans conséquence ici — vérifier deux fois est idempotent — mais l'invariant
-   n'est pas tenu par la base, et il le faudra le jour où ce modèle de jeton ouvrira une
-   action non idempotente.
-8. `secondbrain.base-url` a une valeur par défaut qui ment en production. Déployée sans la
-   variable, l'application démarre, envoie des mails, et tous les liens pointent vers
-   `http://localhost:8080` : la panne ne se manifeste que chez l'utilisateur. La valeur
-   par défaut est conservée parce que les tests et le développement local en dépendent ;
-   c'est donc la première variable à poser sur un vrai déploiement.
-9. Pas de jeton de rafraîchissement, pas de révocation. Un JWT vaut jusqu'à son `exp` :
-   « se déconnecter » efface le jeton du navigateur et rien de plus, et un jeton volé reste
-   valable jusqu'à une heure. C'est ce qui rend la durée de vie courte non négociable.
-10. Le jeton est rangé dans le `localStorage` du navigateur. Il survit donc à un
-    rafraîchissement de page — sans quoi « maintenir une connexion » n'aurait aucun sens —
-    mais une faille XSS dans le front le donnerait. La parade (cookie `httpOnly` `Secure`
-    `SameSite` plus jeton de rafraîchissement, donc CSRF à réactiver) est un ticket entier.
-11. `POST /api/token` n'a aucune limitation de débit : rien n'empêche une recherche
-    exhaustive de mot de passe. Dans la même veine, un email inconnu revient sans calcul
-    BCrypt, donc plus vite qu'un email connu : le temps de réponse trahit l'existence d'un
-    compte. Hacher un leurre systématiquement corrigerait le second point, mais boucher
-    cette fissure avant d'avoir fermé la porte à côté serait se raconter une histoire. Les
-    deux se traitent ensemble, avec la journalisation des tentatives.
-12. Le front se construit et se sert en autonomie (`frontend/Dockerfile` : build npm puis
-    nginx servant `dist`), mais **rien dans le dépôt ne décrit son déploiement**. Le
-    routage de production — `/api` et `/verification` vers le back, tout le reste vers le
-    front, ni Swagger ni actuator exposés — vit dans la configuration Coolify, hors du
-    dépôt. Deux configurations de routage doivent donc rester cohérentes à la main.
-13. `/api/profile` sérialise directement le modèle de lecture `UserView` (dont
-    `createdAt`). La forme de l'API est donc couplée à celle de la query. Acceptable pour
-    une projection dédiée aux écrans ; le jour où l'API et un écran divergeront, il faudra
-    un record de réponse dans `infrastructure/web/`.
-14. `FindUserByEmail` reste sans écran (voir l'écart n° 3) : le profil lit par identifiant,
-    puisque c'est l'identifiant que le jeton porte. Chercher par email quand on détient un
-    UUID immuable serait un contresens.
-15. Aucune vue ni aucun composant de `src/components/` n'est couvert par un test de rendu.
-    Le choix délibéré a été de tester le store d'authentification et le garde de route —
-    les deux endroits où un échec passerait silencieusement — et non le rendu des
-    composants. La correction des écrans repose donc sur `npm run build` (qui compile les
-    templates sans rien affirmer sur leur comportement) et sur un passage humain dans un
-    navigateur. Conséquence directe : un gestionnaire d'événement mal relié ou un nom de
-    champ mal orthographié passerait au vert. Le passage humain n'est donc pas une étape
-    facultative mais une condition avant toute mise en production — et il a un lieu :
-    `/design-system`, servi par la pile `docker compose` seulement, qui rend chaque token et
-    chaque composant partagé dans tous ses états. Les vues `LoginView`, `RegisterView` et
-    `DocumentsView` restent à parcourir en plus, puisque leur logique de soumission n'y est
-    pas — pour la dernière, avec un vrai fichier : le dépôt, le doublon, le format refusé et
-    la suppression.
-16. Les libellés de refus de vérification existent en deux endroits : les exceptions du
-    domaine (`InvalidVerificationLinkException` et ses sœurs) et `VERIFICATION_MESSAGES`
-    dans `LoginView.vue`, qui traduit les codes portés par la redirection. Ils peuvent
-    diverger sans qu'aucun test ne le voie. C'est le prix du choix de faire voyager un code
-    plutôt qu'un message dans une URL.
-17. Il n'existe plus aucune page publique. Un visiteur anonyme est renvoyé sur `/login`,
-    qui porte le lien vers l'inscription, et c'est tout ce qu'il peut voir de
-    l'application. Le jour où il y aura quelque chose à dire à un visiteur, ce sera un
-    ticket, pas une page d'accueil recréée par réflexe.
-18. Le repli SPA de nginx (`try_files`) n'est exercé par aucun environnement avant la
-    production : `docker compose` fait tourner Vite, qui sert `index.html` sur toute route
-    inconnue par construction. Une erreur dans `frontend/nginx.conf` ne se verrait qu'une
-    fois déployée. Le contrôle se fait à la main :
-    `docker build -t second-brain-frontend ./frontend` puis un `curl` sur `/login`.
-19. **Le système de fichiers ne participe à aucune transaction.** `UploadDocumentHandler`
-    écrit l'original en dernier, après le `saveAndFlush` : une panne survenant entre les
-    deux annule la ligne et laisse un fichier que plus rien ne désigne. Symétriquement,
-    `DeleteDocumentHandler` efface la ligne avant le fichier, et un échec entre les deux
-    laisse un original orphelin. Aucune des deux fuites n'est visible de l'utilisateur —
-    elles remplissent un disque, elles ne cassent rien. La parade (journal des fichiers à
-    effacer, balayage périodique) est un ticket à elle seule, à ouvrir le jour où le volume
-    des dépôts la justifiera, ou quand le remplacement d'un document multipliera les
-    occasions.
-20. **Le contenu déposé transite entièrement en mémoire.** SHA-256 ne se calcule pas sur un
-    extrait : il faut les octets complets, et `UploadDocument` les transporte donc en
-    `byte[]`. Le plafond de 20 Mo borne le risque — mais il le borne *par requête*, et rien
-    ne limite le nombre de dépôts simultanés. Le jour où le plafond monterait, ou où
-    plusieurs utilisateurs déposeraient ensemble, il faudra écrire le flux sur disque en
-    calculant l'empreinte au fil de l'eau, et ne relire que pour vérifier.
-21. `DocumentsView` recopie deux choses que le back possède : la liste des extensions
-    acceptées (`ACCEPTED_EXTENSIONS`, qui ne sert qu'à filtrer le sélecteur de fichiers du
-    navigateur) et le libellé des statuts (`STATUS_LABELS`, qui traduit l'énumération
-    `DocumentStatus`). Un format ajouté à `DocumentFormat` ou un statut ajouté à
-    `DocumentStatus` sans mise à jour du front ne casse rien de visible : le premier reste
-    déposable en changeant le filtre du sélecteur, le second s'affiche par son code. Même
-    nature d'écart que le n° 16, et aucun test ne surveille la divergence.
+Chacune a un ADR dans `docs/decisions/`, au format MADR : ce qui a été écarté, ce que ça
+coûte, et à quelle condition on rouvre. **Lire l'ADR avant de proposer autre chose** — ce
+qui ressemble ici à un défaut est presque toujours une décision, et l'alternative qui vient
+à l'esprit y est le plus souvent déjà pesée.
+
+| ADR | Décision |
+|---|---|
+| [0001](docs/decisions/0001-consigner-les-decisions-au-format-madr.md) | Consigner les décisions d'architecture au format MADR |
+| [0002](docs/decisions/0002-les-entites-jpa-vivent-dans-le-domaine.md) | Les entités JPA vivent dans le domaine, sans classe miroir ni mapper |
+| [0003](docs/decisions/0003-pas-de-csrf-ni-de-session-l-identite-voyage-dans-un-en-tete.md) | Pas de CSRF ni de session : l'identité voyage dans un en-tête |
+| [0004](docs/decisions/0004-find-user-by-email-est-livree-sans-ecran.md) | `FindUserByEmail` est livrée sans écran, comme gabarit du query bus |
+| [0005](docs/decisions/0005-la-politique-autorise-128-caracteres-la-ou-bcrypt-en-lit-72.md) | La politique autorise 128 caractères là où BCrypt en lit 72 |
+| [0006](docs/decisions/0006-deux-agregats-se-referencent-par-identifiant.md) | Deux agrégats se référencent par identifiant, jamais par `@ManyToOne` |
+| [0007](docs/decisions/0007-le-jeton-de-verification-voyage-en-query-string.md) | Le jeton de vérification voyage en query string |
+| [0008](docs/decisions/0008-l-usage-unique-du-jeton-ne-tient-qu-a-un-lire-puis-ecrire.md) | L'usage unique du jeton ne tient qu'à un lire-puis-écrire |
+| [0009](docs/decisions/0009-base-url-garde-un-defaut-qui-ment-en-production.md) | `secondbrain.base-url` garde un défaut qui ment en production |
+| [0010](docs/decisions/0010-pas-de-jeton-de-rafraichissement-ni-de-revocation.md) | Pas de jeton de rafraîchissement, pas de révocation |
+| [0011](docs/decisions/0011-le-jeton-d-acces-est-range-dans-le-localstorage.md) | Le jeton d'accès est rangé dans le `localStorage` |
+| [0012](docs/decisions/0012-aucune-limitation-de-debit-sur-la-delivrance-de-jeton.md) | Aucune limitation de débit sur `POST /api/token` |
+| [0013](docs/decisions/0013-le-deploiement-de-production-vit-dans-coolify.md) | Le déploiement de production vit dans Coolify, hors du dépôt |
+| [0014](docs/decisions/0014-le-profil-serialise-directement-le-modele-de-lecture.md) | `/api/profile` sérialise directement le modèle de lecture |
+| [0015](docs/decisions/0015-le-profil-se-lit-par-identifiant-jamais-par-email.md) | Le profil se lit par identifiant, jamais par email |
+| [0016](docs/decisions/0016-aucun-test-de-rendu-le-design-system-tient-lieu-de-controle.md) | Aucun test de rendu : `/design-system` tient lieu de contrôle |
+| [0017](docs/decisions/0017-la-redirection-de-verification-transporte-un-code.md) | La redirection de vérification transporte un code, pas un message |
+| [0018](docs/decisions/0018-aucune-page-publique.md) | Aucune page publique |
+| [0019](docs/decisions/0019-le-repli-spa-de-nginx-ne-s-exerce-qu-en-production.md) | Le repli SPA de nginx ne s'exerce qu'en production |
+| [0020](docs/decisions/0020-le-systeme-de-fichiers-ne-participe-a-aucune-transaction.md) | Le système de fichiers ne participe à aucune transaction |
+| [0021](docs/decisions/0021-le-contenu-depose-transite-entierement-en-memoire.md) | Le contenu déposé transite entièrement en mémoire |
+| [0022](docs/decisions/0022-le-front-recopie-ce-qui-n-est-pas-une-regle-du-serveur.md) | Le front recopie ce qui n'est pas une règle du serveur |
+| [0023](docs/decisions/0023-pas-d-outbox-on-fait-confiance-au-broker.md) | Pas d'outbox : on fait confiance au broker |
+
+Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
+la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
+remplace — voir `.claude/rules/decisions.md`.
 
 ## Stack et versions
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
-Validation, Mail) · Flyway · PostgreSQL 17 · springdoc-openapi · JUnit 5 +
-AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
+Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
+JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
@@ -547,6 +541,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
+RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
+`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), et un
+conteneur `worker` de la même image que `app`.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit
@@ -560,6 +557,9 @@ dans les jars du cache Gradle plutôt que de réécrire le code.
 
 ## Documents de référence
 
+- `docs/decisions/` — un ADR par décision d'architecture, au format MADR. Le gabarit est
+  `0000-adr-template.md`, ADR-0001 explique le dispositif, et l'index des décisions est la
+  section « Décisions d'architecture » ci-dessus.
 - `docs/ticket-template.md` — format de ticket attendu (5 sections, Gherkin
   déclaratif). La Definition of Done appartient à ce CLAUDE.md, pas aux tickets.
 - `docs/superpowers/plans/` — plans d'implémentation détaillés, un par feature.

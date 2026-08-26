@@ -41,7 +41,7 @@ public record Checksum(String value) {
      *
      * <p>Le tableau entier est exigé : SHA-256 ne se calcule pas sur un extrait. C'est ce
      * qui impose de tenir le fichier en mémoire, et donc ce que le plafond de téléversement
-     * borne (voir « Écarts assumés » dans CLAUDE.md).
+     * borne (voir ADR-0021).
      */
     public static Checksum of(byte[] content) {
         if (content == null) {

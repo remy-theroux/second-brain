@@ -66,6 +66,43 @@ Avant d'écrire une classe, décider de sa couche :
   laisser fuiter le clair dans un log ou un message d'échec d'assertion
   (voir `RegisterUser`).
 
+## Événements métier
+
+- Un événement est un **record au passé** dans `<contexte>/domain/event/`, implémente
+  `DomainEvent` (`shared/event/`), n'importe rien de Spring, et porte des identifiants —
+  pas l'état. Le consommateur relit.
+- **Son nom simple est `<Objet><Fait>` en PascalCase, et le dernier mot est le fait** :
+  `DomainEventNames` en dérive la clé de routage `<contexte>.<objet>.<fait>`, les mots de
+  l'objet joints par un tiret — `DocumentUploaded` → `knowledge.document.uploaded`,
+  `DocumentTextExtracted` → `knowledge.document-text.extracted`. Un nom d'un seul mot n'a
+  pas d'objet : il est refusé, et comme la table des noms se construit au démarrage, l'appli
+  ne démarre pas. Le domaine ne porte ni annotation ni chaîne : la convention est le contrat.
+- **C'est le handler qui publie**, par le port `DomainEventPublisher`, en dernière étape.
+  Pas depuis l'agrégat, pas depuis un adapter, pas depuis un contrôleur.
+- Jamais d'`ApplicationEventPublisher` de Spring pour un fait métier : les deux familles
+  d'événements restent séparées.
+- Un nouvel événement se **déclare** dans le `DomainEventRegistration` de son contexte
+  (`<contexte>/infrastructure/messaging/`), sinon le convertisseur ne le connaît pas et la
+  désérialisation le refuse. Ce refus tient à un réglage précis : le mapper de types est en
+  `TypePrecedence.TYPE_ID`, donc c'est l'en-tête `__TypeId__` du message qui gouverne, dans
+  les deux sens. En `INFERRED` — le défaut de Spring AMQP — la réception déduirait le type
+  du paramètre du listener et **ne consulterait jamais l'en-tête** : un `on(DocumentUploaded)`
+  désérialiserait n'importe quel corps en `DocumentUploaded`, et un événement non déclaré
+  partirait à l'envoi sous son nom qualifié de classe. Un nom absent de la table est confronté
+  aux paquets de confiance du mapper (`java.lang`, `java.util`) **avant** tout
+  `ClassUtils.forName`, qui n'est donc tenté que pour un nom déjà jugé sûr : c'est ce filtre
+  qui refuse — « The class '…' is not in the trusted packages » — pas l'absence de tentative.
+- Un listener est un **adapter entrant** dans `<contexte>/infrastructure/messaging/` :
+  `@Profile("worker")`, **un listener par contexte** sur la queue `domain.<contexte>.events`
+  (liée sur `<contexte>.#`), `@RabbitListener` sur la classe et un `@RabbitHandler` par
+  événement, chacun dispatchant une commande sur le bus. Pas une seconde classe
+  `@RabbitListener` sur la même queue : deux consommateurs se disputeraient les messages, et
+  celui qui ne connaît pas le type le rejetterait sans requeue. Aucune règle métier, aucun
+  accès direct à un repository.
+- Un test qui observe une publication observe un **commit** : pas de `@Transactional`
+  sur la classe, nettoyage explicite en `@AfterEach`. Un test du rôle worker pose
+  `@ActiveProfiles("worker")` **et** `webEnvironment = NONE`.
+
 ## Domaine
 
 - Un value object valide et normalise **dans son constructeur compact** : il doit être

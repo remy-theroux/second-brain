@@ -52,6 +52,10 @@ dependencies {
     // Notifications
     implementation("org.springframework.boot:spring-boot-starter-mail")
 
+    // Événements métier : publication et consommation sur RabbitMQ. Le transport est un
+    // choix de la spec 2026-08-25 (décisions 2 à 5) ; le domaine ne le connaît pas.
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
+
     // Persistance
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     // Spring Boot 4 : le starter Flyway apporte l'auto-config (module spring-boot-flyway).
@@ -83,6 +87,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("org.testcontainers:testcontainers-rabbitmq")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

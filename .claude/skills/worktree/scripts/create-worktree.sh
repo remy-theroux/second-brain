@@ -48,7 +48,7 @@ fi
 
 # --- Allocation du bloc de ports -------------------------------------------------------
 #
-# Le bloc d'indice N donne 8080+N, 5432+N, 1025+N, 8025+N. L'indice 0 est celui du dépôt
+# Le bloc d'indice N donne 8080+N, 5432+N, 1025+N, 8025+N, 5672+N, 15672+N. L'indice 0 est celui du dépôt
 # principal. On refuse un indice dont un seul port est occupé sur la machine, et un indice
 # déjà réservé par le .env d'un worktree existant — même arrêté, sa pile lui appartient.
 
@@ -73,7 +73,7 @@ for candidate in $(seq 1 40); do
   for reserved in $claimed; do
     [ "$candidate" = "$reserved" ] && busy=true
   done
-  for port in $((8080 + candidate)) $((5432 + candidate)) $((1025 + candidate)) $((8025 + candidate)); do
+  for port in $((8080 + candidate)) $((5432 + candidate)) $((1025 + candidate)) $((8025 + candidate)) $((5672 + candidate)) $((15672 + candidate)); do
     printf '%s\n' "$listening" | grep -qx "$port" && busy=true
   done
   if [ "$busy" = false ]; then index=$candidate; break; fi
@@ -108,6 +108,8 @@ sed \
   -e "s/^DB_PORT=.*/DB_PORT=$((5432 + index))/" \
   -e "s/^MAILPIT_SMTP_PORT=.*/MAILPIT_SMTP_PORT=$((1025 + index))/" \
   -e "s/^MAILPIT_WEB_PORT=.*/MAILPIT_WEB_PORT=$((8025 + index))/" \
+  -e "s/^RABBITMQ_PORT=.*/RABBITMQ_PORT=$((5672 + index))/" \
+  -e "s/^RABBITMQ_WEB_PORT=.*/RABBITMQ_WEB_PORT=$((15672 + index))/" \
   .env.example > "$worktree_path/.env"
 
 # --- Vérification : la branche sait-elle s'isoler ? ------------------------------------
@@ -150,6 +152,7 @@ Worktree prêt.
   Application http://localhost:$((8080 + index))
   Mailpit     http://localhost:$((8025 + index))
   PostgreSQL  localhost:$((5432 + index))
+  RabbitMQ    http://localhost:$((15672 + index))  (console, RABBITMQ_USER/RABBITMQ_PASSWORD du .env)
 
 Démarrer la pile :
 
