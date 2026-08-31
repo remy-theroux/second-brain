@@ -101,7 +101,10 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    # Il tire le modèle et s'arrête. Sans cette ligne, Compose le relancerait en boucle.
+    # Il tire le modèle et s'arrête. `no` est déjà le défaut de Compose — la ligne ne change
+    # rien, elle dit explicitement qu'un conteneur qui s'arrête après avoir tiré le modèle
+    # est attendu, pour qui lirait ce fichier en pensant qu'un service qui s'arrête est une
+    # panne à corriger.
     restart: "no"
 
   app:

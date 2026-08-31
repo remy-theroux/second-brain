@@ -178,6 +178,10 @@ Le cache Gradle et le `node_modules` ne se partagent pas entre worktrees — c'e
 « Timeout waiting to lock » ci-dessus. Chaque pile paie donc un premier démarrage long, et
 le `gtest` d'un worktree vise un volume `second-brain-gradle-home-<slug>` qui lui est propre.
 
+`ollama-models` non plus ne se partage pas : c'est un volume nommé, donc propre au projet
+Compose comme `db-data`, et chaque nom de projet en a le sien. Une feature de plus en
+parallèle, c'est un modèle de plus téléchargé et un Ollama de plus qui tourne.
+
 ## Architecture
 
 Architecture **hexagonale par bounded context**, avec un **CQRS minimal** posé sur
@@ -197,15 +201,18 @@ xyz.sterenn.secondbrain
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
 │   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
+│   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
 │   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
-│   │   │                    TextBlock + ExtractedText (le format du texte extrait)
+│   │   │                    TextBlock + ExtractedText (le format du texte extrait),
+│   │   │                    Embedding (le vecteur produit par le service de vectorisation)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
-│   │   │                    DocumentTextExtractor
+│   │   │                    DocumentTextExtractor, EmbeddingPort
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
-│   │   │                    et ses deux filles (Unreadable…, Unextractable…)
+│   │   │                    et ses deux filles (Unreadable…, Unextractable…),
+│   │   │                    EmbeddingUnavailableException
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText
@@ -214,6 +221,8 @@ xyz.sterenn.secondbrain
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
+│       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
+│       │                    à la main plutôt que Spring AI, par lots et avec tentatives
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
 │                            KnowledgeEventListener (profil worker), catalogue des

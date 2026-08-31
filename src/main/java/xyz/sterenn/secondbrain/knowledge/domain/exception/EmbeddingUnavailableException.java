@@ -16,7 +16,11 @@ package xyz.sterenn.secondbrain.knowledge.domain.exception;
  *
  * <p>{@code RuntimeException} et non checked : c'est ce qui déclenche le rollback promis par
  * le {@code CommandBus}. Elle prendra pour parent {@code DocumentProcessingException} dans le
- * livrable suivant, quand un second consommateur en aura besoin.
+ * livrable suivant — pas pour un second consommateur, mais parce que
+ * {@code KnowledgeEventListener.motif()} ne teste aujourd'hui que
+ * {@code instanceof DocumentExtractionException} : sans ce lien de parenté, le message
+ * soigné ci-dessus serait écrasé par le motif générique du listener, exactement ce que ce
+ * message existe pour éviter.
  */
 public class EmbeddingUnavailableException extends RuntimeException {
 

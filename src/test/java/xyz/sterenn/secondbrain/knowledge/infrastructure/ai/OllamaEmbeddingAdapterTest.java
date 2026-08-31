@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -69,13 +71,23 @@ class OllamaEmbeddingAdapterTest {
         List<String> textes =
                 IntStream.range(0, 120).mapToObj(i -> "texte " + i).toList();
 
-        // Un lot après l'autre, chacun répondant des valeurs qui identifient son rang.
+        // Un lot après l'autre, chacun répondant des valeurs qui identifient son rang. Les
+        // jsonPath sur les corps de requête sont ce qui fait la preuve du bon découpage : un
+        // adapter qui enverrait toujours les mêmes 32 premiers textes, ou qui tranchait
+        // depuis l'index 0 à chaque lot, produirait le même nombre d'appels et la même forme
+        // de réponse assemblée — seul le contenu envoyé le trahirait.
         // Quatre attentes successives : MockRestServiceServer les consomme dans l'ordre, et
         // `verify()` échoue s'il en reste une, donc « exactement quatre appels » est vérifié.
         serveur.expect(requestTo(URL_EMBED)).andRespond(reponsePour(32, 0f));
-        serveur.expect(requestTo(URL_EMBED)).andRespond(reponsePour(32, 1f));
+        serveur.expect(requestTo(URL_EMBED))
+                .andExpect(jsonPath("$.input[0]").value("texte 32"))
+                .andExpect(jsonPath("$.input[31]").value("texte 63"))
+                .andRespond(reponsePour(32, 1f));
         serveur.expect(requestTo(URL_EMBED)).andRespond(reponsePour(32, 2f));
-        serveur.expect(requestTo(URL_EMBED)).andRespond(reponsePour(24, 3f));
+        serveur.expect(requestTo(URL_EMBED))
+                .andExpect(jsonPath("$.input[0]").value("texte 96"))
+                .andExpect(jsonPath("$.input.length()").value(24))
+                .andRespond(reponsePour(24, 3f));
 
         List<Embedding> vecteurs = adapter.embed(textes);
 
@@ -115,6 +127,7 @@ class OllamaEmbeddingAdapterTest {
                 .isThrownBy(() -> adapter.embed(List.of("un texte")))
                 .withMessageContaining("768")
                 .withMessageContaining(String.valueOf(EmbeddingPolicy.DIMENSIONS));
+        serveur.verify();
     }
 
     @Test
@@ -123,7 +136,26 @@ class OllamaEmbeddingAdapterTest {
 
         assertThatExceptionOfType(EmbeddingUnavailableException.class)
                 .isThrownBy(() -> adapter.embed(List.of("premier", "second")))
-                .withMessageContaining("2");
+                .withMessageContaining("1 vecteurs pour 2 textes");
+        serveur.verify();
+    }
+
+    @Test
+    void n_insiste_pas_sur_un_refus_4xx_et_en_garde_le_message() {
+        // Le cas nommé par la spec : un nom de modèle mal orthographié. Ollama répond vite,
+        // et une seule requête doit partir — retenter trois fois un refus qui ne se corrige
+        // pas tout seul coûterait ~300 requêtes et 40 s de Thread.sleep sur un vrai PDF.
+        String corpsErreur = "{\"error\":\"model \\\"bge-m4\\\" not found, try pulling it first\"}";
+        serveur.expect(ExpectedCount.once(), requestTo(URL_EMBED))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(corpsErreur));
+
+        assertThatExceptionOfType(EmbeddingUnavailableException.class)
+                .isThrownBy(() -> adapter.embed(List.of("un texte")))
+                .withMessageContaining("bge-m4")
+                .withMessageContaining("not found");
+        serveur.verify();
     }
 
     /** Un corps JSON portant un vecteur de la bonne dimension par valeur donnée. */

@@ -54,6 +54,20 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  http:
+    clients:
+      # Seul RestClient du projet (OllamaEmbeddingAdapter), donc un réglage global plutôt
+      # qu'un client nommé. Même statut que les timeouts Jakarta Mail et le
+      # connection-timeout RabbitMQ ci-dessous : sans lui, un Ollama qui accepte la
+      # connexion TCP puis ne répond plus fige le thread du worker pour toujours — le
+      # seul thread qui consomme domain.knowledge.events — sans log, sans FAILED, sans
+      # retentative, puisque rien ne lève d'exception. connect-timeout court : soit
+      # Ollama écoute, soit non. read-timeout volontairement généreux, choisi pour
+      # détecter un service figé et non pour borner un traitement normal : un lot de 32
+      # extraits par bge-m3 sur CPU peut légitimement prendre près d'une minute.
+      connect-timeout: 5s
+      read-timeout: 120s
+
   rabbitmq:
     # Même statut que la datasource : le défaut sert le développement hors conteneur,
     # compose.yaml pose les vrais. guest/guest sont les identifiants par défaut de l'image

@@ -6,6 +6,7 @@ import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
@@ -47,7 +48,12 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
      */
     static final int BATCH_SIZE = 32;
 
-    /** Utile au démarrage, quand Ollama charge encore le modèle en mémoire. */
+    /**
+     * Couvre un aléa réseau bref, pas un modèle qui charge : 3 tentatives × 200 ms ne
+     * totalisent que 400 ms de patience, loin des quelques secondes à quelques dizaines de
+     * secondes que prend un chargement de modèle à froid. Ce cas-là est couvert par le
+     * délai de lecture du {@code RestClient} (voir {@code application.yml}), pas ici.
+     */
     static final int MAX_ATTEMPTS = 3;
 
     /** Court : on attend un modèle qui se charge, pas un service qui se répare. */
@@ -81,7 +87,9 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
      * l'application ni au domaine. L'{@link IllegalArgumentException} d'{@link Embedding} est
      * rattrapée ici pour la même raison qu'un adapter de persistance rattrape une violation
      * de contrainte — l'appelant n'a que faire de savoir <em>où</em> la dimension a été
-     * vérifiée.
+     * vérifiée. La {@link NullPointerException} l'est tout autant : un corps du genre
+     * {@code {"embeddings":[null]}} lèverait sinon une exception technique brute, exactement
+     * ce que cette règle interdit.
      */
     private List<Embedding> embedBatch(List<String> lot) {
         OllamaEmbeddingResponse reponse = appelerAvecTentatives(lot);
@@ -96,7 +104,7 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
         }
         try {
             return reponse.embeddings().stream().map(Embedding::of).toList();
-        } catch (IllegalArgumentException dimensionInattendue) {
+        } catch (IllegalArgumentException | NullPointerException dimensionInattendue) {
             throw new EmbeddingUnavailableException(
                     "Le service de vectorisation ne produit pas des vecteurs de "
                             + EmbeddingPolicy.DIMENSIONS + " dimensions : " + dimensionInattendue.getMessage()
@@ -105,6 +113,17 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
         }
     }
 
+    /**
+     * Un aller-retour, avec jusqu'à {@link #MAX_ATTEMPTS} tentatives — sauf pour un refus
+     * 4xx, qui n'en tente qu'une.
+     *
+     * <p>Un {@link HttpClientErrorException} est la réponse d'Ollama à une requête qu'il
+     * juge mauvaise — modèle inconnu, corps malformé — et son message porte déjà la raison
+     * exacte, tirée du corps JSON de la réponse. Retenter ne changerait rien à ce que dit la
+     * requête, et coûterait trois fois le temps et les tentatives pour un problème que la
+     * première réponse a déjà entièrement décrit. Une erreur 5xx ou une connexion qui échoue
+     * restent, elles, retentées : rien ne dit qu'elles sont durables.
+     */
     private OllamaEmbeddingResponse appelerAvecTentatives(List<String> lot) {
         RestClientException dernierEchec = null;
         for (int tentative = 1; tentative <= MAX_ATTEMPTS; tentative++) {
@@ -116,6 +135,10 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
                         .body(new OllamaEmbeddingRequest(model, lot))
                         .retrieve()
                         .body(OllamaEmbeddingResponse.class);
+            } catch (HttpClientErrorException refusDuService) {
+                throw new EmbeddingUnavailableException(
+                        "Le service de vectorisation refuse la requête : " + refusDuService.getMessage(),
+                        refusDuService);
             } catch (RestClientException echec) {
                 dernierEchec = echec;
                 if (tentative < MAX_ATTEMPTS) {
