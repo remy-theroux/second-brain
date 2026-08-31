@@ -179,8 +179,11 @@ JPA avec `ddl-auto: validate`, et le mapping continue d'être vérifié au déma
 Hibernate ne savait pas faire ; l'employer aujourd'hui, ce serait sortir un agrégat du seul
 mécanisme qui valide son schéma.
 
-Le module s'ajoute au version catalog. S'il s'avère porté par le BOM Boot 4, il s'y déclare
-sans version, comme les starters.
+Le module s'ajoute au version catalog — mais **dans le second livrable, avec `TextChunk`**,
+son premier et seul utilisateur. C'est ici qu'on décide comment le vecteur sera mappé ; c'est
+là qu'on paiera la dépendance. Même argument que la table : une dépendance qu'aucune ligne
+n'emploie est du poids mort, et ce ticket n'a pas d'entité à mapper. S'il s'avère porté par
+le BOM Boot 4, il se déclarera sans version, comme les starters.
 
 ### 6. La dimension est une règle du domaine, pas une propriété de configuration
 
