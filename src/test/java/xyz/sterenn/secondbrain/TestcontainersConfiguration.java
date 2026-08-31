@@ -18,6 +18,10 @@ import org.testcontainers.utility.DockerImageName;
  * <p>{@code org.testcontainers.rabbitmq.RabbitMQContainer} et non
  * {@code org.testcontainers.containers.RabbitMQContainer} : Testcontainers 2 a déplacé la
  * classe, et Spring Boot 4 ne reconnaît l'ancienne que par une fabrique dépréciée.
+ *
+ * <p>La PostgreSQL est l'image {@code pgvector/pgvector}, qui fournit l'extension {@code
+ * vector} — voir {@link #postgresContainer()}. Elle doit rester la même que celle de
+ * {@code compose.yaml} : les deux servent la base de développement et celle des tests.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -25,7 +29,13 @@ public class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     PostgreSQLContainer<?> postgresContainer() {
-        return new PostgreSQLContainer<>(DockerImageName.parse("postgres:17-alpine"));
+        // pgvector/pgvector et non postgres : l'extension `vector` doit être FOURNIE par
+        // l'image pour que la migration V9 puisse l'activer. Version épinglée, pas le tag
+        // `pg17` flottant — la CI et le poste doivent servir la même chose.
+        return new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:0.8.6-pg17")
+                // L'image dérive de `postgres` mais ne porte pas son nom : sans cette
+                // ligne, Testcontainers refuse de la traiter comme une PostgreSQL.
+                .asCompatibleSubstituteFor("postgres"));
     }
 
     @Bean

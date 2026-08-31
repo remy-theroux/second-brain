@@ -25,7 +25,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   db:
-    image: postgres:17-alpine
+    # pgvector/pgvector et non postgres:17-alpine : l'extension `vector` doit être fournie
+    # par l'image, la migration V9 se charge de l'activer. Version épinglée comme le reste
+    # de la pile. Debian et non Alpine : c'est ce que publie pgvector — un volume db-data
+    # initialisé par l'ancienne image se jette (`docker compose down -v`), musl et glibc ne
+    # trient pas le texte de la même façon.
+    image: pgvector/pgvector:0.8.6-pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-second_brain}
       POSTGRES_USER: ${POSTGRES_USER:-second_brain}
