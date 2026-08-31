@@ -15,9 +15,6 @@ public final class TestEvents {
         // conteneur de records d'essai
     }
 
-    /** Deux mots pour l'objet, un pour le fait. */
-    public record DocumentTextExtracted(Instant occurredAt) implements DomainEvent {}
-
     /** Un seul mot : aucun objet, la forme à trois segments n'est pas atteignable. */
     public record Uploaded(Instant occurredAt) implements DomainEvent {}
 }

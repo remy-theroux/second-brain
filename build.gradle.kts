@@ -76,6 +76,13 @@ dependencies {
     // Documentation API
     implementation(libs.springdoc.openapi)
 
+    // Extraction du texte des documents. Un extracteur par format plutôt qu'Apache Tika,
+    // dont l'XHTML unifié aplatit précisément la sémantique qu'on cherche à garder
+    // (ADR-0026). Aucune de ces versions n'est couverte par le BOM Spring Boot.
+    implementation(libs.commonmark)
+    implementation(libs.poi.ooxml)
+    implementation(libs.pdfbox)
+
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).
     developmentOnly("org.springframework.boot:spring-boot-devtools")
@@ -99,4 +106,15 @@ tasks.withType<Test> {
     // configuration, sans dépendre de la précédence entre application.properties et
     // application.yml.
     environment("SECONDBRAIN_JWT_SECRET", "secret-de-test-second-brain-32-octets-minimum")
+}
+
+// Fabrique les fixtures binaires d'extraction (docx, pdf) dans src/test/resources/fixtures/.
+// Lancée À LA MAIN, une fois — `gtest generateFixtures` — et son produit est versionné.
+// Ni test, ni étape de build : un binaire refabriqué à chaque exécution ferait un diff à
+// chaque exécution, et la suite ne testerait plus que sa propre sortie du jour.
+tasks.register<JavaExec>("generateFixtures") {
+    group = "build"
+    description = "Écrit les documents d'essai binaires ; à lancer à la main, puis committer"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "xyz.sterenn.secondbrain.knowledge.fixtures.FixtureFactory"
 }

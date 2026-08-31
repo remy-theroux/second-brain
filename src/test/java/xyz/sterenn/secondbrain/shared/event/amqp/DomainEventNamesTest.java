@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.event.TestEvents;
 import xyz.sterenn.secondbrain.shared.event.DomainEvent;
@@ -22,8 +23,7 @@ class DomainEventNamesTest {
     void joint_les_mots_de_l_objet_par_un_tiret() {
         // Le dernier mot est le fait ; tout ce qui précède est l'objet, et l'objet reste un
         // seul segment : la clé garde ses trois segments quel que soit le nombre de mots.
-        assertThat(DomainEventNames.of(TestEvents.DocumentTextExtracted.class))
-                .isEqualTo("knowledge.document-text.extracted");
+        assertThat(DomainEventNames.of(DocumentTextExtracted.class)).isEqualTo("knowledge.document-text.extracted");
     }
 
     @Test

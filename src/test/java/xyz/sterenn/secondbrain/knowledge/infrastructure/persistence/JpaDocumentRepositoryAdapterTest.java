@@ -164,4 +164,20 @@ class JpaDocumentRepositoryAdapterTest {
 
         assertThat(documentRepository.findAllByOwnerId(proprietaire)).isEmpty();
     }
+
+    @Test
+    void conserve_le_statut_d_echec_et_son_motif() {
+        UUID proprietaire = compteExistant("denis@exemple.fr");
+        Document enregistre = documentRepository.save(document(proprietaire, "scan.pdf", "contenu"));
+
+        enregistre.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        documentRepository.save(enregistre);
+
+        assertThat(documentRepository.findByIdAndOwnerId(enregistre.getId(), proprietaire))
+                .get()
+                .satisfies(relu -> {
+                    assertThat(relu.getStatus()).isEqualTo(DocumentStatus.FAILED);
+                    assertThat(relu.getErrorMessage()).isEqualTo("Ce document ne contient pas de texte exploitable.");
+                });
+    }
 }

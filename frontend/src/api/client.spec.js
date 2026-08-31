@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteDocument,
   DuplicateDocumentError,
+  fetchDocument,
   listDocuments,
   register,
   UnauthorizedError,
@@ -110,6 +111,52 @@ describe('base de connaissance', () => {
 
       await expect(listDocuments('jeton-abc')).rejects.toThrow(
         "La liste des documents n'a pas pu être chargée.",
+      )
+    })
+  })
+
+  describe("lecture d'un document", () => {
+    it('lit le document et son extraction avec le jeton du porteur', async () => {
+      const attendu = {
+        id: 'doc-1',
+        filename: 'notes.md',
+        type: 'TEXTUAL',
+        status: 'EXTRACTED',
+        extraction: { extractedAt: '2026-08-26T10:00:00Z', characterCount: 120, blocks: [] },
+      }
+      fetch.mockResolvedValue(reponse(200, attendu))
+
+      const document = await fetchDocument('jeton-abc', 'doc-1')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/documents/doc-1')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(document).toEqual(attendu)
+    })
+
+    it('traduit un 401 en session expirée', async () => {
+      fetch.mockResolvedValue(reponse(401, null))
+
+      await expect(fetchDocument('jeton-perime', 'doc-1')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('rend le message du serveur sur un document introuvable', async () => {
+      fetch.mockResolvedValue(reponse(404, { message: 'Ce document est introuvable.' }))
+
+      await expect(fetchDocument('jeton-abc', 'doc-1')).rejects.toThrow(
+        'Ce document est introuvable.',
+      )
+    })
+
+    it("rend un message par défaut quand le corps n'est pas du JSON", async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new Error('pas du JSON')),
+      })
+
+      await expect(fetchDocument('jeton-abc', 'doc-1')).rejects.toThrow(
+        "Ce document n'a pas pu être chargé.",
       )
     })
   })

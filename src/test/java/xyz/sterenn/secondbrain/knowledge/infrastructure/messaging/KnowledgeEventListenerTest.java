@@ -5,7 +5,10 @@ import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.amqp.core.AmqpAdmin;
@@ -13,16 +16,31 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.context.WebApplicationContext;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
+import xyz.sterenn.secondbrain.knowledge.Fixtures;
+import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
+import xyz.sterenn.secondbrain.knowledge.application.command.UploadDocument;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.shared.bus.CommandBus;
+import xyz.sterenn.secondbrain.users.domain.entity.User;
+import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
+import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
  * Le rôle worker, démarré comme en production : profil {@code worker}, aucun serveur HTTP.
@@ -32,17 +50,17 @@ import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
  * environnement servlet simulé, et le test vérifierait un contexte que le worker ne
  * construit jamais.
  *
- * <p>Le troisième scénario du socle : un événement publié est reçu par le worker. La queue
- * {@code domain.knowledge.events} reçoit tout le contexte ({@code knowledge.#}), et c'est
- * l'en-tête de type qui désigne le handler. Tant qu'aucune commande d'extraction n'existe,
- * la réception se constate dans le journal ; le plan d'extraction remplacera cette
- * assertion par une lecture du statut du document.
+ * <p><strong>Pas de {@code @Transactional} :</strong> la classe observe des commits, ceux du
+ * worker qui tourne dans ses propres threads. Ce qu'elle écrit est donc réellement écrit, et
+ * effacé en {@code @AfterEach} — la base d'un côté, le disque de l'autre.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")
 @ExtendWith(OutputCaptureExtension.class)
 class KnowledgeEventListenerTest {
+
+    private static final Duration DELAI = Duration.ofSeconds(20);
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -52,6 +70,38 @@ class KnowledgeEventListenerTest {
 
     @Autowired
     private AmqpAdmin amqpAdmin;
+
+    @Autowired
+    private CommandBus commandBus;
+
+    @Autowired
+    private DocumentRepository documentRepository;
+
+    @Autowired
+    private TextExtractionRepository textExtractionRepository;
+
+    @Autowired
+    private DocumentStorage documentStorage;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Value("${secondbrain.storage.originals-path}")
+    private String cheminDesOriginaux;
+
+    private final List<String> comptesCrees = new ArrayList<>();
+
+    @AfterEach
+    void efface_ce_qui_a_ete_commite() {
+        // La clé étrangère en cascade emporte les documents et leurs textes avec le compte ;
+        // le disque, lui, ne participe à aucune transaction (ADR-0020).
+        comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
+        comptesCrees.clear();
+        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+    }
 
     @Test
     void declare_la_queue_du_contexte() {
@@ -70,19 +120,56 @@ class KnowledgeEventListenerTest {
     }
 
     @Test
-    void recoit_l_evenement_publie(CapturedOutput sortie) {
-        UUID document = UUID.randomUUID();
+    void extrait_le_texte_du_document_dont_le_depot_est_annonce() {
+        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
 
-        // Exchange et clé de routage littéraux à dessein : le test fige le contrat sur le
-        // fil. Passer par les constantes ou DomainEventNames.of le rendrait tautologique —
-        // il vérifierait que le code s'accorde avec lui-même.
-        rabbitTemplate.convertAndSend(
-                "domain.events",
-                "knowledge.document.uploaded",
-                new DocumentUploaded(document, UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z")));
+        publie(document);
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(sortie)
-                .contains("Événement knowledge.document.uploaded reçu pour le document " + document));
+        await().atMost(DELAI).untilAsserted(() -> {
+            assertThat(textExtractionRepository.findByDocumentId(document.getId()))
+                    .get()
+                    .satisfies(texte -> assertThat(texte.getBlocks()).isNotEmpty());
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
+        });
+    }
+
+    @Test
+    void marque_le_document_en_echec_quand_l_extraction_refuse() {
+        Document document = unDocumentDepose("scan.pdf", Fixtures.NUMERISE_PDF);
+
+        publie(document);
+
+        await().atMost(DELAI).untilAsserted(() -> {
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.FAILED);
+            assertThat(motifDe(document)).contains("pas de texte exploitable");
+        });
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
+    }
+
+    @Test
+    void n_expose_pas_le_message_d_une_panne_technique() {
+        Document document = unDocumentDepose("notes.txt", Fixtures.BRUT_TXT);
+        // La ligne existe, l'original non : une panne, pas un refus métier.
+        documentStorage.delete(document.getId());
+
+        publie(document);
+
+        await().atMost(DELAI).untilAsserted(() -> assertThat(motifDe(document)).contains("n'a pas pu être lu"));
+    }
+
+    @Test
+    void ne_double_pas_le_texte_quand_l_evenement_est_livre_deux_fois() {
+        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
+
+        publie(document);
+        await().atMost(DELAI).untilAsserted(() -> assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED));
+        publie(document);
+
+        await().during(Duration.ofSeconds(2)).atMost(DELAI).untilAsserted(() -> {
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
+            assertThat(textExtractionRepository.findByDocumentId(document.getId()))
+                    .isPresent();
+        });
     }
 
     @Test
@@ -104,14 +191,55 @@ class KnowledgeEventListenerTest {
 
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(sortie).contains("knowledge.inconnu.survenu"));
-        // Le listener n'a pas été appelé : la conversion échoue avant lui.
-        assertThat(sortie).doesNotContain("reçu pour le document " + document);
 
         // Et le message n'est pas remis en file (`default-requeue-rejected=false`) : sans
         // ça, un message toxique tournerait en boucle et le journal grossirait sans fin.
         int occurrences = occurrencesDe("knowledge.inconnu.survenu", sortie);
         Thread.sleep(1000);
         assertThat(occurrencesDe("knowledge.inconnu.survenu", sortie)).isEqualTo(occurrences);
+    }
+
+    /**
+     * Annonce le dépôt, exchange et clé de routage littéraux : c'est le contrat sur le fil que
+     * le test fige, pas la constante.
+     */
+    private void publie(Document document) {
+        rabbitTemplate.convertAndSend(
+                "domain.events",
+                "knowledge.document.uploaded",
+                new DocumentUploaded(document.getId(), document.getOwnerId(), Instant.now()));
+    }
+
+    /**
+     * Dépose un document par le bus. Le <strong>premier</strong> argument est le nom sous
+     * lequel il est déposé — c'est lui qui décide du format, par son extension —, le
+     * <strong>second</strong> le nom d'une fixture, dont le contenu est lu.
+     */
+    private Document unDocumentDepose(String filename, String fixture) {
+        String email = UUID.randomUUID() + "@exemple.fr";
+        UUID proprietaire = userRepository
+                .save(User.register(new Email(email), "empreinte"))
+                .getId();
+        comptesCrees.add(email);
+        byte[] contenu = Fixtures.lire(fixture);
+        commandBus.dispatch(new UploadDocument(proprietaire, filename, contenu));
+        return documentRepository
+                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .orElseThrow();
+    }
+
+    private DocumentStatus statutDe(Document document) {
+        return relis(document).getStatus();
+    }
+
+    private String motifDe(Document document) {
+        return relis(document).getErrorMessage();
+    }
+
+    private Document relis(Document document) {
+        return documentRepository
+                .findByIdAndOwnerId(document.getId(), document.getOwnerId())
+                .orElseThrow();
     }
 
     private int occurrencesDe(String motif, CapturedOutput sortie) {

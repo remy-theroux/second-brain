@@ -65,6 +65,14 @@ gtest() {
 | Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
 | Compilation seule | `gtest compileJava` |
 | Build complet (ce que fait la CI) | `gtest build` |
+| Refabriquer les fixtures binaires d'extraction | `gtest generateFixtures` |
+
+`generateFixtures` écrit les documents d'essai binaires de `src/test/resources/fixtures/`
+et **son produit est versionné** : elle se lance à la main, pas à chaque build. Ces fichiers
+sont un socle fabriqué, pas de vrais documents — voir la spec d'extraction, décision 9.
+`gtest` tournant en `root`, les fichiers produits appartiennent à `root` : les rendre avant
+de committer, par
+`docker run --rm -v "$PWD/src/test/resources/fixtures":/f alpine chown -R "$(id -u):$(id -g)" /f`.
 
 **Il n'y a pas non plus de Node sur la machine hôte.** Pour le front, définir :
 
@@ -181,17 +189,23 @@ xyz.sterenn.secondbrain
 │                            (ErrorResponse, ValidationErrorResponse)
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
-│   │   ├── entity/          Document
-│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentStatus
-│   │   ├── port/            DocumentRepository, DocumentStorage
+│   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
+│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part)
+│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
+│   │   │                    document se découpe — déduit du format), DocumentStatus,
+│   │   │                    TextBlock + ExtractedText (le format du texte extrait)
+│   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
+│   │   │                    DocumentTextExtractor
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │   │                    UnsupportedDocumentFormatException
-│   │   └── event/           DocumentUploaded
+│   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
+│   │   │                    et ses deux filles (Unreadable…, Unextractable…)
+│   │   └── event/           DocumentUploaded, DocumentTextExtracted
 │   ├── application/
-│   │   ├── command/         UploadDocument, DeleteDocument
+│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
+│       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
@@ -225,9 +239,11 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 ├── src/api/                 seul module qui parle HTTP
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
-├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle
+├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
+│                            DocumentStatusTag (libellé et sévérité d'un statut)
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
-                             DocumentsView, DesignSystemView — catalogue, développement
+                             DocumentsView, DocumentDetailView,
+                             DesignSystemView — catalogue, développement
                              seulement)
 ```
 
@@ -388,9 +404,17 @@ dans la séquence n'a aucune portée transactionnelle, puisqu'elle ne prend effe
 commit** — un rollback n'annonce rien, et le broker injoignable à cet instant perd
 l'événement (ADR-0023).
 
-`DELETE /api/documents/{id}` efface la ligne puis l'original. Les extraits ne sont pas
-mentionnés : la table n'existe pas encore, et le ticket qui la créera posera un
-`ON DELETE CASCADE`.
+`DELETE /api/documents/{id}` efface la ligne puis l'original. L'extraction n'est pas
+mentionnée, et ne le sera pas : les `ON DELETE CASCADE` de ses tables l'emportent avec le
+document, et ce handler n'a pas eu à changer quand elles sont arrivées.
+
+`GET /api/documents/{id}` rend un document **et ce qui en a été extrait** : le nom, le
+format, la typologie, le statut, le motif d'échec le cas échéant, et — quand elle existe —
+l'extraction propre à sa typologie. Une seule requête pour tout l'écran de détail, et non une
+route `/extraction` à part : celle-là aurait rendu `404` sur un document simplement en file
+d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le document
+d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
+rendant un `Optional` — une query ne lève pas.
 
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
 les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
@@ -403,6 +427,41 @@ doublon plutôt que de laisser l'utilisateur la chercher. Aucun plafond de taill
 posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
 Aucun store : aucun autre écran ne partage cet état, la vue appelle `src/api/` directement,
 et c'est elle qui déconnecte sur un `401`, comme le layout le fait pour le profil.
+
+
+`DocumentDetailView` (`/documents/:id`, atteint par l'œil de chaque ligne) montre ce qui a
+été extrait : les métadonnées, le statut, le motif d'échec le cas échéant, puis les blocs
+titrés. L'écran est **adressable** — un texte extrait se relit, se partage par son URL et
+survit à un F5, ce qu'une modale sur la liste n'aurait pas offert. C'est `document.type`, la
+typologie, qui décide du rendu : une typologie sans affichage le dit plutôt que de rendre une
+page vide. `DocumentStatusTag` porte le libellé et la sévérité d'un statut pour les deux
+écrans — le motif était copié, il est devenu un composant.
+
+### Le flux de l'extraction du texte
+
+Le worker reçoit `DocumentUploaded` et dispatche `ExtractDocumentText`, qui relit le
+document, relit son original par le port de stockage, choisit l'extracteur de son format,
+remplace le texte extrait, pose `EXTRACTED` et annonce `DocumentTextExtracted`.
+
+**Le format produit est le livrable durable de ce flux** : `ExtractedText`, une suite
+ordonnée de `TextBlock` portant chacun le titre de sa section, son niveau et son corps
+normalisé. Un bloc est une **section**, pas un paragraphe — un document sans titre rend un
+unique bloc (ADR-0024). Il vit dans deux tables cascadées, `knowledge_text_extractions` et
+`knowledge_text_blocks`, **nommées par la typologie et non par le document** : une autre
+typologie aura les siennes (ADR-0030).
+
+Quatre extracteurs derrière un port, un par format, et non Apache Tika (ADR-0026) : les
+styles `Heading1..9` d'un DOCX et les `#` d'un Markdown sont le livrable, pas du balisage à
+traverser. Un PDF, lui, ne porte aucune sémantique de titre : son sommaire d'abord, la
+taille de police en repli (ADR-0027), et les frontières de paragraphe y sont perdues — une
+section de PDF arrive à RAG-5 comme un seul paragraphe. **`ExtractDocumentTextHandler`
+refuse de démarrer si une constante de `DocumentFormat` n'a pas son extracteur** : un format
+accepté au dépôt doit être lisible.
+
+Un document dont il ne sort pas cinquante caractères **échoue explicitement** (ADR-0025) :
+c'est le cas du PDF numérisé, et le vide silencieux ne se verrait qu'à la première question
+restée sans réponse. L'effacement du texte précédent avant l'écriture n'est pas décoratif :
+AMQP livre au moins une fois et `document_id` est `UNIQUE`.
 
 ### Les deux bus (`shared/bus`)
 
@@ -459,8 +518,11 @@ ne connaît pas le type le rejetterait — l'événement serait perdu. La queue 
 déclarés dans les deux rôles. Une
 exception dans un listener rejette le message **sans remise en file**
 (`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
-boucle. Pas de dead-letter queue, pas de retry : un échec doit finir en `FAILED` sur le
-document, pas être rejoué.
+boucle. Pas de dead-letter queue, pas de retry : un échec finit en `FAILED` sur le document,
+pas rejoué. **Et il y finit depuis une seconde transaction** — `KnowledgeEventListener`
+rattrape l'exception, dispatche `MarkDocumentExtractionFailed`, puis acquitte. Un statut
+d'erreur écrit dans la transaction que le bus vient d'annuler disparaîtrait avec elle, et le
+document resterait éternellement en attente (ADR-0028).
 
 Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
 en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
@@ -485,6 +547,14 @@ détail dans les règles backend, section « Adapters ».
 `Checksum` suit exactement le même chemin, par `ChecksumAttributeConverter` dans
 `knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
 tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
+
+Le texte extrait d'un document vit dans **deux tables**, `knowledge_text_extractions` (une
+ligne par document, `document_id` `UNIQUE`) et `knowledge_text_blocks` (ses blocs, une
+`@ElementCollection` ordonnée par `block_position`, rattachés par `text_extraction_id`).
+Elles portent le nom de leur **typologie**, pas celui du document : une typologie sonore ou
+visuelle aura les siennes, d'une autre forme (ADR-0030). Les deux cascadent à la suppression du
+document — c'est le `ON DELETE CASCADE` que `DeleteDocumentHandler` annonçait, et il n'a
+rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent sur disque, un par
 document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
@@ -524,6 +594,13 @@ qui ressemble ici à un défaut est presque toujours une décision, et l'alterna
 | [0021](docs/decisions/0021-le-contenu-depose-transite-entierement-en-memoire.md) | Le contenu déposé transite entièrement en mémoire |
 | [0022](docs/decisions/0022-le-front-recopie-ce-qui-n-est-pas-une-regle-du-serveur.md) | Le front recopie ce qui n'est pas une règle du serveur |
 | [0023](docs/decisions/0023-pas-d-outbox-on-fait-confiance-au-broker.md) | Pas d'outbox : on fait confiance au broker |
+| [0024](docs/decisions/0024-le-texte-extrait-est-une-suite-plate-de-blocs-titres.md) | Le texte extrait est une suite plate de blocs titrés |
+| [0025](docs/decisions/0025-un-plancher-de-caracteres-declare-un-document-inexploitable.md) | Un plancher de caractères déclare un document inexploitable |
+| [0026](docs/decisions/0026-un-extracteur-par-format-plutot-qu-apache-tika.md) | Un extracteur par format, plutôt qu'Apache Tika |
+| [0027](docs/decisions/0027-les-titres-d-un-pdf-sans-signets-sont-devines-a-la-taille-de-police.md) | Les titres d'un PDF sans signets sont devinés à la taille de police |
+| [0028](docs/decisions/0028-l-echec-d-extraction-s-ecrit-hors-de-la-transaction-annulee.md) | L'échec d'extraction s'écrit hors de la transaction annulée |
+| [0029](docs/decisions/0029-la-typologie-d-un-document-se-deduit-de-son-format.md) | La typologie d'un document se déduit de son format, elle n'est pas stockée |
+| [0030](docs/decisions/0030-chaque-typologie-a-ses-propres-tables-d-extraction.md) | Chaque typologie de document a ses propres tables d'extraction |
 
 Ces ADR remplacent la liste numérotée d'« écarts assumés » qui vivait ici ; ADR-0001 porte
 la correspondance avec l'ancienne numérotation. Un ADR accepté ne se modifie pas, il se
@@ -533,6 +610,7 @@ remplace — voir `.claude/rules/decisions.md`.
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
+commonmark-java · Apache POI · PDFBox ·
 JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 

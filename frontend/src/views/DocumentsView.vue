@@ -9,6 +9,7 @@ import DataTable from 'primevue/datatable'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import {
   deleteDocument,
   DuplicateDocumentError,
@@ -24,12 +25,6 @@ import { useAuthStore } from '@/stores/auth'
 // Cette copie ne sert qu'au confort du sélecteur et peut diverger sans qu'un test le voie —
 // même nature de copie que `VERIFICATION_MESSAGES` dans LoginView — ADR-0022.
 const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
-
-// Le statut voyage en code, comme tout ce que l'API sérialise d'une énumération ; le
-// libellé est une affaire d'écran.
-const STATUS_LABELS = {
-  PENDING: 'En attente de traitement',
-}
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -156,13 +151,24 @@ onMounted(load)
       <template #empty>Aucun document pour l'instant.</template>
       <Column field="filename" header="Fichier" />
       <Column header="Statut">
-        <template #body="{ data }">{{ STATUS_LABELS[data.status] ?? data.status }}</template>
+        <template #body="{ data }">
+          <DocumentStatusTag :status="data.status" />
+          <div v-if="data.errorMessage" class="document-error">{{ data.errorMessage }}</div>
+        </template>
       </Column>
       <Column header="Déposé le">
         <template #body="{ data }">{{ formatDate(data.createdAt) }}</template>
       </Column>
       <Column class="table-actions">
         <template #body="{ data }">
+          <Button
+            type="button"
+            icon="pi pi-eye"
+            text
+            rounded
+            :aria-label="`Voir ${data.filename}`"
+            @click="router.push({ name: 'document', params: { id: data.id } })"
+          />
           <Button
             type="button"
             icon="pi pi-trash"
@@ -180,6 +186,12 @@ onMounted(load)
 </template>
 
 <style scoped>
+.document-error {
+  margin-top: var(--sb-space-xs);
+  font-size: var(--sb-text-small);
+  color: var(--p-text-muted-color);
+}
+
 .documents {
   display: flex;
   flex-direction: column;

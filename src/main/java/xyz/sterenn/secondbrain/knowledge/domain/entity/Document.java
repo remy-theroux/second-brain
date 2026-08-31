@@ -38,6 +38,12 @@ public class Document {
     /** Ce que la plupart des systèmes de fichiers acceptent comme nom. */
     public static final int MAX_FILENAME_LENGTH = 255;
 
+    /**
+     * De quoi porter le plus long des messages de refus métier, avec de la marge. Ce qui
+     * dépasse est tronqué : un motif est une explication, pas une trace d'exécution.
+     */
+    public static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "uuid")
@@ -68,6 +74,11 @@ public class Document {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private DocumentStatus status;
+
+    // Nullable, à l'inverse de tout le reste de cette entité : un document qui n'a pas
+    // échoué n'a pas de motif, et une chaîne vide voudrait dire « échoué sans raison ».
+    @Column(name = "error_message", length = MAX_ERROR_MESSAGE_LENGTH)
+    private String errorMessage;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -110,6 +121,41 @@ public class Document {
         return new Document(ownerId, nomBorne, format, checksum, sizeBytes);
     }
 
+    /**
+     * Le texte de ce document a été extrait et rangé.
+     *
+     * <p>Efface le motif d'un échec précédent : un document réextrait avec succès ne doit
+     * pas garder l'explication de ce qui a raté la fois d'avant.
+     *
+     * <p>Aucun garde sur l'état de départ, volontairement. RAG-7 réextraira depuis
+     * {@code EXTRACTED} comme depuis {@code FAILED} ; un garde posé aujourd'hui serait à
+     * retirer demain.
+     */
+    public void markTextExtracted() {
+        this.status = DocumentStatus.EXTRACTED;
+        this.errorMessage = null;
+    }
+
+    /**
+     * Le traitement de ce document a échoué, pour la raison donnée.
+     *
+     * <p>Le motif est <strong>affichable tel quel</strong> : c'est l'appelant qui garantit
+     * qu'il ne transporte pas une trace technique — voir {@code KnowledgeEventListener} et
+     * ADR-0028. Ici, on garantit seulement qu'il existe et qu'il tient dans sa colonne.
+     *
+     * @throws IllegalArgumentException si le motif est absent ou vide — un échec sans motif
+     *     n'apprend rien de plus qu'un document resté en attente
+     */
+    public void markExtractionFailed(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Un échec sans motif n'apprend rien : le motif est obligatoire");
+        }
+        String motif = reason.strip();
+        this.status = DocumentStatus.FAILED;
+        this.errorMessage =
+                motif.length() > MAX_ERROR_MESSAGE_LENGTH ? motif.substring(0, MAX_ERROR_MESSAGE_LENGTH) : motif;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -136,6 +182,11 @@ public class Document {
 
     public DocumentStatus getStatus() {
         return status;
+    }
+
+    /** {@code null} tant qu'aucun traitement n'a échoué. */
+    public String getErrorMessage() {
+        return errorMessage;
     }
 
     public Instant getCreatedAt() {

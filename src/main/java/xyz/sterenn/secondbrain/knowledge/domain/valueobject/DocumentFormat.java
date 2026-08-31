@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnsupportedDocumentFormatException;
@@ -16,21 +17,44 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.UnsupportedDocumentFor
  * <p>Le format se déduit de l'extension, faute de mieux : le type MIME annoncé par le
  * navigateur est déclaratif, donc pas plus fiable, et renifler le contenu supposerait de
  * savoir déjà le lire. L'extraction, elle, vérifiera qu'un {@code .pdf} en est un.
+ *
+ * <p><strong>Chaque format déclare sa typologie</strong> ({@link DocumentType}) : c'est
+ * elle qui dit comment le document se découpe, donc quel traitement l'attend et quelles
+ * tables le reçoivent. Ajouter une constante sans la nommer ne compile pas — le
+ * constructeur l'exige.
  */
 public enum DocumentFormat {
-    PDF(".pdf"),
-    MARKDOWN(".md"),
-    TEXT(".txt"),
-    DOCX(".docx");
+    PDF(".pdf", DocumentType.TEXTUAL),
+    MARKDOWN(".md", DocumentType.TEXTUAL),
+    TEXT(".txt", DocumentType.TEXTUAL),
+    DOCX(".docx", DocumentType.TEXTUAL);
 
     private final String extension;
+    private final DocumentType type;
 
-    DocumentFormat(String extension) {
+    DocumentFormat(String extension, DocumentType type) {
         this.extension = extension;
+        this.type = type;
     }
 
     public String extension() {
         return extension;
+    }
+
+    /** La typologie de ce format : comment un document de ce format se découpe. */
+    public DocumentType type() {
+        return type;
+    }
+
+    /**
+     * Les formats d'une typologie, dans l'ordre de déclaration.
+     *
+     * <p>C'est cette méthode qui permet à un traitement de ne réclamer que ce qui le
+     * concerne : l'extraction de texte exige un extracteur pour chaque format
+     * {@link DocumentType#TEXTUAL}, et n'a rien à dire des autres.
+     */
+    public static List<DocumentFormat> of(DocumentType type) {
+        return Arrays.stream(values()).filter(format -> format.type == type).toList();
     }
 
     /**
