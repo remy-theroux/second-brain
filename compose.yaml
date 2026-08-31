@@ -72,6 +72,38 @@ services:
       timeout: 5s
       retries: 12
 
+  ollama:
+    # `latest` et non une version épinglée, même statut que mailpit : un outil de
+    # développement, pas un composant dont la version décide d'un comportement du produit.
+    image: ollama/ollama:latest
+    volumes:
+      # Les modèles pèsent des gigaoctets : un volume nommé, jamais le bind mount.
+      - ollama-models:/root/.ollama
+    healthcheck:
+      # `ollama list` répond dès que le serveur écoute, sans rien télécharger.
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 30s
+      retries: 10
+    # Aucun port publié, à la différence de db, rabbitmq et mailpit. Deux raisons : seul le
+    # worker lui parle, depuis le réseau de la pile ; et un port de plus devrait entrer dans
+    # le décalage d'indices du skill `worktree`, sans quoi deux features se le disputeraient.
+    # Pour l'interroger à la main : `docker compose exec ollama ollama list`.
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    # Un client, pas un serveur : OLLAMA_HOST le fait parler au conteneur voisin, qui
+    # télécharge dans SON volume. Le puller n'a donc aucun volume à monter.
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    # Il tire le modèle et s'arrête. Sans cette ligne, Compose le relancerait en boucle.
+    restart: "no"
+
   app:
     build:
       context: .
@@ -89,6 +121,8 @@ services:
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals
+      OLLAMA_BASE_URL: http://ollama:11434
+      SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
     labels:
       - "traefik.enable=true"
       # /verification est hors /api à dessein : c'est une navigation, pas un appel XHR.
@@ -153,6 +187,8 @@ services:
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals
+      OLLAMA_BASE_URL: http://ollama:11434
+      SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       # Cache Gradle propre : deux conteneurs qui partagent un GRADLE_USER_HOME se bloquent
       # sur ses verrous (la contention passe par un port local, invisible de l'autre
       # conteneur). Prix : un second téléchargement des dépendances au premier démarrage.
@@ -168,6 +204,8 @@ services:
         condition: service_healthy
       app:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   frontend:
     image: node:24-alpine
@@ -198,4 +236,5 @@ volumes:
   gradle-cache:
   gradle-cache-worker:
   originals:
+  ollama-models:
   frontend-node-modules:

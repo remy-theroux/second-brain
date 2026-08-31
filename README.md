@@ -27,7 +27,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 
 ```bash
 cp .env.example .env          # ajuster si besoin
-docker compose up --build     # démarre PostgreSQL, Mailpit, RabbitMQ, l'app, le worker et le front
+docker compose up --build     # démarre PostgreSQL, Mailpit, RabbitMQ, Ollama, l'app, le worker et le front
 ```
 
 Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (toolchain) — c'est un peu long, ensuite c'est mis en cache.

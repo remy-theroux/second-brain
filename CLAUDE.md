@@ -130,6 +130,13 @@ qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même « Tim
 to lock » qu'entre `gtest` et la pile. Le prix est un second téléchargement des dépendances
 au premier démarrage.
 
+Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions), tiré au premier
+démarrage par le conteneur one-shot `ollama-pull`. Il ne publie aucun port : seul le worker
+lui parle, par le réseau de la pile. Pour l'interroger à la main,
+`docker compose exec ollama ollama list`. Le worker **ne l'attend pas** pour démarrer — un
+document traité pendant le téléchargement du modèle échoue avec un motif qui nomme la
+vectorisation.
+
 Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
 échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
 `docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
@@ -609,8 +616,8 @@ remplace — voir `.claude/rules/decisions.md`.
 ## Stack et versions
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
-Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
-commonmark-java · Apache POI · PDFBox ·
+Validation, Mail) · Flyway · PostgreSQL 17 + pgvector · Spring AMQP · RabbitMQ 4 ·
+springdoc-openapi · commonmark-java · Apache POI · PDFBox ·
 JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
 (`gradle/libs.versions.toml`).
 
@@ -620,8 +627,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
-`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), et un
-conteneur `worker` de la même image que `app`.
+`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
+conteneur `worker` de la même image que `app`, et un service `ollama` qui sert le modèle
+d'embedding.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit
