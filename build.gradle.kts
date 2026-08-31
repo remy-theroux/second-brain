@@ -70,6 +70,12 @@ dependencies {
     // spring-boot-starter-oauth2-resource-server existe toujours mais est déprécié.
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 
+    // Vectorisation : OllamaEmbeddingAdapter parle HTTP via RestClient. Sous Boot 4, ce
+    // starter n'est plus tiré par spring-boot-starter-web : RestClientAutoConfiguration a
+    // été extraite dans son propre module (spring-boot-restclient), et sans ce starter le
+    // bean RestClient.Builder n'existe pas — le contexte refuse de démarrer.
+    implementation("org.springframework.boot:spring-boot-starter-restclient")
+
     // Observabilité
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 

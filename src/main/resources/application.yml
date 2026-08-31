@@ -114,6 +114,15 @@ secondbrain:
     # identifiant. Comme `base-url`, le défaut sert le développement : hors conteneur,
     # `/data` n'est pas écrivable, et c'est SECONDBRAIN_ORIGINALS_PATH qui fait foi.
     originals-path: ${SECONDBRAIN_ORIGINALS_PATH:/data/originals}
+  embedding:
+    # Où joindre le service de vectorisation. Comme la datasource, le défaut sert le
+    # développement hors conteneur — 11434 est le port d'Ollama. En production, la variable
+    # visera l'Ollama déjà en place plutôt qu'un second, embarqué pour rien.
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # Le modèle, et lui seul, est configurable. Sa DIMENSION ne l'est pas : elle vit dans
+    # EmbeddingPolicy, parce qu'elle est le contrat entre le modèle, la colonne et l'index.
+    # Changer de modèle est une migration et une réindexation, pas une variable.
+    model: ${SECONDBRAIN_EMBEDDING_MODEL:bge-m3}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   jwt:
