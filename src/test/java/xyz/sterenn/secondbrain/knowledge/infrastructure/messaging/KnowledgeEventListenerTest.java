@@ -29,11 +29,14 @@ import org.springframework.web.context.WebApplicationContext;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
+import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
+import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration.RecordingEmbeddingPort;
 import xyz.sterenn.secondbrain.knowledge.application.command.UploadDocument;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
@@ -54,7 +57,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * worker qui tourne dans ses propres threads. Ce qu'elle écrit est donc réellement écrit, et
  * effacé en {@code @AfterEach} — la base d'un côté, le disque de l'autre.
  */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, RecordingEmbeddingPortConfiguration.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")
 @ExtendWith(OutputCaptureExtension.class)
@@ -81,6 +84,12 @@ class KnowledgeEventListenerTest {
     private TextExtractionRepository textExtractionRepository;
 
     @Autowired
+    private TextChunkRepository textChunkRepository;
+
+    @Autowired
+    private RecordingEmbeddingPort embeddingPort;
+
+    @Autowired
     private DocumentStorage documentStorage;
 
     @Autowired
@@ -96,11 +105,12 @@ class KnowledgeEventListenerTest {
 
     @AfterEach
     void efface_ce_qui_a_ete_commite() {
-        // La clé étrangère en cascade emporte les documents et leurs textes avec le compte ;
-        // le disque, lui, ne participe à aucune transaction (ADR-0020).
+        // La clé étrangère en cascade emporte les documents, leurs textes et leurs extraits
+        // avec le compte ; le disque, lui, ne participe à aucune transaction (ADR-0020).
         comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
         comptesCrees.clear();
         KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        embeddingPort.clear();
     }
 
     @Test
@@ -120,7 +130,10 @@ class KnowledgeEventListenerTest {
     }
 
     @Test
-    void extrait_le_texte_du_document_dont_le_depot_est_annonce() {
+    void indexe_le_document_dont_le_depot_est_annonce_et_le_declare_pret() {
+        // La chaîne entière, telle qu'elle tourne en production : le dépôt annonce, le worker
+        // extrait, l'extraction annonce, le worker découpe et vectorise. Deux messages, deux
+        // transactions, un seul statut à l'arrivée.
         Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
 
         publie(document);
@@ -129,7 +142,8 @@ class KnowledgeEventListenerTest {
             assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .get()
                     .satisfies(texte -> assertThat(texte.getBlocks()).isNotEmpty());
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
+            assertThat(textChunkRepository.findByDocumentId(document.getId())).isNotEmpty();
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY);
         });
     }
 
@@ -158,18 +172,39 @@ class KnowledgeEventListenerTest {
     }
 
     @Test
-    void ne_double_pas_le_texte_quand_l_evenement_est_livre_deux_fois() {
+    void ne_double_ni_le_texte_ni_les_extraits_quand_l_evenement_est_livre_deux_fois() {
         Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
-
         publie(document);
-        await().atMost(DELAI).untilAsserted(() -> assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED));
+        await().atMost(DELAI).untilAsserted(() -> assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY));
+        int extraits = textChunkRepository.findByDocumentId(document.getId()).size();
+
         publie(document);
 
         await().during(Duration.ofSeconds(2)).atMost(DELAI).untilAsserted(() -> {
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.EXTRACTED);
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY);
             assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .isPresent();
+            assertThat(textChunkRepository.findByDocumentId(document.getId())).hasSize(extraits);
         });
+    }
+
+    @Test
+    void marque_le_document_en_echec_quand_la_vectorisation_ne_repond_pas() {
+        // Le seul endroit où le « tout ou rien » se constate : ici, les transactions sont
+        // réellement commitées ou réellement annulées. L'extraction, elle, a commité avant —
+        // le document garde donc son texte, et l'écran de détail montre ce qui a marché et où
+        // ça a cassé.
+        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
+        embeddingPort.tombeEnPanne();
+
+        publie(document);
+
+        await().atMost(DELAI).untilAsserted(() -> {
+            assertThat(statutDe(document)).isEqualTo(DocumentStatus.FAILED);
+            assertThat(motifDe(document)).contains("vectorisation");
+        });
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).isEmpty();
+        assertThat(textExtractionRepository.findByDocumentId(document.getId())).isPresent();
     }
 
     @Test

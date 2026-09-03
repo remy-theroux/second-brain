@@ -7,6 +7,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
+import xyz.sterenn.secondbrain.knowledge.application.command.IndexDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
@@ -72,19 +73,25 @@ public class KnowledgeEventListener {
     }
 
     /**
-     * Le texte d'un document vient d'être extrait.
+     * Le texte d'un document vient d'être extrait : on le découpe et on le vectorise.
      *
-     * <p>Ce handler ne fait rien d'autre que journaliser, et il doit pourtant exister : un
-     * type déclaré dans {@code DomainEventRegistration} mais sans {@code @RabbitHandler} est
-     * refusé par Spring AMQP et rejeté comme un type inconnu. RAG-5 remplacera cette ligne
-     * par {@code commandBus.dispatch(new ChunkDocumentText(...))}.
+     * <p>Même dispositif qu'au dépôt, et pour la même raison (ADR-0028) : le bus annule sa
+     * transaction sur la moindre exception, donc l'échec se consigne depuis une
+     * <em>seconde</em> commande, dans une transaction à elle. Sans quoi le document resterait
+     * éternellement en {@code EXTRACTED}, sans que rien ne dise pourquoi.
+     *
+     * <p>C'est aussi ce qui rend le « tout ou rien » gratuit : la transaction annulée emporte
+     * les extraits déjà écrits, et le document garde son texte extrait. L'écran de détail
+     * montre alors ce qui a marché et où ça a cassé.
      */
     @RabbitHandler
     public void on(DocumentTextExtracted event) {
-        log.info(
-                "Événement knowledge.document-text.extracted reçu pour le document {} : {} blocs",
-                event.documentId(),
-                event.blockCount());
+        try {
+            commandBus.dispatch(new IndexDocumentText(event.documentId(), event.ownerId()));
+        } catch (RuntimeException echec) {
+            log.error("Indexation du document {} en échec", event.documentId(), echec);
+            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), motif(echec)));
+        }
     }
 
     /**
