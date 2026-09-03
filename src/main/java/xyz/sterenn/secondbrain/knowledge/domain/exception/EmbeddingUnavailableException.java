@@ -14,15 +14,13 @@ package xyz.sterenn.secondbrain.knowledge.domain.exception;
  * trois tentatives, une réponse qui ne rend pas autant de vecteurs que de textes, et un
  * vecteur d'une dimension étrangère au modèle attendu.
  *
- * <p>{@code RuntimeException} et non checked : c'est ce qui déclenche le rollback promis par
- * le {@code CommandBus}. Elle prendra pour parent {@code DocumentProcessingException} dans le
- * livrable suivant — pas pour un second consommateur, mais parce que
- * {@code KnowledgeEventListener.motif()} ne teste aujourd'hui que
- * {@code instanceof DocumentExtractionException} : sans ce lien de parenté, le message
- * soigné ci-dessus serait écrasé par le motif générique du listener, exactement ce que ce
- * message existe pour éviter.
+ * <p>{@code RuntimeException} par sa mère, et non checked : c'est ce qui déclenche le rollback
+ * promis par le {@code CommandBus}. Et {@link DocumentProcessingException} pour mère, et non
+ * {@code DocumentExtractionException} : {@code KnowledgeEventListener.motif()} ne montre que
+ * les messages de cette famille, et sans ce lien de parenté le message soigné ci-dessus serait
+ * écrasé par le motif générique du listener — exactement ce qu'il existe pour éviter.
  */
-public class EmbeddingUnavailableException extends RuntimeException {
+public class EmbeddingUnavailableException extends DocumentProcessingException {
 
     public EmbeddingUnavailableException(String message) {
         super(message);

@@ -13,16 +13,16 @@ import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
  * transaction annulée n'a rien laissé derrière elle.
  */
 @Component
-public class MarkDocumentExtractionFailedHandler implements CommandHandler<MarkDocumentExtractionFailed> {
+public class MarkDocumentProcessingFailedHandler implements CommandHandler<MarkDocumentProcessingFailed> {
 
     private final DocumentRepository documentRepository;
 
-    public MarkDocumentExtractionFailedHandler(DocumentRepository documentRepository) {
+    public MarkDocumentProcessingFailedHandler(DocumentRepository documentRepository) {
         this.documentRepository = documentRepository;
     }
 
     @Override
-    public void handle(MarkDocumentExtractionFailed command) {
+    public void handle(MarkDocumentProcessingFailed command) {
         Document document = documentRepository
                 .findByIdAndOwnerId(command.documentId(), command.ownerId())
                 .orElseThrow(DocumentNotFoundException::new);

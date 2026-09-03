@@ -7,10 +7,10 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
-import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentExtractionFailed;
+import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
-import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentExtractionException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
 /**
@@ -66,7 +66,7 @@ public class KnowledgeEventListener {
             commandBus.dispatch(new ExtractDocumentText(event.documentId(), event.ownerId()));
         } catch (RuntimeException echec) {
             log.error("Extraction du document {} en échec", event.documentId(), echec);
-            commandBus.dispatch(new MarkDocumentExtractionFailed(event.documentId(), event.ownerId(), motif(echec)));
+            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), motif(echec)));
         }
     }
 
@@ -90,8 +90,13 @@ public class KnowledgeEventListener {
      * Un refus métier porte un message affichable tel quel ; le reste n'en porte aucun qu'on
      * puisse montrer. Le message d'une {@code NullPointerException} n'a rien à faire sous les
      * yeux de l'utilisateur — il est dans le journal, où il sert.
+     *
+     * <p>C'est {@link DocumentProcessingException} qui est testée, et non la seule
+     * {@code DocumentExtractionException} : un service de vectorisation injoignable doit
+     * s'annoncer comme tel, sans quoi une URL mal saisie serait indiscernable d'un PDF
+     * illisible.
      */
     private static String motif(RuntimeException echec) {
-        return echec instanceof DocumentExtractionException refusMetier ? refusMetier.getMessage() : ECHEC_INATTENDU;
+        return echec instanceof DocumentProcessingException refusMetier ? refusMetier.getMessage() : ECHEC_INATTENDU;
     }
 }
