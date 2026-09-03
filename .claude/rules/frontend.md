@@ -132,7 +132,7 @@ et les logs du proxy. La contrepartie — deux endroits qui peuvent diverger —
 décision assumée : ADR-0017.
 
 Ce qui n'est **pas** un message d'erreur peut se traduire côté front : le libellé d'une
-énumération sérialisée par l'API (`STATUS_LABELS` dans `DocumentsView.vue`) est une affaire
+énumération sérialisée par l'API (`LABELS` dans `DocumentStatusTag.vue`) est une affaire
 d'écran. Et un filtre de sélecteur de fichiers (`ACCEPTED_EXTENSIONS`) n'est pas une règle :
 la règle est au serveur, dont le `415` énonce la liste qui fait foi. Les deux copies sont
 assumées : ADR-0022.

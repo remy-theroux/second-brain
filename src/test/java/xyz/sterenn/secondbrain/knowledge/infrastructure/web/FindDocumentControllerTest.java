@@ -117,7 +117,7 @@ class FindDocumentControllerTest {
         // Déposé sous un nom en .txt : ce test ne teste pas l'extraction, seulement ce que le
         // détail montre d'un document déjà marqué en échec.
         Document document = depose(jetonAlice, alice, "scan.txt", Fixtures.BRUT_TXT);
-        document.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
 
         mockMvc.perform(get("/api/documents/" + document.getId())

@@ -74,7 +74,7 @@ class DocumentTest {
     void un_document_en_echec_porte_le_statut_failed_et_son_motif() {
         Document document = unDocumentDepose();
 
-        document.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
 
         assertThat(document.getStatus()).isEqualTo(DocumentStatus.FAILED);
         assertThat(document.getErrorMessage()).isEqualTo("Ce document ne contient pas de texte exploitable.");
@@ -83,7 +83,7 @@ class DocumentTest {
     @Test
     void une_extraction_reussie_efface_le_motif_de_l_echec_precedent() {
         Document document = unDocumentDepose();
-        document.markExtractionFailed("Un premier échec.");
+        document.markProcessingFailed("Un premier échec.");
 
         document.markTextExtracted();
 
@@ -94,7 +94,7 @@ class DocumentTest {
     void refuse_un_echec_sans_motif() {
         Document document = unDocumentDepose();
 
-        assertThatThrownBy(() -> document.markExtractionFailed("   "))
+        assertThatThrownBy(() -> document.markProcessingFailed("   "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("motif");
     }
@@ -103,7 +103,7 @@ class DocumentTest {
     void tronque_un_motif_trop_long_pour_sa_colonne() {
         Document document = unDocumentDepose();
 
-        document.markExtractionFailed("M".repeat(Document.MAX_ERROR_MESSAGE_LENGTH + 42));
+        document.markProcessingFailed("M".repeat(Document.MAX_ERROR_MESSAGE_LENGTH + 42));
 
         assertThat(document.getErrorMessage()).hasSize(Document.MAX_ERROR_MESSAGE_LENGTH);
     }

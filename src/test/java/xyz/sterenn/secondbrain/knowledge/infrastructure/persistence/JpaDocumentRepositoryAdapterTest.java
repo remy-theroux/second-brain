@@ -170,7 +170,7 @@ class JpaDocumentRepositoryAdapterTest {
         UUID proprietaire = compteExistant("denis@exemple.fr");
         Document enregistre = documentRepository.save(document(proprietaire, "scan.pdf", "contenu"));
 
-        enregistre.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        enregistre.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(enregistre);
 
         assertThat(documentRepository.findByIdAndOwnerId(enregistre.getId(), proprietaire))

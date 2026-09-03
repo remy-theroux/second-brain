@@ -97,6 +97,10 @@ public final class RecursiveChunker {
             if (reprises.size() < phrases.size()) {
                 extraits.add(new Chunk(heading, courant));
             }
+            // join() recolle les phrases reprises par une simple espace : une frontière de
+            // paragraphe tombée dans les 90 tokens du recouvrement est donc aplatie dans ce
+            // préfixe repris. Le texte survit intact, sa forme non — la promesse de units() ne
+            // vaut que pour un extrait publié, pas pour ce qu'un recouvrement recolle.
             courant = reprises.isEmpty() ? unite.text() : join(reprises) + unite.separator() + unite.text();
         }
         if (!courant.isEmpty()) {

@@ -9,7 +9,7 @@ import xyz.sterenn.secondbrain.shared.bus.Command;
  *
  * <p>Une commande à part, et non un appel dans le handler d'extraction : elle est dispatchée
  * <strong>après</strong> que la transaction de l'extraction a été annulée, donc dans une
- * transaction à elle. Un {@code markExtractionFailed} écrit dans la transaction annulée
+ * transaction à elle. Un {@code markProcessingFailed} écrit dans la transaction annulée
  * disparaîtrait avec elle, et le document resterait éternellement en attente — voir
  * ADR-0028.
  *

@@ -45,6 +45,20 @@ class RecursiveChunkerTest {
     }
 
     @Test
+    void un_document_court_mais_titre_donne_un_extrait_par_section() {
+        // Le troisième scénario du ticket dit « un seul extrait » ; il vaut pour un document
+        // sans titre. Titré, le même texte en rend un par section : la décision 2 de la spec
+        // interdit d'accumuler par-dessus une frontière de section, parce que deux sections
+        // portent deux titres et qu'un extrait à cheval mentirait sur le sien.
+        ExtractedText texte = new ExtractedText(List.of(
+                TextBlock.of("Première section", 1, paragraphe(1, 4)),
+                TextBlock.of("Deuxième section", 1, paragraphe(5, 4)),
+                TextBlock.of("Troisième section", 1, paragraphe(9, 4))));
+
+        assertThat(chunker.chunk(texte)).hasSize(3);
+    }
+
+    @Test
     void une_section_sous_le_plafond_donne_un_extrait_meme_au_dessus_de_la_cible() {
         // 70 phrases : 700 tokens, au-dessus de la cible (600) mais sous le plafond (800).
         // On ne coupe pas un bloc déjà valide pour se rapprocher de la cible.

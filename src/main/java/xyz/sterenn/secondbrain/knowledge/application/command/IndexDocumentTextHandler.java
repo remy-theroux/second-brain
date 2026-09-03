@@ -31,13 +31,14 @@ import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
  * gratuit, c'est le rollback, il n'y a rien à construire. Un Ollama qui tombe au troisième lot
  * ne laisse aucun extrait derrière lui, et le document garde son texte extrait.
  *
- * <p><strong>Le prix est assumé : une connexion PostgreSQL tenue quelques dizaines de secondes
- * par document</strong> — un PDF de trente pages fait une centaine d'extraits, soit quatre
- * lots. Sur une application mono-utilisateur dont le worker consomme en séquence, c'est
- * tenable. C'est précisément le genre de chose qu'on « corrige » spontanément faute de savoir
- * qu'elle a été pesée : les deux découpes en commandes chaînées ou en écritures par lot ont
- * été écartées, la première parce qu'elle rendrait un document découpé mais non vectorisé
- * possible, la seconde parce que c'est l'état partiel que le ticket interdit.
+ * <p><strong>Le prix est assumé : une connexion PostgreSQL tenue plusieurs minutes par
+ * document</strong> — un PDF de trente pages fait une centaine d'extraits, soit quatre lots, et
+ * un lot de 32 auprès de {@code bge-m3} sur CPU prend près d'une minute. Sur une application
+ * mono-utilisateur dont le worker consomme en séquence, c'est tenable. C'est précisément le
+ * genre de chose qu'on « corrige » spontanément faute de savoir qu'elle a été pesée : les deux
+ * découpes en commandes chaînées ou en écritures par lot ont été écartées, la première parce
+ * qu'elle rendrait un document découpé mais non vectorisé possible, la seconde parce que c'est
+ * l'état partiel que le ticket interdit.
  *
  * <p><strong>Vectoriser avant de toucher à la base.</strong> Transactionnellement c'est
  * indifférent, mais ça se lit mieux, et c'est l'ordre du handler d'extraction : on obtient ce

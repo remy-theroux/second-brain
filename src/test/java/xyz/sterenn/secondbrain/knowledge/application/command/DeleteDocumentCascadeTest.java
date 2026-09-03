@@ -87,9 +87,8 @@ class DeleteDocumentCascadeTest {
 
     @Test
     void la_suppression_d_un_document_emporte_ses_extraits() {
-        // Les extraits sont écrits par le port et non par une commande : l'indexation n'existe
-        // pas encore, et ce qui est vérifié ici est la cascade de la migration V10, pas le
-        // chemin qui la remplit.
+        // Les extraits sont écrits par le port et non par la commande d'indexation : ce qui est
+        // vérifié ici est la cascade de la migration V10, pas le chemin qui remplit la table.
         Document document = unDocumentDepose();
         textChunkRepository.saveAll(List.of(TextChunk.of(
                 document.getId(),

@@ -96,6 +96,13 @@ spring:
         # dead-letter queue ni de retry (spec, décision 7) : un échec doit finir en FAILED
         # sur le document, pas être rejoué.
         default-requeue-rejected: false
+        # Explicite plutôt qu'implicite : l'idempotence de KnowledgeEventListener repose sur
+        # un seul consommateur à la fois. Ses handlers effacent puis réécrivent derrière des
+        # contraintes UNIQUE — correct pour une redélivrance séquentielle, mais deux
+        # livraisons simultanées du même événement effaceraient et écriraient toutes les
+        # deux, et se heurteraient l'une l'autre sur ces contraintes au lieu de se remplacer
+        # proprement.
+        concurrency: 1
 
 management:
   endpoints:

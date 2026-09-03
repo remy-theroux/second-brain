@@ -61,6 +61,14 @@ services:
       # les interfaces : c'est un secret de développement, du même rang que POSTGRES_PASSWORD.
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-second_brain}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-second_brain}
+      # Le worker tient une seule livraison AMQP pendant tout le temps que prend la
+      # vectorisation d'un document, potentiellement plusieurs minutes. Le défaut du
+      # broker (30 minutes) est atteignable sur un document volumineux, et un broker qui
+      # dépasse ce délai ferme le canal — ce qui remet le message en file quoi que dise
+      # `default-requeue-rejected`, réglage qui ne gouverne que `basicNack`, pas une
+      # fermeture de canal. Le document repartirait de zéro, indéfiniment, avec l'unique
+      # consommateur bloqué dessus. Deux heures couvrent large sans masquer un vrai blocage.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 7200000"
     ports:
       # AMQP pour l'application, console de gestion pour voir passer les messages. Même
       # statut que Mailpit : un outil de développement, pas routé par Traefik.

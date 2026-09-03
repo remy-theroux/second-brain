@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.knowledge.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -51,5 +52,23 @@ class RecursiveChunkerWithJtokkitTest {
         assertThat(extraits).hasSizeGreaterThan(1);
         assertThat(extraits).allSatisfy(extrait -> assertThat(tokenCounter.count(extrait.text()))
                 .isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS));
+    }
+
+    @Test
+    void la_coupe_au_caractere_ne_separe_jamais_une_paire_de_substituts() {
+        // Un emoji est une paire de substituts UTF-16 (U+1F600 en fait deux `char`). Une coupe
+        // malheureuse en plein milieu laisserait une moitié orpheline, qui n'est plus de
+        // l'UTF-8 valide — c'est le garde de splitOnCharacters. Le témoin est le round-trip
+        // UTF-8 : un substitut orphelin n'y survit pas, il devient U+FFFD.
+        String blob = "😀".repeat(2000);
+
+        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(blob));
+
+        assertThat(extraits).hasSizeGreaterThan(1);
+        assertThat(extraits).allSatisfy(extrait -> {
+            assertThat(tokenCounter.count(extrait.text())).isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS);
+            assertThat(new String(extrait.text().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8))
+                    .isEqualTo(extrait.text());
+        });
     }
 }

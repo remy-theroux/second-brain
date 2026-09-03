@@ -160,7 +160,7 @@ public class Document {
      * @throws IllegalArgumentException si le motif est absent ou vide — un échec sans motif
      *     n'apprend rien de plus qu'un document resté en attente
      */
-    public void markExtractionFailed(String reason) {
+    public void markProcessingFailed(String reason) {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("Un échec sans motif n'apprend rien : le motif est obligatoire");
         }

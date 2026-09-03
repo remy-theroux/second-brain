@@ -135,7 +135,7 @@ class ListDocumentsControllerTest {
     void expose_le_motif_d_un_document_en_echec() throws Exception {
         depose(jetonAlice, "scan.pdf", "un contenu quelconque");
         Document document = documentRepository.findAllByOwnerId(alice).getFirst();
-        document.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
 
         mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))

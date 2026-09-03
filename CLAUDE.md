@@ -520,8 +520,15 @@ gratuit : c'est le rollback. Un Ollama à terre ne laisse aucun extrait derrièr
 document passe `FAILED` en gardant son texte extrait, et le motif nomme la vectorisation —
 c'est à ça que sert `DocumentProcessingException`, mère commune des refus d'extraction et de
 vectorisation, seule famille dont le listener montre les messages. Le prix est une connexion
-PostgreSQL tenue quelques dizaines de secondes par document : pesé, et tenable pour une
+PostgreSQL tenue plusieurs minutes par document — une centaine d'extraits fait quatre lots, et
+un lot de 32 auprès de `bge-m3` sur CPU prend près d'une minute : pesé, et tenable pour une
 application mono-utilisateur dont le worker consomme en séquence.
+
+**Un document extrait avant l'arrivée de cette fonctionnalité reste `EXTRACTED`.** Rien ne
+réémet `DocumentTextExtracted` pour lui, et il n'existe aujourd'hui aucune route qui
+réindexe — ce sera RAG-7. La seule façon de le faire avancer est de le supprimer et de le
+redéposer, ou de republier à la main son événement `knowledge.document-text.extracted` sur le
+broker.
 
 ### Les deux bus (`shared/bus`)
 
@@ -583,6 +590,14 @@ pas rejoué. **Et il y finit depuis une seconde transaction** — `KnowledgeEven
 rattrape l'exception, dispatche `MarkDocumentProcessingFailed`, puis acquitte. Un statut
 d'erreur écrit dans la transaction que le bus vient d'annuler disparaîtrait avec elle, et le
 document resterait éternellement en attente (ADR-0028).
+
+**Le worker tient une livraison AMQP le temps de vectoriser tout un document**, ce qui peut
+se compter en minutes — voir plus haut. `compose.yaml` pose `consumer_timeout` à deux heures
+côté broker de développement pour cette raison : au-delà du défaut de 30 minutes, RabbitMQ
+ferme le canal et remet le message en file quoi que dise `default-requeue-rejected`, qui ne
+gouverne que `basicNack`. Un broker de production doit recevoir le même réglage — il vit dans
+Coolify, hors de ce dépôt (ADR-0013). Le symptôme sans lui : un document volumineux qui ne
+quitte jamais `EXTRACTED`, et le journal du worker qui rejoue la même indexation en boucle.
 
 Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
 en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
