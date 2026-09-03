@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,10 +15,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
-import xyz.sterenn.secondbrain.knowledge.ConstantEmbeddingPortConfiguration;
-import xyz.sterenn.secondbrain.knowledge.ConstantEmbeddingPortConfiguration.ConstantEmbeddingPort;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
+import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
+import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration.RecordingEmbeddingPort;
 import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.TextChunk;
@@ -25,8 +26,10 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundExcept
 import xyz.sterenn.secondbrain.knowledge.domain.exception.EmbeddingUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
@@ -42,7 +45,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * ne défait rien de visible. La preuve qu'un Ollama à terre ne laisse aucun extrait derrière
  * lui appartient au test du worker, qui observe de vrais commits.
  */
-@Import({TestcontainersConfiguration.class, ConstantEmbeddingPortConfiguration.class})
+@Import({TestcontainersConfiguration.class, RecordingEmbeddingPortConfiguration.class})
 @SpringBootTest
 @Transactional
 class IndexDocumentTextTest {
@@ -57,10 +60,13 @@ class IndexDocumentTextTest {
     private TextChunkRepository textChunkRepository;
 
     @Autowired
+    private TextExtractionRepository textExtractionRepository;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
-    private ConstantEmbeddingPort embeddingPort;
+    private RecordingEmbeddingPort embeddingPort;
 
     @Value("${secondbrain.storage.originals-path}")
     private String cheminDesOriginaux;
@@ -71,7 +77,11 @@ class IndexDocumentTextTest {
     }
 
     @AfterEach
-    void nettoieLesOriginaux() {
+    void videLaDoublureEtLesOriginaux() {
+        // La doublure est un singleton partagé par tout le contexte Spring : aucune
+        // transaction de test ne la vide, et le drapeau de panne survivrait sinon au test
+        // suivant, y compris dans un autre contexte qui importe cette même configuration.
+        embeddingPort.clear();
         KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
     }
 
@@ -95,10 +105,38 @@ class IndexDocumentTextTest {
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(textChunkRepository.findByDocumentId(document.getId()))
+        List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
+        // Positions contiguës à partir de zéro : `isSorted()` ne prouverait rien, la lecture
+        // étant déjà triée par la requête.
+        assertThat(extraits)
                 .extracting(TextChunk::getPosition)
-                .startsWith(0)
-                .isSorted();
+                .containsExactlyElementsOf(
+                        IntStream.range(0, extraits.size()).boxed().toList());
+        // Et l'ordre est celui du document : chaque section de structure.md tient sous le
+        // plafond, donc les extraits en suivent les blocs un pour un.
+        List<TextBlock> blocs = textExtractionRepository
+                .findByDocumentId(document.getId())
+                .orElseThrow()
+                .text()
+                .blocks();
+        assertThat(extraits)
+                .extracting(TextChunk::getHeading)
+                .containsExactlyElementsOf(
+                        blocs.stream().map(TextBlock::getHeading).toList());
+        assertThat(extraits.getFirst().getText()).isEqualTo(blocs.getFirst().getText());
+    }
+
+    @Test
+    void range_sous_chaque_extrait_le_vecteur_de_son_propre_texte() {
+        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+
+        commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
+
+        List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
+        assertThat(extraits).isNotEmpty();
+        for (int position = 0; position < extraits.size(); position++) {
+            assertThat(extraits.get(position).getEmbedding()).isEqualTo(RecordingEmbeddingPort.vecteurDuRang(position));
+        }
     }
 
     @Test
