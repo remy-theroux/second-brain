@@ -61,11 +61,12 @@ awssdk-s3 = { module = "software.amazon.awssdk:s3" }
 # le plugin io.spring.dependency-management rétrograde à 5.5.2 — un désaccord de version
 # actif, pas hypothétique, pour une bibliothèque qu'on n'appelle jamais.
 #
-# url-connection-client, lui, n'est déclaré nulle part en scope runtime : c'est le seul
-# artefact HTTP du classpath une fois les deux exclusions posées, et il est obligatoire,
-# pas une optimisation — sans lui, le premier appel échoue sur « Unable to load an HTTP
-# implementation from any provider in the chain », au premier dépôt de document et non au
-# démarrage. Préféré à apache5-client : il ne dépend que de utils, annotations et
+# url-connection-client, lui, n'est pas redéclaré par le pom parent services — contrairement
+# aux deux ci-dessus — donc rien à en exclure : c'est le seul artefact HTTP du classpath une
+# fois les deux exclusions posées, et il est obligatoire, pas une optimisation — sans lui,
+# le premier appel échoue sur « Unable to load an HTTP implementation from any provider in
+# the chain », au premier dépôt de document et non au démarrage. Préféré à apache5-client :
+# il ne dépend que de utils, annotations et
 # http-client-spi, donc de rien qui sorte du SDK. Il s'appuie sur HttpURLConnection : pas
 # d'HTTP/2, pas d'Expect: 100-continue, et le corps est tamponné en mémoire. Aucun des
 # trois ne nous concerne — un objet est un byte[] déjà en mémoire, plafonné à 20 Mo par

@@ -112,9 +112,11 @@ dependencies {
     // `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client`, qui
     // remonte la requête jusqu'à s3). On les exclut tous les deux : sans quoi le plugin
     // io.spring.dependency-management rétrograde httpclient5 de la version que réclame
-    // apache5-client (5.6.4) à celle qu'il gère lui-même (5.5.2, via
-    // spring-boot-starter-restclient) — une bibliothèque compilée contre une version et
-    // chargée contre une autre, pour un client qu'on n'appelle jamais. netty-nio-client,
+    // apache5-client (5.6.4) à 5.5.2 — une propriété que le BOM Spring Boot gère pour
+    // elle-même, indépendamment de tout starter présent ici (aucun n'en dépend sur cette
+    // branche), et que le plugin impose quand même à tout ce qui traverse le graphe, y
+    // compris une dépendance arrivée par AWS. Une bibliothèque compilée contre une version
+    // et chargée contre une autre, pour un client qu'on n'appelle jamais. netty-nio-client,
     // laissé tel quel, traînerait toute la pile Netty avec lui, tout aussi inutilisée.
     implementation(libs.awssdk.s3) {
         exclude(group = "software.amazon.awssdk", module = "apache5-client")
