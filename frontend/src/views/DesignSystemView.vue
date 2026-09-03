@@ -55,7 +55,7 @@ const menuItems = [
 // La deuxième ligne porte la classe du doublon désigné par le serveur.
 // Les statuts sont donnés en CODE, comme l'API les sérialise : c'est `DocumentStatusTag`
 // qui porte le libellé, et le catalogue doit montrer l'écran tel qu'il est.
-const DOCUMENT_STATUSES = ['PENDING', 'EXTRACTED', 'FAILED']
+const DOCUMENT_STATUSES = ['PENDING', 'EXTRACTED', 'READY', 'FAILED']
 
 const DOCUMENTS = [
   {
