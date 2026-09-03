@@ -25,6 +25,12 @@ public final class ChunkingPolicy {
     /**
      * Ce qu'aucun extrait ne dépasse — le premier scénario du ticket. Le recouvrement cède
      * devant lui, et une phrase qui le franchit à elle seule est coupée net.
+     *
+     * <p>Le plafond borne le <strong>corps</strong> de l'extrait, pas ce qui part réellement à
+     * la vectorisation : {@code Chunk.contextualised} y ajoute un préfixe (« Document: … —
+     * Section: … »), donc ce qui quitte le domaine pèse un peu plus. Sans danger — le plafond
+     * est déjà une marge conservatrice face aux 8192 tokens que {@code bge-m3} accepte — mais
+     * un lecteur pressé croirait autrement que le plafond borne ce que le modèle voit.
      */
     public static final int MAX_TOKENS = 800;
 

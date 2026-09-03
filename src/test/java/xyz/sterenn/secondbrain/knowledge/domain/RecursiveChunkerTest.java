@@ -149,6 +149,34 @@ class RecursiveChunkerTest {
         assertThat(extraits.get(1).text()).isEqualTo(phraseGeante.strip());
     }
 
+    @Test
+    void ne_publie_pas_un_extrait_que_le_suivant_reprend_en_entier() {
+        // Une courte accroche suivie de longs paragraphes : sans garde, l'accroche devient un
+        // extrait d'un token, repris mot pour mot en tête du suivant.
+        ExtractedText texte =
+                ExtractedText.untitled("Introduction." + "\n\n" + paragraphe(1, 70) + "\n\n" + paragraphe(71, 70));
+
+        List<Chunk> extraits = chunker.chunk(texte);
+
+        for (int index = 0; index < extraits.size() - 1; index++) {
+            assertThat(extraits.get(index + 1).text())
+                    .doesNotContain(extraits.get(index).text());
+        }
+    }
+
+    @Test
+    void ne_perd_aucune_phrase_du_document() {
+        // La propriété la plus facile à casser sans s'en apercevoir : découper, ce n'est pas
+        // jeter. Le recouvrement autorise les répétitions, jamais les absences.
+        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 200)));
+
+        for (int numero = 1; numero <= 200; numero++) {
+            String attendue = phrase(numero);
+            assertThat(extraits)
+                    .anySatisfy(extrait -> assertThat(extrait.text()).contains(attendue));
+        }
+    }
+
     /** Une phrase de dix mots, numérotée : dix tokens pour le compteur d'essai. */
     private static String phrase(int numero) {
         return "Phrase numero " + numero + " avec quelques mots pour occuper la place.";

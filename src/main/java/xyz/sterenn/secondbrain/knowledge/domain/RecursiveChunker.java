@@ -88,8 +88,16 @@ public final class RecursiveChunker {
                 courant = candidat;
                 continue;
             }
-            extraits.add(new Chunk(heading, courant));
-            courant = openWithOverlap(courant, unite);
+            List<String> phrases = sentences(courant);
+            List<String> reprises = keptOverlap(phrases, unite);
+            // Un extrait dont le recouvrement reprend TOUTES les phrases serait un doublon exact de
+            // son successeur : une ligne de vecteur pour rien, et une réponse de recherche qui ne
+            // montrerait rien de plus que l'extrait suivant. Il ne se publie pas — son texte n'est
+            // pas perdu pour autant, il ouvre le suivant.
+            if (reprises.size() < phrases.size()) {
+                extraits.add(new Chunk(heading, courant));
+            }
+            courant = reprises.isEmpty() ? unite.text() : join(reprises) + unite.separator() + unite.text();
         }
         if (!courant.isEmpty()) {
             extraits.add(new Chunk(heading, courant));
@@ -98,22 +106,26 @@ public final class RecursiveChunker {
     }
 
     /**
-     * Ouvre l'extrait suivant sur les dernières phrases du précédent — et en reprend moins,
-     * jusqu'à zéro s'il le faut, plutôt que de franchir le plafond.
+     * Les phrases de fin du précédent extrait à reprendre en tête du suivant — et moins
+     * encore, jusqu'à zéro s'il le faut, plutôt que de franchir le plafond une fois
+     * rattachées à {@code suivante}.
+     *
+     * <p>Prend {@code phrases} déjà découpées plutôt que le texte du précédent extrait : son
+     * appelant en a déjà besoin pour décider si ce précédent extrait mérite d'être publié, et
+     * les redécouper ici referait le même travail de {@link BreakIterator} pour rien.
      */
-    private String openWithOverlap(String precedent, Unit suivante) {
-        List<String> reprises = new ArrayList<>(trailingSentences(precedent));
+    private List<String> keptOverlap(List<String> phrases, Unit suivante) {
+        List<String> reprises = new ArrayList<>(trailingSentences(phrases));
         while (!reprises.isEmpty()
                 && tokenCounter.count(join(reprises) + suivante.separator() + suivante.text())
                         > ChunkingPolicy.MAX_TOKENS) {
             reprises.removeFirst();
         }
-        return reprises.isEmpty() ? suivante.text() : join(reprises) + suivante.separator() + suivante.text();
+        return reprises;
     }
 
     /** Les dernières phrases entières qui tiennent dans le recouvrement, dans l'ordre. */
-    private List<String> trailingSentences(String texte) {
-        List<String> phrases = sentences(texte);
+    private List<String> trailingSentences(List<String> phrases) {
         List<String> reprises = new ArrayList<>();
         int total = 0;
         for (int index = phrases.size() - 1; index >= 0; index--) {
@@ -188,23 +200,33 @@ public final class RecursiveChunker {
     /**
      * Un « mot » plus lourd que le plafond — une chaîne encodée, un fichier collé dans un
      * document. Il n'y a plus aucune frontière : on estime la longueur à couper par la
-     * densité de tokens du reste, puis on la resserre tant qu'elle dépasse. C'est le seul
+     * densité de tokens du mot, puis on la resserre tant qu'elle dépasse. C'est le seul
      * chemin qui ne préserve rien du tout, et c'est ce qui garantit qu'<em>aucun</em> extrait
      * ne franchit le plafond.
      */
     private List<String> splitOnCharacters(String mot) {
         List<String> morceaux = new ArrayList<>();
+        // La densité de tokens est mesurée UNE fois, et la coupe ne vérifie ensuite que le
+        // préfixe qu'elle publie : recompter le reste à chaque tour rendrait le découpage
+        // quadratique, et un blob de deux mégaoctets ferait passer des centaines de
+        // mégaoctets dans le tokenizer pour un seul document.
+        long tokens = Math.max(1, tokenCounter.count(mot));
+        // (long) : le produit dépasse int dès 2,7 millions de caractères. L'entier négatif
+        // qui en sortait ramenait la coupe à un caractère par tour.
+        int estimation = (int) Math.max(1L, (long) mot.length() * ChunkingPolicy.MAX_TOKENS / tokens);
         String reste = mot;
-        while (tokenCounter.count(reste) > ChunkingPolicy.MAX_TOKENS) {
-            int taille = Math.max(1, reste.length() * ChunkingPolicy.MAX_TOKENS / tokenCounter.count(reste));
+        while (!reste.isEmpty()) {
+            int taille = Math.min(estimation, reste.length());
             while (taille > 1 && tokenCounter.count(reste.substring(0, taille)) > ChunkingPolicy.MAX_TOKENS) {
                 taille = taille * 3 / 4;
             }
+            // Ne pas couper une paire de substituts en deux : la moitié orpheline n'est plus
+            // de l'UTF-8 valide, et PostgreSQL refuse de l'écrire.
+            if (taille > 1 && taille < reste.length() && Character.isHighSurrogate(reste.charAt(taille - 1))) {
+                taille--;
+            }
             morceaux.add(reste.substring(0, taille));
             reste = reste.substring(taille);
-        }
-        if (!reste.isEmpty()) {
-            morceaux.add(reste);
         }
         return morceaux;
     }
