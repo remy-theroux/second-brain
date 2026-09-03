@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
@@ -84,6 +85,21 @@ public class KnowledgeEventListener {
                 "Événement knowledge.document-text.extracted reçu pour le document {} : {} blocs",
                 event.documentId(),
                 event.blockCount());
+    }
+
+    /**
+     * Les extraits d'un document viennent d'être rangés — la fin de la chaîne, pour l'instant.
+     *
+     * <p>Ce handler ne fait que journaliser, et il doit pourtant exister : un type déclaré dans
+     * {@code DomainEventRegistration} mais sans {@code @RabbitHandler} est refusé par Spring
+     * AMQP et rejeté comme un type inconnu.
+     */
+    @RabbitHandler
+    public void on(DocumentTextIndexed event) {
+        log.info(
+                "Événement knowledge.document-text.indexed reçu pour le document {} : {} extraits",
+                event.documentId(),
+                event.chunkCount());
     }
 
     /**

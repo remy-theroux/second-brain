@@ -137,6 +137,20 @@ public class Document {
     }
 
     /**
+     * Les extraits de ce document sont découpés, vectorisés et rangés : il est interrogeable.
+     *
+     * <p>Efface le motif d'un échec précédent, pour la même raison que
+     * {@link #markTextExtracted()} : un document réindexé avec succès ne garde pas
+     * l'explication de ce qui a raté la fois d'avant.
+     *
+     * <p>Aucun garde sur l'état de départ, volontairement — même arbitrage qu'à l'extraction.
+     */
+    public void markIndexed() {
+        this.status = DocumentStatus.READY;
+        this.errorMessage = null;
+    }
+
+    /**
      * Le traitement de ce document a échoué, pour la raison donnée.
      *
      * <p>Le motif est <strong>affichable tel quel</strong> : c'est l'appelant qui garantit

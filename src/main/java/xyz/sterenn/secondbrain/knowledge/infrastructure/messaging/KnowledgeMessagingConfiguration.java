@@ -8,6 +8,7 @@ import org.springframework.amqp.core.TopicExchange;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.shared.event.amqp.DomainEventRegistration;
 
@@ -36,7 +37,8 @@ public class KnowledgeMessagingConfiguration {
 
     @Bean
     public DomainEventRegistration knowledgeDomainEvents() {
-        return new DomainEventRegistration(List.of(DocumentUploaded.class, DocumentTextExtracted.class));
+        return new DomainEventRegistration(
+                List.of(DocumentUploaded.class, DocumentTextExtracted.class, DocumentTextIndexed.class));
     }
 
     @Bean
