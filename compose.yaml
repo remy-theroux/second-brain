@@ -148,10 +148,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-    # Aucun port publié, pour la même raison qu'au-dessus du service `rabbitmq` : seuls
-    # `app` et `worker` lui parlent, depuis le réseau de la pile. Un port de plus entrerait
-    # dans le décalage d'indices du skill `worktree`, et deux features se le disputeraient.
-    # Pour regarder dedans à la main :
+    # Aucun port publié : seuls `app` et `worker` lui parlent, depuis le réseau de la
+    # pile. Un port de plus entrerait dans le décalage d'indices du skill `worktree`
+    # (voir CLAUDE.md, section « Plusieurs features en parallèle »), sans quoi deux
+    # features se le disputeraient. Pour regarder dedans à la main :
     # docker compose exec garage /garage bucket info second-brain-originals
 
   app:
