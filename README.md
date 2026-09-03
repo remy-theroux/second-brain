@@ -144,6 +144,8 @@ développement, voir `compose.yaml`) :
 | `SECONDBRAIN_S3_ENDPOINT` | Point d'entrée du stockage objet des fichiers d'origine (Garage en développement) | **aucun** — l'application refuse de démarrer sans lui |
 | `SECONDBRAIN_S3_BUCKET` | Bucket où sont conservés les fichiers d'origine | **aucun** — l'application refuse de démarrer sans lui |
 | `SECONDBRAIN_S3_ACCESS_KEY` / `SECONDBRAIN_S3_SECRET_KEY` | Identifiants du stockage objet | **aucun** — l'application refuse de démarrer sans eux |
+| `SECONDBRAIN_S3_REGION` | Région signée dans les requêtes SigV4. Elle ne désigne aucun emplacement : le protocole l'exige dans la signature, et le serveur rejette une signature calculée pour une autre région que la sienne | `garage` — la valeur du `s3_region` de `docker/garage.toml`, donc **fausse pour tout stockage qui n'est pas ce Garage-là** : viser AWS S3 ou un autre fournisseur impose de poser sa région (`eu-west-3`, …) |
+| `SECONDBRAIN_S3_PATH_STYLE` | Adressage `hôte/bucket/clé` plutôt que `bucket.hôte/clé` | `true` — ce qu'exige Garage, qui n'a pas de DNS générique `*.bucket.hôte`. AWS S3 accepte encore les deux, mais un fournisseur qui n'accepte que l'adressage par sous-domaine demande `false` |
 | `SPRING_RABBITMQ_HOST` | Broker des événements métier | `localhost` |
 | `SPRING_RABBITMQ_PORT` | Broker des événements métier | `5672` |
 | `SPRING_RABBITMQ_USERNAME` | Broker des événements métier — un utilisateur **dédié**, pas l'administrateur : l'application déclare son exchange, sa queue et son binding, puis publie et consomme, donc les permissions `configure` / `write` / `read` sur le vhost suffisent | `guest` — le compte par défaut de l'image, qui n'existe plus dès que le broker est créé avec ses propres identifiants |

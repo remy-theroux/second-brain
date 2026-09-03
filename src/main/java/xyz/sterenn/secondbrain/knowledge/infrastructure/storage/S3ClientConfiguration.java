@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.storage;
 
 import java.net.URI;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,9 +37,14 @@ class S3ClientConfiguration {
      * décisif est ailleurs : un placeholder <strong>sans défaut</strong> fait échouer le
      * démarrage, exactement comme {@code secondbrain.jwt.secret}.
      *
-     * <p>C'est le cas des quatre premières propriétés. Un défaut y viserait silencieusement
-     * un bucket qui n'est pas le bon, et le premier dépôt écrirait ailleurs qu'où on croit :
-     * une panne muette, découverte à la première relecture d'un original.
+     * <p>C'est le cas de trois des cinq propriétés lues ici : {@code endpoint},
+     * {@code access-key} et {@code secret-key}. Un défaut y viserait silencieusement un autre
+     * serveur, ou s'y présenterait sous d'autres identifiants, et le premier dépôt écrirait
+     * ailleurs qu'où on croit : une panne muette, découverte à la première relecture d'un
+     * original. {@code region} et {@code path-style}, elles, <em>ont</em> un défaut, et
+     * application.yml dit pourquoi chacune peut se le permettre. Quant au bucket — le
+     * quatrième placeholder sans défaut — il ne se lit pas ici : c'est {@link
+     * S3DocumentStorage} qui le lit, parce que c'est lui qui le nomme dans chaque requête.
      *
      * <p>{@link StaticCredentialsProvider} et non la chaîne par défaut du SDK : celle-ci
      * interrogerait les variables {@code AWS_*}, puis {@code ~/.aws/credentials}, puis le
@@ -47,11 +53,38 @@ class S3ClientConfiguration {
      * démarre pas.
      *
      * <p>{@link UrlConnectionHttpClient} nommé explicitement plutôt que découvert par
-     * {@code ServiceLoader} : c'est le seul client HTTP qui atteint le classpath — le SDK en
-     * propose quatre, {@code apache-client} reste en scope {@code test} dans le pom de
-     * {@code s3}, et build.gradle.kts exclut {@code apache5-client} et
-     * {@code netty-nio-client}. L'écrire ici fait échouer la <em>compilation</em> le jour où
-     * on le retirerait, au lieu de faire échouer le premier dépôt de document.
+     * {@code ServiceLoader} : c'est le seul client HTTP qui atteint le classpath. Cinq se
+     * présentent, et aucun ne passe tout seul — {@code url-connection-client},
+     * {@code aws-crt-client} et {@code apache-client} sont déclarés en scope {@code test} par
+     * le pom de {@code s3}, donc sans effet ici ; {@code apache5-client} et
+     * {@code netty-nio-client} arrivent en scope {@code runtime} par le pom parent
+     * {@code services} et sont exclus dans build.gradle.kts. Celui-ci n'atteint donc le
+     * classpath que parce que build.gradle.kts le déclare à part — l'écrire ici fait échouer
+     * la <em>compilation</em> le jour où on retirerait cette déclaration, au lieu de faire
+     * échouer le premier dépôt de document.
+     *
+     * <p><strong>Les deux timeouts bornent un service figé, pas un transfert normal.</strong>
+     * Un objet pèse au plus 20 Mo ({@code spring.servlet.multipart.max-file-size}) et part
+     * vers un Garage du même réseau : il passe en une fraction de seconde, et aucune de ces
+     * deux valeurs ne le concerne. Elles ne mordent que sur un stockage qui accepte le TCP
+     * puis ne répond plus. Sans elles, ce cas-là dure : le client HTTP n'oppose que ses
+     * timeouts de socket, 30 s en lecture comme en écriture
+     * ({@code SdkHttpConfigurationOption}), et le mode de reprise par défaut —
+     * {@code LEGACY}, dont le maximum est de quatre tentatives — les remet en jeu à chaque
+     * fois, soit près de deux minutes, pauses de backoff en plus. Or {@code UploadDocumentHandler} appelle {@code store}
+     * <em>après</em> le {@code saveAndFlush} : ces deux minutes sont deux minutes de connexion
+     * PostgreSQL tenue par la transaction du bus. <strong>C'est exactement le calcul écrit
+     * dans application.yml</strong> pour les timeouts de Jakarta Mail — dix inscriptions
+     * bloquées figent un pool Hikari de dix connexions — puis repris pour
+     * {@code spring.rabbitmq.connection-timeout}. Même panne, troisième parade.
+     *
+     * <p>{@code apiCallAttemptTimeout} à 30 s aligne la tentative sur le timeout de lecture du
+     * client HTTP : il ne raccourcit rien de ce qui aboutissait, il rend la borne explicite.
+     * {@code apiCallTimeout} à 90 s est celui qui compte, parce qu'il borne l'appel
+     * <em>entier</em>, reprises et pauses comprises. Sans lui la durée maximale n'est pas
+     * choisie, elle se déduit — du nombre de tentatives du mode de reprise, que
+     * {@code RetryMode.Resolver} lit dans {@code AWS_RETRY_MODE} et dans le profil AWS, donc
+     * hors de cette configuration. Avec lui, elle est à nous.
      *
      * <p><strong>{@code chunkedEncodingEnabled(false)} est obligatoire face à Garage</strong>,
      * et le raisonnement mérite d'être gardé parce que le symptôme n'y renvoie pas. Depuis
@@ -86,6 +119,9 @@ class S3ClientConfiguration {
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .forcePathStyle(pathStyle)
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
+                .overrideConfiguration(configuration -> configuration
+                        .apiCallAttemptTimeout(Duration.ofSeconds(30))
+                        .apiCallTimeout(Duration.ofSeconds(90)))
                 .serviceConfiguration(configuration -> configuration.chunkedEncodingEnabled(false))
                 .build();
     }

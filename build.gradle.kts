@@ -103,32 +103,16 @@ dependencies {
     // posées, d'Apache HttpClient. Une contrainte Gradle suffit ici, et elle ne porte que
     // sur les modules software.amazon.awssdk:*.
     implementation(platform(libs.awssdk.bom))
-    // Le pom.xml de software.amazon.awssdk:s3 déclare bien ses trois clients HTTP
-    // (apache-client, apache5-client, netty-nio-client) en scope test — vérifié en lisant
-    // le pom résolu. Mais son pom.xml PARENT, software.amazon.awssdk:services, redéclare
-    // apache5-client et netty-nio-client dans sa propre section <dependencies> (et non
-    // <dependencyManagement>) avec scope runtime : un héritage Maven invisible depuis le
-    // pom de s3 seul, qui les fait quand même atterrir sur runtimeClasspath (confirmé par
-    // `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client`, qui
-    // remonte la requête jusqu'à s3). On les exclut tous les deux : sans quoi le plugin
-    // io.spring.dependency-management rétrograde httpclient5 de la version que réclame
-    // apache5-client (5.6.4) à 5.5.2 — une propriété que le BOM Spring Boot gère pour
-    // elle-même, indépendamment de tout starter présent ici (aucun n'en dépend sur cette
-    // branche), et que le plugin impose quand même à tout ce qui traverse le graphe, y
-    // compris une dépendance arrivée par AWS. Une bibliothèque compilée contre une version
-    // et chargée contre une autre, pour un client qu'on n'appelle jamais. netty-nio-client,
-    // laissé tel quel, traînerait toute la pile Netty avec lui, tout aussi inutilisée.
+    // Deux clients HTTP du SDK arrivent ici sans qu'on les demande, hérités du pom parent
+    // software.amazon.awssdk:services. Pourquoi on les exclut — et pourquoi les deux raisons
+    // ne se valent pas — est écrit une seule fois, sur awssdk-s3 dans
+    // gradle/libs.versions.toml.
     implementation(libs.awssdk.s3) {
         exclude(group = "software.amazon.awssdk", module = "apache5-client")
         exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
     }
-    // Le seul client HTTP qu'on veut voir sur le classpath, et il reste explicite :
-    // l'adapter le nommera dans son builder (UrlConnectionHttpClient), plutôt que de
-    // laisser le SDK arbitrer entre plusieurs implémentations trouvées par
-    // ServiceLoader. Obligatoire, pas une optimisation : sans lui, le premier dépôt de
-    // document échoue sur « Unable to load an HTTP implementation from any provider in
-    // the chain » — pas le démarrage de l'application. Il ne dépend que de utils,
-    // annotations et http-client-spi, donc de rien qui sorte du SDK.
+    // Le seul client HTTP qu'on veut voir sur le classpath, et le seul qu'il faille déclarer :
+    // même bloc du version catalog pour le détail.
     implementation(libs.awssdk.url.connection.client)
 
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de

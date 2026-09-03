@@ -1,6 +1,6 @@
 # Configuration Garage partagée par deux usages : le service `garage` de compose.yaml
-# la monte sur /etc/garage.toml, et une tâche ultérieure la fait copier dans un conteneur
-# Testcontainers pour les tests d'intégration de l'adapter S3. Une seule source, donc la
+# la monte sur /etc/garage.toml, et TestcontainersConfiguration la copie sur ce même chemin
+# dans le conteneur Garage des tests. Une seule source, donc la
 # pile de développement et celle des tests ne peuvent pas diverger — possible seulement
 # parce que rien ici ne dépend de l'environnement qui l'exécute (voir rpc_public_addr).
 

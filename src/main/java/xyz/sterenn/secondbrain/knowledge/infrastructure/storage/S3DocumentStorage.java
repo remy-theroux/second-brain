@@ -35,10 +35,15 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
  *
  * <p><strong>Un stockage objet ne participe à aucune transaction</strong> — exactement comme
  * le système de fichiers qu'il remplace. Ce que cette classe écrit survit à un rollback
- * survenu après elle, et ADR-0020 reste vraie mot pour mot : seul le support a changé.
- * L'aléa, lui, s'est déplacé — ce n'est plus une {@code IOException} sur un disque local
- * mais un aller-retour réseau, donc la fuite qu'ADR-0020 assume entre l'effacement de la
- * ligne et celui de l'original devient plus probable.
+ * survenu après elle. <strong>C'est l'invariant d'ADR-0020 qui tient ici, pas son
+ * énoncé</strong> : cet ADR s'intitule « Le système de fichiers ne participe à aucune
+ * transaction » et son corps parle de disque, de fichier et de répertoire des originaux —
+ * tout cela a changé de support. Ce qu'il décide, en revanche, vaut à l'identique : la ligne
+ * d'abord, l'original ensuite, et les deux fuites assumées dans les deux sens. C'est à ce
+ * titre qu'il fait toujours autorité sur cette classe. L'aléa, lui, s'est déplacé — ce n'est
+ * plus une {@code IOException} sur un disque local mais un aller-retour réseau, donc la fuite
+ * qu'ADR-0020 assume entre l'effacement de la ligne et celui de l'original devient plus
+ * probable.
  */
 @Component
 class S3DocumentStorage implements DocumentStorage {

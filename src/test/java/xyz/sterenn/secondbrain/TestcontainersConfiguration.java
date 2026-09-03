@@ -31,10 +31,12 @@ import org.testcontainers.utility.MountableFile;
  * alimente (`secondbrain.storage.s3.*`) sont les nôtres, pas celles d'un starter connu. C'est
  * le registrar ci-dessous qui fait le raccordement, à la main.
  *
- * <p>Il n'est donc pas optionnel : {@code S3ClientConfiguration} lit ces quatre propriétés au
- * démarrage et aucune n'a de valeur par défaut. Un Garage qui ne démarre pas, c'est un
- * contexte Spring qui ne démarre pas — pour toute la suite, pas seulement pour les tests du
- * stockage.
+ * <p>Il n'est donc pas optionnel : aucune des quatre propriétés que pose le registrar n'a de
+ * valeur par défaut, et deux beans se les partagent au démarrage —
+ * {@code S3ClientConfiguration} lit {@code endpoint}, {@code access-key} et
+ * {@code secret-key}, {@code S3DocumentStorage} lit {@code bucket}. Un Garage qui ne démarre
+ * pas, c'est un contexte Spring qui ne démarre pas — pour toute la suite, pas seulement pour
+ * les tests du stockage.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
