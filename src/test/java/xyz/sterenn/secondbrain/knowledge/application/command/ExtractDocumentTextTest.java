@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
@@ -27,6 +28,14 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
+/**
+ * {@code @Transactional} : la base est annulée après chaque test. Le stockage objet, lui, ne
+ * l'est pas — d'où le nettoyage explicite en {@code @AfterEach}.
+ *
+ * <p>Le dépôt passe par le bus, comme en production : c'est lui qui écrit l'original, sans
+ * quoi l'extraction n'aurait rien à lire. Le compte est créé par le port plutôt que par
+ * l'inscription complète : ni le dépôt ni l'extraction ne regardent s'il est vérifié.
+ */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -44,12 +53,15 @@ class ExtractDocumentTextTest {
     @Autowired
     private UserRepository userRepository;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     @AfterEach
     void nettoieLesOriginaux() {
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     @Test

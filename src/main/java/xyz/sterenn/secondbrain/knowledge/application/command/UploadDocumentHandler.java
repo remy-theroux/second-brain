@@ -13,6 +13,27 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
+/**
+ * Orchestre le dépôt : reconnaissance du format, calcul de l'empreinte, refus du doublon,
+ * écriture, conservation du fichier d'origine, puis annonce.
+ *
+ * <p>Aucun {@code @Transactional} ici — la transaction est ouverte par
+ * {@code SpringCommandBus.dispatch} et couvre tout ce qui suit.
+ *
+ * <p><strong>L'ordre des étapes est un choix.</strong> Le contrôle du doublon en mémoire
+ * d'abord, parce qu'il rend un refus <em>désignant</em> le document existant, ce que la
+ * violation de contrainte ne saurait pas faire. L'écriture en base ensuite, avec son flush,
+ * parce que c'est elle qui tranche en cas de dépôts simultanés. L'original après, parce que
+ * sa conservation ne participe à aucune transaction — c'était vrai du système de fichiers,
+ * ça l'est du stockage objet qui l'a remplacé, et le handler n'a pas à savoir lequel des
+ * deux est derrière le port : écrit avant, l'original survivrait à un rollback en désignant
+ * une ligne qui n'existe pas.
+ *
+ * <p>L'annonce en tout dernier. Elle ne prend effet qu'au commit — le port la diffère —,
+ * donc sa place dans la séquence n'a aucune importance transactionnelle : elle est dernière
+ * pour se lire comme ce qu'elle est, une annonce de ce qui vient d'être fait. Un dépôt
+ * refusé ou annulé n'annonce rien.
+ */
 @Component
 public class UploadDocumentHandler implements CommandHandler<UploadDocument> {
 

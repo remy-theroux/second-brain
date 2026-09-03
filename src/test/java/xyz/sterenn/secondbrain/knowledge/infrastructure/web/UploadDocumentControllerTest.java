@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
@@ -63,8 +64,11 @@ class UploadDocumentControllerTest {
     @Autowired
     private DocumentStorage documentStorage;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     private UUID compte;
     private String jeton;
@@ -79,7 +83,7 @@ class UploadDocumentControllerTest {
 
     @AfterEach
     void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     private static MockMultipartFile fichier(String nom, byte[] contenu) {

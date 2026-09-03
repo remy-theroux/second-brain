@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
@@ -29,6 +30,11 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
+/**
+ * Supprimer, c'est faire disparaître les deux : la ligne et son original. Un test qui ne
+ * regarderait que la liste laisserait passer un stockage objet qui se remplit indéfiniment,
+ * et que plus aucune ligne ne permettrait de nettoyer.
+ */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -55,8 +61,11 @@ class DeleteDocumentControllerTest {
     @Autowired
     private DocumentStorage documentStorage;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     private UUID alice;
     private String jetonAlice;
@@ -71,7 +80,7 @@ class DeleteDocumentControllerTest {
 
     @AfterEach
     void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     private UUID depose(String jeton, UUID proprietaire, String nom) throws Exception {

@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
@@ -30,9 +31,13 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 
 /**
- * Pas de {@code @Transactional} : l'annonce ne part qu'au commit, une transaction de test
- * l'empêcherait de partir. Le compte et le document sont donc réellement écrits, et effacés en
- * {@code @AfterEach} — la cascade emporte le document avec le compte, le disque se vide à part.
+ * Le premier scénario du socle : un dépôt réussi est annoncé, par le chemin réel — le bus,
+ * sa transaction, son commit.
+ *
+ * <p>Pas de {@code @Transactional} : l'annonce ne part qu'au commit, une transaction de test
+ * l'empêcherait de partir. Le compte et le document sont donc réellement écrits, et effacés
+ * en {@code @AfterEach} — la clé étrangère en cascade emporte le document avec le compte,
+ * le bucket se vide à part.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
@@ -60,8 +65,11 @@ class UploadDocumentAnnouncementTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     private UUID compte;
 
@@ -82,7 +90,7 @@ class UploadDocumentAnnouncementTest {
     void efface_ce_qui_a_ete_commite() {
         amqpAdmin.deleteQueue(OBSERVATION);
         jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", EMAIL);
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     @Test
