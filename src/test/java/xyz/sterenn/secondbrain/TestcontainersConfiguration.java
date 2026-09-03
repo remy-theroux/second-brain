@@ -28,10 +28,13 @@ import org.testcontainers.utility.MountableFile;
  *
  * <p>Garage, lui, n'a **pas** de {@code @ServiceConnection} : Spring Boot n'en fournit aucun
  * pour S3, et il n'y aurait de toute façon rien à auto-configurer — les propriétés qu'il
- * alimente (`secondbrain.storage.s3.*`) sont les nôtres, pas celles d'un starter connu. Tant
- * que l'adapter S3 n'existe pas, aucun bean ne les lit : ce conteneur démarre à vide, et c'est
- * volontaire — il isole les problèmes de Testcontainers (image, amorçage, attente) de ceux de
- * l'adapter, qui viendra ensuite.
+ * alimente (`secondbrain.storage.s3.*`) sont les nôtres, pas celles d'un starter connu. C'est
+ * le registrar ci-dessous qui fait le raccordement, à la main.
+ *
+ * <p>Il n'est donc pas optionnel : {@code S3ClientConfiguration} lit ces quatre propriétés au
+ * démarrage et aucune n'a de valeur par défaut. Un Garage qui ne démarre pas, c'est un
+ * contexte Spring qui ne démarre pas — pour toute la suite, pas seulement pour les tests du
+ * stockage.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -109,8 +112,12 @@ public class TestcontainersConfiguration {
         // n'est pas un test. Le registrar, lui, est traité par une auto-configuration
         // (TestcontainersPropertySourceAutoConfiguration), donc des deux côtés.
         //
-        // region et path-style ne sont pas posées ici : leurs valeurs par défaut vivront dans
-        // application.yml à la tâche suivante, qui écrit l'adapter.
+        // Quatre propriétés seulement : region et path-style ne sont PAS posées ici, et c'est
+        // délibéré. Elles ne dépendent pas du conteneur — la région doit valoir le s3_region
+        // de docker/garage.toml, que Testcontainers et Compose montent tous les deux, et
+        // l'adressage par chemin vaut partout. Les reposer ici en ferait une seconde source
+        // qui pourrait dériver de ce fichier-là ; leurs défauts d'application.yml suffisent,
+        // et c'est le démarrage du contexte qui vérifie qu'ils suffisent.
         //
         // Les trois constantes (bucket, clé, secret) sont partagées entre ce registrar et
         // garageContainer() ci-dessus, pour qu'ils ne puissent pas diverger.

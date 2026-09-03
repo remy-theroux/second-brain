@@ -17,6 +17,9 @@ package xyz.sterenn.secondbrain.knowledge.domain.exception;
  * Le SDK dit « The specified bucket does not exist » et un identifiant de requête : c'est du
  * jargon, en anglais, et les messages d'exception de ce projet sont affichables tels quels à
  * l'utilisateur. La cause porte tout cela et part au journal, où elle sert celui qui répare.
+ * <strong>L'identifiant du document n'y entre pas non plus</strong>, pour la même raison :
+ * aucune autre exception de ce package n'en met dans sa phrase, et celui qui répare le
+ * retrouve dans le journal du consommateur d'événements.
  *
  * <p><strong>Elle n'hérite pas de {@link DocumentExtractionException}, et ce n'est pas un
  * oubli.</strong> Conséquence directe : quand le stockage tombe pendant une extraction,

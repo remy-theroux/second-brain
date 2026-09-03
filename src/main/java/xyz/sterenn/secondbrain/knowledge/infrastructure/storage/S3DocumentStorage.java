@@ -78,7 +78,7 @@ class S3DocumentStorage implements DocumentStorage {
             s3Client.putObject(
                     PutObjectRequest.builder().bucket(bucket).key(cle).build(), RequestBody.fromBytes(content));
         } catch (SdkException e) {
-            throw indisponible("conserver", documentId, e);
+            throw indisponible("conservé", e);
         }
     }
 
@@ -98,7 +98,7 @@ class S3DocumentStorage implements DocumentStorage {
                     .key(cle(documentId))
                     .build());
         } catch (SdkException e) {
-            throw indisponible("effacer", documentId, e);
+            throw indisponible("effacé", e);
         }
     }
 
@@ -126,7 +126,7 @@ class S3DocumentStorage implements DocumentStorage {
         } catch (NoSuchKeyException e) {
             return Optional.empty();
         } catch (SdkException e) {
-            throw indisponible("relire", documentId, e);
+            throw indisponible("relu", e);
         }
     }
 
@@ -166,10 +166,17 @@ class S3DocumentStorage implements DocumentStorage {
         return documentId.toString();
     }
 
-    private DocumentStorageUnavailableException indisponible(String verbe, UUID documentId, SdkException cause) {
+    /**
+     * Le message dit ce qui a échoué, <strong>pas sur quel identifiant</strong> : c'est une
+     * phrase affichable telle quelle, comme toutes celles du package d'exceptions, et un UUID
+     * au milieu la ferait lire comme une ligne de journal. L'identifiant n'est pas perdu pour
+     * autant — la cause le porte, et le consommateur d'événements le journalise avec le
+     * document qu'il traitait.
+     */
+    private DocumentStorageUnavailableException indisponible(String participe, SdkException cause) {
         return new DocumentStorageUnavailableException(
-                "Le stockage des originaux n'a pas répondu : impossible de " + verbe + " l'original du document "
-                        + documentId + ".",
+                "Le stockage des originaux n'a pas répondu : l'original de ce document n'a pas pu être " + participe
+                        + ".",
                 cause);
     }
 }

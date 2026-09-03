@@ -47,9 +47,11 @@ class S3ClientConfiguration {
      * démarre pas.
      *
      * <p>{@link UrlConnectionHttpClient} nommé explicitement plutôt que découvert par
-     * {@code ServiceLoader} : c'est le seul client HTTP du classpath (build.gradle.kts
-     * exclut les deux autres), et l'écrire ici fait échouer la <em>compilation</em> le jour
-     * où on le retirerait, au lieu de faire échouer le premier dépôt de document.
+     * {@code ServiceLoader} : c'est le seul client HTTP qui atteint le classpath — le SDK en
+     * propose quatre, {@code apache-client} reste en scope {@code test} dans le pom de
+     * {@code s3}, et build.gradle.kts exclut {@code apache5-client} et
+     * {@code netty-nio-client}. L'écrire ici fait échouer la <em>compilation</em> le jour où
+     * on le retirerait, au lieu de faire échouer le premier dépôt de document.
      *
      * <p><strong>{@code chunkedEncodingEnabled(false)} est obligatoire face à Garage</strong>,
      * et le raisonnement mérite d'être gardé parce que le symptôme n'y renvoie pas. Depuis

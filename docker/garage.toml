@@ -27,7 +27,7 @@ rpc_public_addr = "127.0.0.1:3901"
 rpc_secret = "55e93261d70590473b8ec6a6bea5b3125c2950c321270acb31b9802ce4339533"
 
 [s3_api]
-# Doit rester égal à secondbrain.storage.s3.region, posée par une tâche ultérieure :
+# Doit rester égal au défaut de secondbrain.storage.s3.region, dans application.yml :
 # SigV4 signe la région dans la requête, et Garage rejette une signature calculée pour
 # une autre région que la sienne.
 s3_region = "garage"

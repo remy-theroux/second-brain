@@ -6,9 +6,11 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
@@ -61,10 +63,24 @@ public final class KnowledgeFixture {
 
         for (int debut = 0; debut < cles.size(); debut += LOT_DE_SUPPRESSION) {
             List<ObjectIdentifier> lot = cles.subList(debut, Math.min(debut + LOT_DE_SUPPRESSION, cles.size()));
-            s3Client.deleteObjects(DeleteObjectsRequest.builder()
+            DeleteObjectsResponse reponse = s3Client.deleteObjects(DeleteObjectsRequest.builder()
                     .bucket(bucket)
                     .delete(Delete.builder().objects(lot).build())
                     .build());
+            // Sur CETTE opération, un 200 ne vaut pas succès : DeleteObjects rend un statut
+            // favorable et range les échecs clé par clé dans le corps de la réponse. Le SDK ne
+            // lève donc rien, et sans cette lecture le nettoyage avalerait ses propres pannes —
+            // là où la version disque relançait sur la moindre IOException. Une fuite passée
+            // sous silence ne se manifesterait qu'en faisant échouer un
+            // `refuse_d_ecraser_un_original_deja_conserve` par intermittence, plusieurs classes
+            // plus loin : le pire symptôme possible, parce qu'il n'accuse pas l'endroit fautif.
+            if (!reponse.errors().isEmpty()) {
+                String echecs = reponse.errors().stream()
+                        .map(erreur -> erreur.key() + " (" + erreur.code() + " : " + erreur.message() + ")")
+                        .collect(Collectors.joining(", "));
+                throw new IllegalStateException(
+                        "Le nettoyage du bucket " + bucket + " a laissé des originaux derrière lui : " + echecs);
+            }
         }
     }
 
