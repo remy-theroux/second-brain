@@ -99,14 +99,34 @@ dependencies {
     // platform(...) Gradle et non le plugin io.spring.dependency-management : ce dernier
     // tient déjà le BOM Spring Boot, et rien du BOM AWS ne le recoupe — le SDK S3 ne
     // dépend ni de Jackson (le protocole S3 est en XML, avec un parseur maison, donc zéro
-    // conflit avec Jackson 3 / Spring Boot 4) ni d'Apache HttpClient. Une contrainte
-    // Gradle suffit ici, et elle ne porte que sur les modules software.amazon.awssdk:*.
+    // conflit avec Jackson 3 / Spring Boot 4) ni, une fois les deux exclusions ci-dessous
+    // posées, d'Apache HttpClient. Une contrainte Gradle suffit ici, et elle ne porte que
+    // sur les modules software.amazon.awssdk:*.
     implementation(platform(libs.awssdk.bom))
-    implementation(libs.awssdk.s3)
-    // Obligatoire, pas une optimisation : depuis les versions 2.5x, software.amazon.awssdk:s3
-    // ne déclare plus aucun client HTTP en portée compile (voir libs.versions.toml). Sans
-    // lui, le premier dépôt de document échoue sur « Unable to load an HTTP implementation
-    // from any provider in the chain » — pas le démarrage de l'application.
+    // Le pom.xml de software.amazon.awssdk:s3 déclare bien ses trois clients HTTP
+    // (apache-client, apache5-client, netty-nio-client) en scope test — vérifié en lisant
+    // le pom résolu. Mais son pom.xml PARENT, software.amazon.awssdk:services, redéclare
+    // apache5-client et netty-nio-client dans sa propre section <dependencies> (et non
+    // <dependencyManagement>) avec scope runtime : un héritage Maven invisible depuis le
+    // pom de s3 seul, qui les fait quand même atterrir sur runtimeClasspath (confirmé par
+    // `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client`, qui
+    // remonte la requête jusqu'à s3). On les exclut tous les deux : sans quoi le plugin
+    // io.spring.dependency-management rétrograde httpclient5 de la version que réclame
+    // apache5-client (5.6.4) à celle qu'il gère lui-même (5.5.2, via
+    // spring-boot-starter-restclient) — une bibliothèque compilée contre une version et
+    // chargée contre une autre, pour un client qu'on n'appelle jamais. netty-nio-client,
+    // laissé tel quel, traînerait toute la pile Netty avec lui, tout aussi inutilisée.
+    implementation(libs.awssdk.s3) {
+        exclude(group = "software.amazon.awssdk", module = "apache5-client")
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+    }
+    // Le seul client HTTP qu'on veut voir sur le classpath, et il reste explicite :
+    // l'adapter le nommera dans son builder (UrlConnectionHttpClient), plutôt que de
+    // laisser le SDK arbitrer entre plusieurs implémentations trouvées par
+    // ServiceLoader. Obligatoire, pas une optimisation : sans lui, le premier dépôt de
+    // document échoue sur « Unable to load an HTTP implementation from any provider in
+    // the chain » — pas le démarrage de l'application. Il ne dépend que de utils,
+    // annotations et http-client-spi, donc de rien qui sorte du SDK.
     implementation(libs.awssdk.url.connection.client)
 
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de

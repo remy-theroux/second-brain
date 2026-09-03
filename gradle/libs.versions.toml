@@ -50,16 +50,23 @@ jtokkit = { module = "com.knuddels:jtokkit", version.ref = "jtokkit" }
 # url-connection-client n'ont donc pas de version.ref.
 awssdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "awsSdk" }
 awssdk-s3 = { module = "software.amazon.awssdk:s3" }
-# Depuis les versions 2.5x, software.amazon.awssdk:s3 ne déclare plus aucun client HTTP en
-# portée compile — apache-client, netty-nio-client et url-connection-client y sont tous en
-# <scope>test</scope>, et aucune de ses transitives n'en apporte. Sans ce second artefact,
-# le premier appel échoue sur « Unable to load an HTTP implementation from any provider in
-# the chain » — au premier dépôt de document, pas au démarrage.
+# Le pom.xml de software.amazon.awssdk:s3 déclare bien ses clients HTTP en <scope>test</scope>
+# (apache-client, apache5-client, netty-nio-client). Mais son pom.xml PARENT,
+# software.amazon.awssdk:services, redéclare apache5-client et netty-nio-client dans sa
+# propre section <dependencies> (pas <dependencyManagement>) avec <scope>runtime</scope> —
+# un héritage Maven invisible depuis le pom de s3 seul, qui les fait quand même atterrir
+# sur runtimeClasspath. build.gradle.kts les exclut donc explicitement sur la dépendance
+# awssdk.s3 : laissés tels quels, ils sont inutilisés (l'adapter pose
+# UrlConnectionHttpClient explicitement) et apache5-client réclame httpclient5 5.6.4, que
+# le plugin io.spring.dependency-management rétrograde à 5.5.2 — un désaccord de version
+# actif, pas hypothétique, pour une bibliothèque qu'on n'appelle jamais.
 #
-# url-connection-client plutôt qu'apache5-client : il ne dépend que de utils, annotations
-# et http-client-spi, donc de rien qui sorte du SDK, là où apache5-client ramènerait
-# httpclient5 — déjà présent via spring-boot-starter-restclient mais tenu par le BOM
-# Spring, et les deux ne s'accorderaient plus. Il s'appuie sur HttpURLConnection : pas
+# url-connection-client, lui, n'est déclaré nulle part en scope runtime : c'est le seul
+# artefact HTTP du classpath une fois les deux exclusions posées, et il est obligatoire,
+# pas une optimisation — sans lui, le premier appel échoue sur « Unable to load an HTTP
+# implementation from any provider in the chain », au premier dépôt de document et non au
+# démarrage. Préféré à apache5-client : il ne dépend que de utils, annotations et
+# http-client-spi, donc de rien qui sorte du SDK. Il s'appuie sur HttpURLConnection : pas
 # d'HTTP/2, pas d'Expect: 100-continue, et le corps est tamponné en mémoire. Aucun des
 # trois ne nous concerne — un objet est un byte[] déjà en mémoire, plafonné à 20 Mo par
 # spring.servlet.multipart.max-file-size.
