@@ -89,6 +89,10 @@ dependencies {
     implementation(libs.poi.ooxml)
     implementation(libs.pdfbox)
 
+    // Comptage de tokens pour le découpage. Derrière le port TokenCounter : le domaine
+    // compte, il ne sait pas avec quelle toise.
+    implementation(libs.jtokkit)
+
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).
     developmentOnly("org.springframework.boot:spring-boot-devtools")
