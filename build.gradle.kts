@@ -95,6 +95,19 @@ dependencies {
     // Comptage de tokens pour le découpage. Derrière le port TokenCounter : le domaine
     // compte, il ne sait pas avec quelle toise.
     implementation(libs.jtokkit)
+    // Stockage objet des originaux (Garage, compatible S3 — voir compose.yaml). Un
+    // platform(...) Gradle et non le plugin io.spring.dependency-management : ce dernier
+    // tient déjà le BOM Spring Boot, et rien du BOM AWS ne le recoupe — le SDK S3 ne
+    // dépend ni de Jackson (le protocole S3 est en XML, avec un parseur maison, donc zéro
+    // conflit avec Jackson 3 / Spring Boot 4) ni d'Apache HttpClient. Une contrainte
+    // Gradle suffit ici, et elle ne porte que sur les modules software.amazon.awssdk:*.
+    implementation(platform(libs.awssdk.bom))
+    implementation(libs.awssdk.s3)
+    // Obligatoire, pas une optimisation : depuis les versions 2.5x, software.amazon.awssdk:s3
+    // ne déclare plus aucun client HTTP en portée compile (voir libs.versions.toml). Sans
+    // lui, le premier dépôt de document échoue sur « Unable to load an HTTP implementation
+    // from any provider in the chain » — pas le démarrage de l'application.
+    implementation(libs.awssdk.url.connection.client)
 
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).
