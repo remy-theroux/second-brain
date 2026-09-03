@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.knowledge.application.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -16,9 +17,12 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextChunk;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Chunk;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
@@ -45,6 +49,9 @@ class DeleteDocumentCascadeTest {
 
     @Autowired
     private TextExtractionRepository textExtractionRepository;
+
+    @Autowired
+    private TextChunkRepository textChunkRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -76,6 +83,25 @@ class DeleteDocumentCascadeTest {
         // Les blocs partent avec leur texte : la seconde cascade, que le port ne montre pas.
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM knowledge_text_blocks", Integer.class))
                 .isZero();
+    }
+
+    @Test
+    void la_suppression_d_un_document_emporte_ses_extraits() {
+        // Les extraits sont écrits par le port et non par une commande : l'indexation n'existe
+        // pas encore, et ce qui est vérifié ici est la cascade de la migration V10, pas le
+        // chemin qui la remplit.
+        Document document = unDocumentDepose();
+        textChunkRepository.saveAll(List.of(TextChunk.of(
+                document.getId(),
+                0,
+                new Chunk("Titre", "Un corps."),
+                KnowledgeFixture.unVecteur(0.5f),
+                Instant.now())));
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).isNotEmpty();
+
+        commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
+
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).isEmpty();
     }
 
     private Document unDocumentDepose() {

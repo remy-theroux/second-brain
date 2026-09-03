@@ -6,8 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.UUID;
+import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Embedding;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 /**
@@ -54,5 +57,18 @@ public final class KnowledgeFixture {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * Un vecteur constant de la dimension du modèle.
+     *
+     * <p>Ce qui est vérifié dans ces tests, c'est la <em>forme</em> — qu'un vecteur parte,
+     * revienne et se compare —, jamais son contenu : personne n'appelle Ollama dans la suite
+     * de tests.
+     */
+    public static Embedding unVecteur(float valeur) {
+        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
+        Arrays.fill(valeurs, valeur);
+        return Embedding.of(valeurs);
     }
 }

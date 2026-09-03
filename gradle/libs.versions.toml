@@ -22,6 +22,10 @@ jtokkit = "1.1.0"
 # Boot 4, l'auto-config vit dans le starter dédié spring-boot-starter-flyway ;
 # flyway-database-postgresql fournit le support spécifique PostgreSQL.
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+# Vecteurs : le module qui apprend à Hibernate le type `vector` de pgvector, donc
+# @JdbcTypeCode(SqlTypes.VECTOR) sur un float[]. Version alignée par le BOM Spring Boot
+# (elle suit hibernate-core) : ne pas la pinner.
+hibernate-vector = { module = "org.hibernate.orm:hibernate-vector" }
 postgresql = { module = "org.postgresql:postgresql" }
 springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 # Markdown : le parseur de référence CommonMark en Java. Il donne les titres comme des

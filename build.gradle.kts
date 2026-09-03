@@ -61,6 +61,9 @@ dependencies {
     // Spring Boot 4 : le starter Flyway apporte l'auto-config (module spring-boot-flyway).
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation(libs.flyway.postgresql)
+    // Le type `vector` côté Hibernate. Arrivé avec la table des extraits et pas avant :
+    // une dépendance sans appelant est du poids mort.
+    implementation(libs.hibernate.vector)
     runtimeOnly(libs.postgresql)
 
     // Sécurité
