@@ -46,18 +46,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Le rôle worker, démarré comme en production : profil {@code worker}, aucun serveur HTTP.
- *
- * <p>{@code webEnvironment = NONE} redit ce que {@code application-worker.yml} pose
- * ({@code spring.main.web-application-type=none}) : {@code @SpringBootTest} force sinon un
- * environnement servlet simulé, et le test vérifierait un contexte que le worker ne
- * construit jamais.
- *
- * <p><strong>Pas de {@code @Transactional} :</strong> la classe observe des commits, ceux du
- * worker qui tourne dans ses propres threads. Ce qu'elle écrit est donc réellement écrit, et
- * effacé en {@code @AfterEach} — la base d'un côté, le stockage objet de l'autre.
- */
 @Import({TestcontainersConfiguration.class, RecordingEmbeddingPortConfiguration.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")

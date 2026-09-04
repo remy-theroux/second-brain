@@ -28,14 +28,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * {@code @Transactional} : la base est annulée après chaque test. Le stockage objet, lui, ne
- * l'est pas — d'où le nettoyage explicite en {@code @AfterEach}.
- *
- * <p>Le dépôt passe par le bus, comme en production : c'est lui qui écrit l'original, sans
- * quoi l'extraction n'aurait rien à lire. Le compte est créé par le port plutôt que par
- * l'inscription complète : ni le dépôt ni l'extraction ne regardent s'il est vérifié.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional

@@ -30,11 +30,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * Supprimer, c'est faire disparaître les deux : la ligne et son original. Un test qui ne
- * regarderait que la liste laisserait passer un stockage objet qui se remplit indéfiniment,
- * et que plus aucune ligne ne permettrait de nettoyer.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
