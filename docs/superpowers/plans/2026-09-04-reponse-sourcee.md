@@ -560,7 +560,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.LlmUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.LlmPort;
@@ -594,7 +593,9 @@ public class LangChain4jLlmAdapter implements LlmPort {
                 try {
                     onToken.accept(fragment);
                 } catch (RuntimeException abandon) {
-                    attendu.completeExceptionally(abandon);
+                    // Emballée pour être reconnue à la sortie : c'est le client qui est parti,
+                    // pas le service de génération qui a échoué.
+                    attendu.completeExceptionally(new AbandonDuConsommateur(abandon));
                     throw abandon;
                 }
             }
@@ -619,12 +620,19 @@ public class LangChain4jLlmAdapter implements LlmPort {
             return attendu.join();
         } catch (CompletionException echec) {
             Throwable cause = echec.getCause() == null ? echec : echec.getCause();
-            if (cause instanceof RuntimeException abandonDuClient
-                    && !(cause instanceof dev.langchain4j.exception.LangChain4jException)) {
-                throw abandonDuClient;
+            if (cause instanceof AbandonDuConsommateur abandon) {
+                throw (RuntimeException) abandon.getCause();
             }
             throw new LlmUnavailableException(
                     "Le service de génération n'a pas répondu : " + cause.getMessage(), cause);
+        }
+    }
+
+    /** Distingue « le client est parti » de « le service a échoué » sans deviner un type de la bibliothèque. */
+    private static final class AbandonDuConsommateur extends RuntimeException {
+
+        AbandonDuConsommateur(RuntimeException cause) {
+            super(cause);
         }
     }
 
@@ -648,9 +656,11 @@ public class LangChain4jLlmAdapter implements LlmPort {
         }
         Map<String, String> arguments = new LinkedHashMap<>();
         try {
-            JsonNode racine = OBJECT_MAPPER.readTree(json);
-            racine.propertyNames().forEach(nom -> arguments.put(nom, racine.get(nom).asString()));
+            Map<?, ?> brut = OBJECT_MAPPER.readValue(json, Map.class);
+            brut.forEach((cle, valeur) -> arguments.put(String.valueOf(cle), String.valueOf(valeur)));
         } catch (RuntimeException jsonIllisible) {
+            // Un petit modèle produit des arguments illisibles : la boucle en fait une erreur
+            // d'outil rendue au modèle, pas une panne.
             return Map.of();
         }
         return arguments;
@@ -3346,7 +3356,7 @@ public class CitedSource {
     @Column(nullable = false, length = MAX_HEADING_LENGTH)
     private String heading;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String text;
 
     protected CitedSource() {}
@@ -3434,10 +3444,12 @@ public class AgentRun {
     @Column(name = "agent_version", nullable = false, length = MAX_AGENT_VERSION_LENGTH)
     private String agentVersion;
 
-    @Column(nullable = false)
+    // columnDefinition : sans lui, Hibernate attend un varchar(255) et `ddl-auto: validate`
+    // échoue au démarrage sur « wrong column type ». Même motif que TextChunk.text.
+    @Column(nullable = false, columnDefinition = "text")
     private String question;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String answer;
 
     @Enumerated(EnumType.STRING)
@@ -3455,7 +3467,7 @@ public class AgentRun {
             name = "knowledge_agent_run_searches",
             joinColumns = @JoinColumn(name = "agent_run_id", nullable = false))
     @OrderColumn(name = "search_position")
-    @Column(name = "search_query", nullable = false)
+    @Column(name = "search_query", nullable = false, columnDefinition = "text")
     private List<String> searches = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
