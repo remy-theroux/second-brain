@@ -12,7 +12,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.DocumentAgent;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Agent;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.AgentRefusals;
 
-public final class AgentDefinitionLoader {
+final class AgentDefinitionLoader {
 
     private static final Pattern FRONT_MATTER = Pattern.compile("\\A---\\R(.*?)\\R---\\R", Pattern.DOTALL);
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{([a-z-]+)}}");
@@ -21,7 +21,7 @@ public final class AgentDefinitionLoader {
 
     private AgentDefinitionLoader() {}
 
-    public static Agent depuisLeClasspath(String chemin) {
+    static Agent depuisLeClasspath(String chemin) {
         try (InputStream flux = AgentDefinitionLoader.class.getClassLoader().getResourceAsStream(chemin)) {
             if (flux == null) {
                 throw new IllegalStateException(
@@ -33,7 +33,7 @@ public final class AgentDefinitionLoader {
         }
     }
 
-    public static Agent analyse(String contenu) {
+    static Agent analyse(String contenu) {
         Matcher enTete = FRONT_MATTER.matcher(contenu);
         if (!enTete.find()) {
             throw new IllegalStateException("La définition d'agent n'a pas de front matter délimité par ---.");

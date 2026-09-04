@@ -7,12 +7,12 @@ import org.springframework.context.annotation.Configuration;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Agent;
 
 @Configuration(proxyBeanMethods = false)
-public class AgentConfiguration {
+class AgentConfiguration {
 
     private static final String DEFINITION = "agents/document-agent.md";
 
     @Bean
-    public Agent documentAgent() {
+    Agent documentAgent() {
         return AgentDefinitionLoader.depuisLeClasspath(DEFINITION);
     }
 
@@ -21,7 +21,7 @@ public class AgentConfiguration {
      * serait un thread de plateforme immobilisé.
      */
     @Bean(destroyMethod = "close")
-    public ExecutorService conversationExecutor() {
+    ExecutorService conversationExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }
 }
