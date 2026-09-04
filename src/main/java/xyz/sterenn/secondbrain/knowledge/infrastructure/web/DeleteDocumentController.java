@@ -15,13 +15,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundExcept
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.shared.web.ErrorResponse;
 
-/**
- * Adapter entrant du retrait d'un document.
- *
- * <p>Le document d'un autre compte rend le même {@code 404} qu'un document inexistant :
- * un {@code 403} confirmerait l'existence de l'identifiant demandé, et ferait de la route
- * un oracle. Même raisonnement que les trois refus confondus de {@code GET /verification}.
- */
 @RestController
 public class DeleteDocumentController {
 

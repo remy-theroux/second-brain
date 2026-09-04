@@ -25,19 +25,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * On teste le <strong>port</strong>, jamais l'adapter. Le montage du propriétaire est celui
- * de {@link JpaTextExtractionRepositoryAdapterTest} — la clé étrangère de
- * {@code knowledge_documents} traverse les deux contextes bornés.
- *
- * <p>Le vecteur n'est pas un détail dans ces assertions : c'est la seule vérification que
- * {@code float[]} atterrit bien dans une colonne {@code vector(1024)} et en revient
- * identique. Un test unitaire de l'entité n'apprendrait rien là-dessus.
- *
- * <p>La cascade depuis {@code knowledge_documents}, elle, est vérifiée par
- * {@code DeleteDocumentCascadeTest}, non transactionnel : ici, Hibernate rendrait les extraits
- * depuis son cache de premier niveau sans jamais interroger la base.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional

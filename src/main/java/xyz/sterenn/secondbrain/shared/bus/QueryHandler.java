@@ -1,9 +1,8 @@
 package xyz.sterenn.secondbrain.shared.bus;
 
 /**
- * Traite une et une seule query. Comme les {@link CommandHandler}, ne doit pas être
- * annoté {@code @Transactional} : {@link QueryBus#ask} ouvre déjà une transaction
- * en lecture seule.
+ * <strong>Ne jamais annoter un handler avec {@code @Transactional}</strong> : la proxification
+ * qui en résulte empêche la résolution de ses types génériques au démarrage.
  */
 public interface QueryHandler<Q extends Query<R>, R> {
 

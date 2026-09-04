@@ -9,15 +9,11 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 import xyz.sterenn.secondbrain.users.domain.valueobject.RawVerificationToken;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Ce qui est testé ici, c'est ce que l'adapter écrit : l'URL, l'adresse, le sujet. Le
- * transport lui-même est celui de Spring, il n'a pas à être vérifié — d'où le
- * {@code JavaMailSender} nul, jamais sollicité par {@code buildMessage}.
- */
 class EmailNotificationSenderTest {
 
     private static final UUID COMPTE = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
+    // JavaMailSender nul : buildMessage ne le sollicite jamais, seul son résultat est testé.
     private final EmailNotificationSender sender =
             new EmailNotificationSender(null, "http://localhost:8080", "no-reply@second-brain.localhost");
 

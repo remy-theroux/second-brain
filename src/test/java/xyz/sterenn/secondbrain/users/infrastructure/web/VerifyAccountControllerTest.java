@@ -22,9 +22,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Parcours complet vu du dehors : je crée un compte, je lis le lien reçu, je le suis.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -94,7 +91,6 @@ class VerifyAccountControllerTest {
     void refuse_un_lien_dont_le_compte_est_inconnu_avec_le_meme_code_qu_un_lien_falsifie() throws Exception {
         VerificationNotification notification = inscrit("carol@example.com");
 
-        // Un code distinct ferait de cette route un oracle d'existence de compte.
         mockMvc.perform(get("/verification")
                         .param("compte", UUID.randomUUID().toString())
                         .param("jeton", notification.rawToken().value()))

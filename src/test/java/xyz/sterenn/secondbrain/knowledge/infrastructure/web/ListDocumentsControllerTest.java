@@ -29,11 +29,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * La liste est la seule façon pour l'utilisateur de savoir ce que contient sa base de
- * connaissance. Ce qu'elle ne doit jamais montrer — le dépôt d'un autre compte — compte
- * donc autant que ce qu'elle montre.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc

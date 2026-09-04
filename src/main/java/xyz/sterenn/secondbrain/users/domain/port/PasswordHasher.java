@@ -1,8 +1,6 @@
 package xyz.sterenn.secondbrain.users.domain.port;
 
-/**
- * Port sortant vers l'algorithme de hachage. Le domaine ignore lequel est utilisé.
- */
+/** Hache un mot de passe et compare une saisie à une empreinte, par un algorithme que le domaine ignore. */
 public interface PasswordHasher {
 
     String hash(String rawPassword);

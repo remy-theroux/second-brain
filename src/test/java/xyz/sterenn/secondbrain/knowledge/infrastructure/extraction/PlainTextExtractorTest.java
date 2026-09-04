@@ -12,7 +12,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
-/** Aucun Spring : un extracteur est un adapter, mais il n'a besoin d'aucun contexte. */
 class PlainTextExtractorTest {
 
     private final PlainTextExtractor extracteur = new PlainTextExtractor();

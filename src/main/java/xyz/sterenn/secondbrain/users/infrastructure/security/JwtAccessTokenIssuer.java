@@ -9,14 +9,8 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 import xyz.sterenn.secondbrain.users.domain.valueobject.AccessToken;
 
-/**
- * Adapter JWT du port {@link AccessTokenIssuer}. Il est le seul à savoir que le jeton est
- * un JWT signé, et le seul à choisir ses revendications : {@code sub}, {@code iat},
- * {@code exp}, et rien d'autre.
- *
- * <p>Pas d'en-tête à construire : l'encodeur déclaré dans {@code JwtConfiguration} est
- * bâti sur une clé symétrique, il pose donc HS256 de lui-même.
- */
+// L'encodeur de JwtConfiguration est bâti sur une clé symétrique : il pose HS256 lui-même,
+// il n'y a pas d'en-tête à construire ici.
 @Component
 public class JwtAccessTokenIssuer implements AccessTokenIssuer {
 

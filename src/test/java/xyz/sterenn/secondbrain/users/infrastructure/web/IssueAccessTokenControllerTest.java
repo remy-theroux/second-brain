@@ -22,10 +22,6 @@ import xyz.sterenn.secondbrain.users.AccountFixture;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 
-/**
- * La forme du protocole est ce qui est vérifié ici : noms des paramètres, noms des champs
- * de la réponse, codes d'erreur RFC 6749. Le front en dépend au caractère près.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc

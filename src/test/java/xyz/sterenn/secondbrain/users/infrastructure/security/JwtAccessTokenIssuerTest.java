@@ -14,11 +14,6 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 import xyz.sterenn.secondbrain.users.domain.valueobject.AccessToken;
 
-/**
- * C'est le <em>port</em> qui est injecté, pas l'adapter : ce qui est vérifié, c'est le
- * contrat du domaine. Le décodeur, lui, sert de témoin indépendant — il prouve que ce qui
- * a été émis est bien un JWT valide portant les revendications attendues.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class JwtAccessTokenIssuerTest {
@@ -58,7 +53,6 @@ class JwtAccessTokenIssuerTest {
 
     @Test
     void n_ecrit_aucune_revendication_sur_l_email() {
-        // Décision 3 du design : le jeton ne transporte pas de donnée personnelle.
         AccessToken jeton = accessTokenIssuer.issue(
                 UUID.randomUUID(), Instant.now(), Instant.now().plusSeconds(3600));
 

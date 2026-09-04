@@ -25,18 +25,8 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
 /**
- * Le contrat du port : l'annonce part au commit, jamais avant, jamais après un rollback.
- *
- * <p>Pas de {@code @Transactional} sur la classe : le test observe des commits, une
- * transaction englobante les masquerait. Rien n'est écrit en base ; la seule chose à
- * nettoyer est la queue d'observation, effacée en {@code @AfterEach}.
- *
- * <p>La queue est <em>durable</em> et non exclusive, à dessein : RabbitMQ 4 refuse par
- * défaut une queue transiente non exclusive ({@code transient_nonexcl_queues}, dépréciée),
- * et une queue exclusive ne se lirait que depuis la connexion qui l'a déclarée.
- *
- * <p>La queue d'observation est liée sur {@code knowledge.#} : c'est le <em>port</em> qui
- * est vérifié, par ce qui arrive sur l'exchange, pas l'adapter par ses appels internes.
+ * Pas de {@code @Transactional} sur la classe : le test observe des commits, qu'une transaction
+ * englobante masquerait. La queue d'observation est effacée en {@code @AfterEach}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -91,7 +81,6 @@ class AmqpDomainEventPublisherTest {
     void publie_apres_le_commit_d_une_transaction() {
         transactionTemplate.executeWithoutResult(statut -> {
             domainEventPublisher.publish(evenement);
-            // Rien ne part tant que la transaction est ouverte.
             assertThat(rabbitTemplate.receive(OBSERVATION, SILENCE_MS)).isNull();
         });
 

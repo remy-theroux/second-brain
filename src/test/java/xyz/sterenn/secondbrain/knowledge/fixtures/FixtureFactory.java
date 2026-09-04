@@ -22,22 +22,9 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 
 /**
- * Fabrique les documents d'essai binaires de {@code src/test/resources/fixtures/}.
- *
- * <p><strong>Se lance à la main, une fois, et son produit est versionné</strong> :
- * {@code gtest generateFixtures}. Elle n'est ni un test ni une étape de build — un fichier
- * refabriqué à chaque exécution ferait un diff à chaque exécution, et la suite ne testerait
- * plus que sa propre sortie du jour.
- *
- * <p>Ce que ces fichiers <strong>ne sont pas</strong> : de vrais documents personnels. Le
- * ticket en demandait cinq à dix, en intégration continue ; le porteur a tranché pour un
- * socle fabriqué (spec, décision 9). Un PDF écrit par PDFBox est un PDF aimable, celui qu'un
- * scanner produit ne l'est pas. La vérification sur documents réels reste un geste manuel,
- * sur la pile {@code docker compose}, et ce qu'elle révélera sera un ticket.
- *
- * <p>Le texte des fixtures PDF est volontairement sans accents : les polices Standard 14 les
- * acceptent, mais les diagnostics d'un test qui échoue sont plus lisibles sans elles — et ce
- * que ces fichiers vérifient est la structure, pas l'encodage, dont {@code brut.txt} se charge.
+ * Se lance à la main — {@code gtest generateFixtures} — et son produit est versionné : la
+ * refabriquer à chaque build ferait un diff à chaque build. Le texte des fixtures PDF est sans
+ * accents, pour que le diagnostic d'un test qui échoue reste lisible.
  */
 public final class FixtureFactory {
 
@@ -46,9 +33,7 @@ public final class FixtureFactory {
     private static final PDFont CORPS = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private static final PDFont TITRE = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
-    private FixtureFactory() {
-        // point d'entrée, pas un objet
-    }
+    private FixtureFactory() {}
 
     public static void main(String[] arguments) throws IOException {
         Files.createDirectories(FIXTURES);
@@ -59,7 +44,6 @@ public final class FixtureFactory {
         System.out.println("Fixtures écrites dans " + FIXTURES.toAbsolutePath());
     }
 
-    /** Un DOCX à trois niveaux de titres, portés par les styles standard {@code HeadingN}. */
     private static void ecrisTitresDocx() throws IOException {
         try (XWPFDocument docx = new XWPFDocument();
                 OutputStream sortie = Files.newOutputStream(FIXTURES.resolve("titres.docx"))) {
@@ -82,10 +66,7 @@ public final class FixtureFactory {
         }
     }
 
-    /**
-     * Un PDF de trois pages avec un sommaire : un signet par page, plus une page de garde qui
-     * n'en a pas — c'est elle que le bloc sans titre doit couvrir.
-     */
+    /** La page de garde n'a pas de signet : c'est elle que le bloc sans titre doit couvrir. */
     private static void ecrisSignetsPdf() throws IOException {
         try (PDDocument pdf = new PDDocument();
                 OutputStream sortie = Files.newOutputStream(FIXTURES.resolve("signets.pdf"))) {
@@ -114,7 +95,6 @@ public final class FixtureFactory {
         }
     }
 
-    /** Un PDF sans sommaire, dont les titres ne se distinguent que par la taille de police. */
     private static void ecrisSansSignetsPdf() throws IOException {
         try (PDDocument pdf = new PDDocument();
                 OutputStream sortie = Files.newOutputStream(FIXTURES.resolve("sans-signets.pdf"))) {
@@ -135,10 +115,6 @@ public final class FixtureFactory {
         }
     }
 
-    /**
-     * Un PDF numerise : une image, aucune couche texte. C'est le troisieme scenario du
-     * ticket — l'extraction doit echouer, pas rendre du vide.
-     */
     private static void ecrisNumerisePdf() throws IOException {
         try (PDDocument pdf = new PDDocument();
                 OutputStream sortie = Files.newOutputStream(FIXTURES.resolve("numerise.pdf"))) {
@@ -173,7 +149,6 @@ public final class FixtureFactory {
         return page;
     }
 
-    /** Écrit une ligne et rend l'ordonnée de la suivante. */
     private static float ligne(PDPageContentStream flux, PDFont police, float taille, float y, String texte)
             throws IOException {
         flux.beginText();

@@ -7,19 +7,9 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TokenCounter;
 
 /**
- * Adapter jtokkit du port {@link TokenCounter}, en {@code cl100k_base}.
- *
- * <p>Aucun réseau, aucun modèle à télécharger : les tables BPE voyagent dans le jar. Le
- * registre est <em>paresseux</em> — il ne charge que l'encodage demandé, là où le registre
- * par défaut les charge tous, dont ceux dont ce projet n'a que faire.
- *
- * <p>L'{@link Encoding} est construit une fois : il est immuable et sûr en accès concurrent,
- * et le construire à chaque appel relirait les tables BPE pour chaque paragraphe d'un
- * document.
- *
- * <p>Package-private : rien au-dehors ne doit dépendre d'autre chose que du port. Voisin de
- * {@code OllamaEmbeddingAdapter} parce que les deux servent le même modèle — l'un le mesure,
- * l'autre l'interroge.
+ * Le registre paresseux ne charge que l'encodage demandé, là où le registre par défaut les
+ * charge tous. L'{@link Encoding}, immuable et sûr en accès concurrent, est construit une
+ * fois : le reconstruire relirait les tables BPE à chaque appel.
  */
 @Component
 class JtokkitTokenCounter implements TokenCounter {

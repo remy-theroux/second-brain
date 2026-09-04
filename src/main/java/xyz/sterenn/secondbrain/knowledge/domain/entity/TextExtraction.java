@@ -19,27 +19,6 @@ import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
-/**
- * Le texte extrait d'un document, dans la forme commune aux quatre formats acceptés.
- *
- * <p><strong>Agrégat distinct de {@link Document}</strong>, et non des colonnes de plus sur
- * lui : il naît plus tard, et il est remplacé en entier à chaque réextraction. Les deux se
- * référencent donc par identifiant, jamais par {@code @ManyToOne} — ADR-0006.
- *
- * <p><strong>C'est l'extraction de la typologie textuelle</strong>, et son nom le dit :
- * {@code knowledge_text_extractions}, pas {@code knowledge_document_texts}. Une autre
- * typologie aura ses propres tables et son propre agrégat — ADR-0030.
- *
- * <p>Les blocs sont une {@code @ElementCollection} et non des entités : un bloc n'a pas
- * d'identité propre, il n'existe que par le texte qui le contient, et rien ne le désigne de
- * l'extérieur. Sa position est portée par {@code @OrderColumn} plutôt que par un champ de
- * {@link TextBlock} : elle appartient à la liste, pas au bloc — un bloc extrait de son
- * document reste le même bloc.
- *
- * <p>{@code EAGER}, à contre-courant de l'habitude : {@code open-in-view} est à {@code false}
- * et personne ne charge un {@code TextExtraction} sans vouloir ses blocs. Une collection
- * paresseuse ne ferait que déplacer l'échec hors de la transaction du bus.
- */
 @Entity
 @Table(name = "knowledge_text_extractions")
 public class TextExtraction {
@@ -49,11 +28,13 @@ public class TextExtraction {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    // unique = true : un document a un texte, jamais deux. C'est cette contrainte qui impose
-    // au handler d'effacer avant d'écrire — une redélivrance AMQP est toujours possible.
+    // unique : c'est cette contrainte qui impose au handler d'effacer avant d'écrire, une
+    // redélivrance AMQP étant toujours possible.
     @Column(name = "document_id", nullable = false, unique = true, columnDefinition = "uuid")
     private UUID documentId;
 
+    // EAGER : open-in-view est à false, une collection paresseuse ne ferait que déplacer
+    // l'échec hors de la transaction du bus.
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "knowledge_text_blocks",
@@ -64,9 +45,7 @@ public class TextExtraction {
     @Column(name = "extracted_at", nullable = false)
     private Instant extractedAt;
 
-    protected TextExtraction() {
-        // requis par JPA
-    }
+    protected TextExtraction() {}
 
     private TextExtraction(UUID documentId, List<TextBlock> blocks, Instant extractedAt) {
         this.documentId = documentId;
@@ -74,12 +53,6 @@ public class TextExtraction {
         this.extractedAt = extractedAt;
     }
 
-    /**
-     * Range un texte fraîchement extrait sous l'identifiant de son document.
-     *
-     * <p>{@link ExtractedText} garantit déjà qu'il n'est ni vide ni sous le plancher : il n'y
-     * a rien à revalider ici, seulement à recopier dans une liste que JPA peut gérer.
-     */
     public static TextExtraction of(UUID documentId, ExtractedText text, Instant extractedAt) {
         Objects.requireNonNull(documentId, "Le document dont ce texte est extrait est obligatoire");
         Objects.requireNonNull(text, "Le texte extrait est obligatoire");
@@ -87,7 +60,6 @@ public class TextExtraction {
         return new TextExtraction(documentId, new ArrayList<>(text.blocks()), extractedAt);
     }
 
-    /** Le format du domaine, tel que RAG-5 le consommera. */
     public ExtractedText text() {
         return new ExtractedText(blocks);
     }
@@ -100,7 +72,6 @@ public class TextExtraction {
         return documentId;
     }
 
-    /** Copie : la liste interne est gérée par Hibernate, personne d'autre n'y touche. */
     public List<TextBlock> getBlocks() {
         return List.copyOf(blocks);
     }

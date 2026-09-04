@@ -6,11 +6,6 @@ import java.util.Map;
 import org.springframework.core.GenericTypeResolver;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Pendant lecture de {@link SpringCommandBus}. La transaction est ouverte en lecture
- * seule : Hibernate peut sauter le dirty checking, et une écriture accidentelle depuis
- * une query échoue au lieu de passer inaperçue.
- */
 public class SpringQueryBus implements QueryBus {
 
     private final Map<Class<?>, QueryHandler<?, ?>> handlers = new HashMap<>();
@@ -27,7 +22,6 @@ public class SpringQueryBus implements QueryBus {
         }
     }
 
-    // Même parti pris de type brut que SpringCommandBus.
     @Override
     @Transactional(readOnly = true)
     @SuppressWarnings({"unchecked", "rawtypes"})

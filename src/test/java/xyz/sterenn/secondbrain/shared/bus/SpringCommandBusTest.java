@@ -6,11 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/**
- * Test unitaire : le bus est instancié directement, sans contexte Spring. Le
- * comportement transactionnel (qui exige le proxy) est couvert par
- * {@code RegisterUserCommandTransactionTest}.
- */
 class SpringCommandBusTest {
 
     record Saluer(String nom) implements Command {}

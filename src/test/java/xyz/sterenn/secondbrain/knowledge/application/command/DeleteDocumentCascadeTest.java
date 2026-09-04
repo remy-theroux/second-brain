@@ -29,13 +29,9 @@ import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
- * La seule vérification que le {@code ON DELETE CASCADE} de la migration V7 fonctionne
- * réellement.
- *
- * <p><strong>Pas de {@code @Transactional} sur la classe, et c'est le tout.</strong> Dans une
- * transaction, Hibernate rendrait le {@code TextExtraction} depuis son cache de premier niveau
- * sans jamais interroger la base : le test passerait au vert quelle que soit la migration, et
- * ne vérifierait rien. D'où le nettoyage explicite en {@code @AfterEach}.
+ * Pas de {@code @Transactional} : dans une transaction, Hibernate rendrait le
+ * {@code TextExtraction} depuis son cache de premier niveau sans interroger la base, et le test
+ * passerait au vert quelle que soit la migration. D'où le nettoyage en {@code @AfterEach}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -80,15 +76,12 @@ class DeleteDocumentCascadeTest {
         commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
-        // Les blocs partent avec leur texte : la seconde cascade, que le port ne montre pas.
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM knowledge_text_blocks", Integer.class))
                 .isZero();
     }
 
     @Test
     void la_suppression_d_un_document_emporte_ses_extraits() {
-        // Les extraits sont écrits par le port et non par la commande d'indexation : ce qui est
-        // vérifié ici est la cascade de la migration V10, pas le chemin qui remplit la table.
         Document document = unDocumentDepose();
         textChunkRepository.saveAll(List.of(TextChunk.of(
                 document.getId(),

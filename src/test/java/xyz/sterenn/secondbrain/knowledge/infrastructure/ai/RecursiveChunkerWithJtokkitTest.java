@@ -13,14 +13,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.TokenCounter;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Chunk;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 
-/**
- * Le découpage mesuré par la <strong>vraie</strong> toise, pour ne pas ne vérifier que la
- * doublure de {@code RecursiveChunkerTest}.
- *
- * <p>Il vit dans le package de l'adapter et non dans celui du domaine : {@code
- * JtokkitTokenCounter} est package-private, et le rendre public pour un test serait payer le
- * test au prix de la règle.
- */
 class RecursiveChunkerWithJtokkitTest {
 
     private final TokenCounter tokenCounter = new JtokkitTokenCounter();
@@ -42,9 +34,8 @@ class RecursiveChunkerWithJtokkitTest {
 
     @Test
     void coupe_au_caractere_un_bloc_sans_espace_ni_ponctuation() {
-        // Le cas où il ne reste aucune frontière du tout : un contenu encodé collé dans un
-        // document. Le compteur d'essai de RecursiveChunkerTest ne peut pas l'atteindre — un
-        // seul « mot » y vaut un seul token.
+        // Le compteur d'essai de RecursiveChunkerTest ne peut pas atteindre ce cas : un seul
+        // « mot » y vaut un seul token.
         String blob = "QWxvcnNRdWVMZURvY3VtZW50TmVQb3J0ZUF1Y3VuZUZyb250aWVyZQ".repeat(400);
 
         List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(blob));
@@ -56,10 +47,8 @@ class RecursiveChunkerWithJtokkitTest {
 
     @Test
     void la_coupe_au_caractere_ne_separe_jamais_une_paire_de_substituts() {
-        // Un emoji est une paire de substituts UTF-16 (U+1F600 en fait deux `char`). Une coupe
-        // malheureuse en plein milieu laisserait une moitié orpheline, qui n'est plus de
-        // l'UTF-8 valide — c'est le garde de splitOnCharacters. Le témoin est le round-trip
-        // UTF-8 : un substitut orphelin n'y survit pas, il devient U+FFFD.
+        // Un emoji est une paire de substituts UTF-16 : coupée en son milieu, la moitié
+        // orpheline n'est plus de l'UTF-8 valide, et le round-trip la rend en U+FFFD.
         String blob = "😀".repeat(2000);
 
         List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(blob));

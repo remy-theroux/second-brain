@@ -17,10 +17,6 @@ import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Le test injecte le <em>port</em>, pas l'adapter : c'est le contrat du domaine qui est
- * vérifié. {@code @Transactional} fait rouler chaque test en arrière.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -86,10 +82,6 @@ class JpaVerificationTokenRepositoryAdapterTest {
 
     @Test
     void persiste_l_empreinte_sans_la_tronquer() {
-        // Contrôle direct en SQL : la colonne doit contenir l'empreinte reçue telle quelle,
-        // sans troncature ni conversion. La garantie que le jeton en clair, lui, n'est
-        // jamais stocké est apportée ailleurs, par
-        // RegisterUserHandlerTest.emet_un_jeton_dont_seule_l_empreinte_est_stockee.
         UUID compte = compteExistant("dave@example.com");
         verificationTokenRepository.save(VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
 

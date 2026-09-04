@@ -35,16 +35,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * L'indexation par le bus, comme en production — dépôt et extraction compris, sans quoi il n'y
- * aurait rien à découper.
- *
- * <p>{@code @Transactional} : la base est annulée après chaque test, le disque non, d'où le
- * nettoyage en {@code @AfterEach}. Conséquence à connaître : <strong>ce qui est vérifié ici,
- * ce n'est pas le « tout ou rien »</strong> — dans une transaction de test, un rollback du bus
- * ne défait rien de visible. La preuve qu'un Ollama à terre ne laisse aucun extrait derrière
- * lui appartient au test du worker, qui observe de vrais commits.
- */
 @Import({TestcontainersConfiguration.class, RecordingEmbeddingPortConfiguration.class})
 @SpringBootTest
 @Transactional
@@ -78,9 +68,8 @@ class IndexDocumentTextTest {
 
     @AfterEach
     void videLaDoublureEtLesOriginaux() {
-        // La doublure est un singleton partagé par tout le contexte Spring : aucune
-        // transaction de test ne la vide, et le drapeau de panne survivrait sinon au test
-        // suivant, y compris dans un autre contexte qui importe cette même configuration.
+        // La doublure est un singleton du contexte Spring, et le disque ne participe à aucune
+        // transaction : @Transactional n'annule ni l'un ni l'autre.
         embeddingPort.clear();
         KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
     }
@@ -106,14 +95,10 @@ class IndexDocumentTextTest {
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
         List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
-        // Positions contiguës à partir de zéro : `isSorted()` ne prouverait rien, la lecture
-        // étant déjà triée par la requête.
         assertThat(extraits)
                 .extracting(TextChunk::getPosition)
                 .containsExactlyElementsOf(
                         IntStream.range(0, extraits.size()).boxed().toList());
-        // Et l'ordre est celui du document : chaque section de structure.md tient sous le
-        // plafond, donc les extraits en suivent les blocs un pour un.
         List<TextBlock> blocs = textExtractionRepository
                 .findByDocumentId(document.getId())
                 .orElseThrow()
@@ -141,8 +126,6 @@ class IndexDocumentTextTest {
 
     @Test
     void vectorise_un_texte_prefixe_du_nom_du_document_et_de_sa_section() {
-        // Le préfixe part au modèle ; la colonne, elle, porte le corps nu. C'est la seule
-        // façon de constater les deux d'un coup.
         Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
@@ -185,11 +168,6 @@ class IndexDocumentTextTest {
                 .isThrownBy(() -> commandBus.dispatch(new IndexDocumentText(document.getId(), UUID.randomUUID())));
     }
 
-    /**
-     * Dépose un document par le bus puis en extrait le texte. Le <strong>premier</strong>
-     * argument est le nom sous lequel il est déposé — c'est lui qui décide du format —, le
-     * <strong>second</strong> le nom d'une fixture, dont le contenu est lu.
-     */
     private Document unDocumentExtrait(String filename, String fixture) {
         UUID proprietaire = userRepository
                 .save(User.register(new Email(UUID.randomUUID() + "@exemple.fr"), "empreinte"))

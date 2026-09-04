@@ -45,18 +45,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Le rôle worker, démarré comme en production : profil {@code worker}, aucun serveur HTTP.
- *
- * <p>{@code webEnvironment = NONE} redit ce que {@code application-worker.yml} pose
- * ({@code spring.main.web-application-type=none}) : {@code @SpringBootTest} force sinon un
- * environnement servlet simulé, et le test vérifierait un contexte que le worker ne
- * construit jamais.
- *
- * <p><strong>Pas de {@code @Transactional} :</strong> la classe observe des commits, ceux du
- * worker qui tourne dans ses propres threads. Ce qu'elle écrit est donc réellement écrit, et
- * effacé en {@code @AfterEach} — la base d'un côté, le disque de l'autre.
- */
 @Import({TestcontainersConfiguration.class, RecordingEmbeddingPortConfiguration.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")
@@ -115,8 +103,6 @@ class KnowledgeEventListenerTest {
 
     @Test
     void declare_la_queue_du_contexte() {
-        // Nom littéral à dessein, comme la clé de routage plus bas : c'est le contrat sur le
-        // fil que le test fige, pas la constante.
         assertThat(amqpAdmin.getQueueInfo("domain.knowledge.events")).isNotNull();
     }
 
@@ -131,9 +117,6 @@ class KnowledgeEventListenerTest {
 
     @Test
     void indexe_le_document_dont_le_depot_est_annonce_et_le_declare_pret() {
-        // La chaîne entière, telle qu'elle tourne en production : le dépôt annonce, le worker
-        // extrait, l'extraction annonce, le worker découpe et vectorise. Deux messages, deux
-        // transactions, un seul statut à l'arrivée.
         Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
 
         publie(document);
@@ -163,7 +146,6 @@ class KnowledgeEventListenerTest {
     @Test
     void n_expose_pas_le_message_d_une_panne_technique() {
         Document document = unDocumentDepose("notes.txt", Fixtures.BRUT_TXT);
-        // La ligne existe, l'original non : une panne, pas un refus métier.
         documentStorage.delete(document.getId());
 
         publie(document);
@@ -190,10 +172,6 @@ class KnowledgeEventListenerTest {
 
     @Test
     void marque_le_document_en_echec_quand_la_vectorisation_ne_repond_pas() {
-        // Le seul endroit où le « tout ou rien » se constate : ici, les transactions sont
-        // réellement commitées ou réellement annulées. L'extraction, elle, a commité avant —
-        // le document garde donc son texte, et l'écran de détail montre ce qui a marché et où
-        // ça a cassé.
         Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
         embeddingPort.tombeEnPanne();
 
@@ -210,9 +188,6 @@ class KnowledgeEventListenerTest {
     @Test
     void rejette_un_evenement_non_declare_sans_le_retraiter(CapturedOutput sortie) throws InterruptedException {
         UUID document = UUID.randomUUID();
-        // Un corps parfaitement valide, mais annoncé sous un nom que personne n'a déclaré.
-        // C'est l'en-tête de type qui gouverne (TypePrecedence.TYPE_ID) : le convertisseur
-        // ne cherche pas le nom hors de ses paquets de confiance, il refuse.
         Message message = rabbitTemplate
                 .getMessageConverter()
                 .toMessage(
@@ -220,24 +195,18 @@ class KnowledgeEventListenerTest {
                         new MessageProperties());
         message.getMessageProperties().setHeader("__TypeId__", "knowledge.inconnu.survenu");
 
-        // Clé de routage d'un autre événement du contexte : la queue est liée sur
-        // `knowledge.#`, elle reçoit tout le contexte, et c'est l'en-tête qui est jugé.
+        // La queue est liée sur `knowledge.#` : elle reçoit tout le contexte, et c'est
+        // l'en-tête de type qui est jugé, pas la clé de routage.
         rabbitTemplate.send("domain.events", "knowledge.inconnu.survenu", message);
 
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(sortie).contains("knowledge.inconnu.survenu"));
 
-        // Et le message n'est pas remis en file (`default-requeue-rejected=false`) : sans
-        // ça, un message toxique tournerait en boucle et le journal grossirait sans fin.
         int occurrences = occurrencesDe("knowledge.inconnu.survenu", sortie);
         Thread.sleep(1000);
         assertThat(occurrencesDe("knowledge.inconnu.survenu", sortie)).isEqualTo(occurrences);
     }
 
-    /**
-     * Annonce le dépôt, exchange et clé de routage littéraux : c'est le contrat sur le fil que
-     * le test fige, pas la constante.
-     */
     private void publie(Document document) {
         rabbitTemplate.convertAndSend(
                 "domain.events",
@@ -245,11 +214,6 @@ class KnowledgeEventListenerTest {
                 new DocumentUploaded(document.getId(), document.getOwnerId(), Instant.now()));
     }
 
-    /**
-     * Dépose un document par le bus. Le <strong>premier</strong> argument est le nom sous
-     * lequel il est déposé — c'est lui qui décide du format, par son extension —, le
-     * <strong>second</strong> le nom d'une fixture, dont le contenu est lu.
-     */
     private Document unDocumentDepose(String filename, String fixture) {
         String email = UUID.randomUUID() + "@exemple.fr";
         UUID proprietaire = userRepository

@@ -63,7 +63,6 @@ class EmbeddingTest {
                 .doesNotContain("0.5");
     }
 
-    /** Un vecteur constant : ce qui est testé ici, c'est la forme, jamais le contenu. */
     private static float[] unVecteur(int dimensions) {
         float[] valeurs = new float[dimensions];
         Arrays.fill(valeurs, 0.5f);

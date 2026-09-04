@@ -9,14 +9,8 @@ import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Notification;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Remplace le canal email par un enregistreur en mémoire. Les tests vérifient ainsi le
- * <em>port</em> et non l'adapter, et peuvent relire le jeton en clair pour enchaîner sur
- * la route de vérification — exactement ce que ferait l'utilisateur depuis sa boîte mail.
- *
- * <p>Le bean est partagé par tout le contexte : appeler {@link RecordingNotificationSender#clear()}
- * en {@code @BeforeEach}, le rollback de la transaction de test ne le vide pas.
- */
+// Le bean est partagé par tout le contexte et le rollback de la transaction de test ne le
+// vide pas : appeler RecordingNotificationSender.clear() en @BeforeEach.
 @TestConfiguration(proxyBeanMethods = false)
 public class RecordingNotificationSenderConfiguration {
 

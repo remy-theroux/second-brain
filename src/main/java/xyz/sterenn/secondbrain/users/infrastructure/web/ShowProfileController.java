@@ -12,18 +12,6 @@ import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 import xyz.sterenn.secondbrain.users.application.query.FindUserById;
 import xyz.sterenn.secondbrain.users.application.query.UserView;
 
-/**
- * Adapter entrant du profil du porteur du jeton. C'est cet appel qui répond à la question
- * « ma session tient-elle encore ? » : il n'existe pas d'autre façon pour le front de le
- * savoir, puisque le serveur ne garde aucun état.
- *
- * <p>Le jeton est déjà validé par le filtre resource server quand cette méthode s'exécute :
- * signature, expiration et forme ont été contrôlées en amont. Il ne reste qu'à lire
- * {@code sub}.
- *
- * <p>Un jeton bien signé dont le compte a disparu répond {@code 401} et non {@code 404} :
- * il n'identifie plus personne, et le front n'a ainsi qu'un seul cas d'échec à traiter.
- */
 @RestController
 public class ShowProfileController {
 
@@ -40,7 +28,6 @@ public class ShowProfileController {
         try {
             accountId = UUID.fromString(jwt.getSubject());
         } catch (IllegalArgumentException | NullPointerException e) {
-            // Hors de portée avec nos propres jetons ; un `sub` illisible n'identifie personne.
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 

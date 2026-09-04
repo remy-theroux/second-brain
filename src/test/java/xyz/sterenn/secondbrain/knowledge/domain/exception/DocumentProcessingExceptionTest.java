@@ -4,13 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Un test de filiation, et il n'est pas décoratif : {@code KnowledgeEventListener.motif()}
- * décide de montrer ou non un message à l'utilisateur sur un seul {@code instanceof}. Le jour
- * où un refus sortirait de cette famille, son message soigné serait silencieusement remplacé
- * par « Le traitement de ce document a échoué de façon inattendue. » — une panne qui ne se
- * verrait qu'à l'écran d'un utilisateur, jamais dans un test de comportement.
- */
 class DocumentProcessingExceptionTest {
 
     @Test

@@ -6,20 +6,8 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/**
- * Empreinte SHA-256 d'un contenu, en 64 caractères hexadécimaux minuscules.
- *
- * <p>C'est <strong>elle</strong> qui identifie un document, jamais le nom du fichier : le
- * même contenu redéposé sous un autre nom reste le même document, et deux contenus
- * différents portant le même nom sont deux documents. Un nom se change d'un clic, un
- * contenu non.
- *
- * <p>{@code MessageDigest} vient du JDK, pas d'un framework : le domaine reste sans
- * dépendance, et le calcul se teste sans Spring contre des empreintes connues.
- */
 public record Checksum(String value) {
 
-    /** SHA-256 : 256 bits, donc 64 caractères hexadécimaux. */
     public static final int LENGTH = 64;
 
     private static final String ALGORITHM = "SHA-256";
@@ -36,13 +24,6 @@ public record Checksum(String value) {
         }
     }
 
-    /**
-     * Calcule l'empreinte d'un contenu.
-     *
-     * <p>Le tableau entier est exigé : SHA-256 ne se calcule pas sur un extrait. C'est ce
-     * qui impose de tenir le fichier en mémoire, et donc ce que le plafond de téléversement
-     * borne (voir ADR-0021).
-     */
     public static Checksum of(byte[] content) {
         if (content == null) {
             throw new IllegalArgumentException("Le contenu est obligatoire");

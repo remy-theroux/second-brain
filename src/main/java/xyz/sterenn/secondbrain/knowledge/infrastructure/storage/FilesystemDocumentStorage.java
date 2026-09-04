@@ -13,17 +13,9 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 
 /**
- * Adapter système de fichiers du port {@link DocumentStorage}. Un fichier par document,
- * nommé par son identifiant : le nom d'origine ne sert qu'à l'affichage et vit en base,
- * ce qui évite d'avoir à assainir une chaîne venue de l'utilisateur avant d'en faire un
- * chemin.
- *
- * <p>Toute {@link IOException} devient une {@link UncheckedIOException} : le rollback promis
- * par le {@code CommandBus} n'a lieu que sur une {@code RuntimeException}, une exception
- * checked laisserait committer une ligne dont l'original n'a pas été écrit.
- *
- * <p><strong>Un système de fichiers ne participe à aucune transaction.</strong> Ce que
- * cette classe écrit survit à un rollback survenu après elle — décision assumée (ADR-0020).
+ * Toute {@link IOException} devient une {@link UncheckedIOException} : le rollback promis
+ * par le {@code CommandBus} n'a lieu que sur une {@code RuntimeException}. Ce qui est écrit
+ * ici y survit malgré tout — voir ADR-0020.
  */
 @Component
 public class FilesystemDocumentStorage implements DocumentStorage {
@@ -38,11 +30,11 @@ public class FilesystemDocumentStorage implements DocumentStorage {
     public void store(UUID documentId, byte[] content) {
         Path destination = resolve(documentId);
         try {
-            // Créé ici et non au démarrage : dans un conteneur, le volume est monté avant
-            // l'application, mais rien ne garantit que le sous-répertoire existe.
+            // Dans un conteneur, le volume est monté avant l'application, mais rien ne
+            // garantit que le sous-répertoire existe.
             Files.createDirectories(destination.getParent());
-            // CREATE_NEW plutôt que le défaut : deux documents ne partagent jamais un
-            // identifiant, donc un fichier déjà là révèle un défaut qu'il vaut mieux voir.
+            // CREATE_NEW : deux documents ne partagent jamais un identifiant, donc un fichier
+            // déjà là révèle un défaut qu'il vaut mieux voir qu'écraser.
             Files.write(destination, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         } catch (FileAlreadyExistsException e) {
             throw new IllegalStateException("Un original est déjà conservé pour le document " + documentId, e);
@@ -73,11 +65,7 @@ public class FilesystemDocumentStorage implements DocumentStorage {
         }
     }
 
-    /**
-     * L'identifiant est un UUID produit par la base, jamais une chaîne venue de la requête :
-     * il n'y a donc pas de traversée de répertoire à craindre ici. La conversion explicite
-     * en {@code String} le rappelle plutôt qu'elle ne le corrige.
-     */
+    /** L'identifiant vient de la base, jamais de la requête : pas de traversée de répertoire. */
     private Path resolve(UUID documentId) {
         return originalsPath.resolve(documentId.toString());
     }

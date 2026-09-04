@@ -17,11 +17,6 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 
-/**
- * L'encodeur et le décodeur partagent un secret : ce qui est signé ici doit se relire ici.
- * Un test unitaire ne le prouverait pas — ce sont bien les deux beans du contexte qui
- * doivent s'accorder.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class JwtConfigurationTest {
@@ -53,8 +48,7 @@ class JwtConfigurationTest {
 
     @Test
     void refuse_un_jeton_expire() {
-        // La tolérance d'horloge du décodeur est de 60 secondes par défaut : il faut donc
-        // dater franchement dans le passé pour observer le refus.
+        // Deux heures, pas une minute : le décodeur tolère 60 secondes de dérive d'horloge.
         Instant ilYaDeuxHeures = Instant.now().minus(Duration.ofHours(2));
         JwtClaimsSet revendications = JwtClaimsSet.builder()
                 .subject(SUJET)
@@ -69,8 +63,6 @@ class JwtConfigurationTest {
 
     @Test
     void refuse_un_secret_trop_court_au_demarrage() {
-        // Sans ce garde, Nimbus lèverait « This key is too small for any standard JWK
-        // symmetric signing algorithm » — exact mais illisible pour qui déploie.
         assertThatThrownBy(() -> new JwtConfiguration("trop-court"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 octets");

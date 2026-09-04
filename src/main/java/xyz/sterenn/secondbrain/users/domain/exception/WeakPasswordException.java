@@ -2,10 +2,6 @@ package xyz.sterenn.secondbrain.users.domain.exception;
 
 import xyz.sterenn.secondbrain.users.domain.PasswordPolicy;
 
-/**
- * Le mot de passe soumis ne satisfait pas {@link PasswordPolicy}. Le message énonce
- * la règle pour que l'utilisateur puisse corriger sans deviner.
- */
 public class WeakPasswordException extends RuntimeException {
 
     public WeakPasswordException() {

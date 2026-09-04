@@ -28,8 +28,6 @@ class ChunkTest {
 
     @Test
     void refuse_un_titre_absent() {
-        // Vide, oui ; absent, non. Un consommateur qui préfixe ses extraits n'a pas à
-        // distinguer deux formes d'absence — c'est déjà la règle de TextBlock.
         assertThatNullPointerException().isThrownBy(() -> new Chunk(null, "Un corps."));
     }
 

@@ -55,7 +55,6 @@ class DocumentFormatTest {
 
     @Test
     void refuse_une_extension_qui_n_en_est_qu_un_fragment() {
-        // « .pdfx » n'est pas « .pdf » : la comparaison porte sur la fin du nom entier.
         assertThatThrownBy(() -> DocumentFormat.fromFilename("rapport.pdfx"))
                 .isInstanceOf(UnsupportedDocumentFormatException.class);
     }

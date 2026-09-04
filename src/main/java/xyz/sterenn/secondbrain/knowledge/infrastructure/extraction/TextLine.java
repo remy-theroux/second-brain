@@ -1,9 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.extraction;
 
 /**
- * Une ligne rendue par PDFBox, et la plus grande police qu'elle emploie.
- *
- * <p>La plus grande et non la moyenne : un titre dont le premier caractère est une lettrine,
- * ou qui porte un appel de note en petit, reste un titre. La moyenne le noierait.
+ * La police retenue est la plus grande de la ligne, jamais la moyenne : une lettrine ou un
+ * appel de note en petit ne doit pas faire passer un titre pour du corps.
  */
 record TextLine(String text, float fontSize) {}

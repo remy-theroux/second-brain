@@ -31,11 +31,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * Le détail est le seul écran qui montre ce qui a été extrait d'un document. Il doit répondre
- * quelque chose d'utile dans les trois états — en attente, extrait, en échec : un {@code 404}
- * sur un document qui existe mais n'a pas encore été traité laisserait croire qu'il a disparu.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -92,9 +87,6 @@ class FindDocumentControllerTest {
                 .andExpect(jsonPath("$.status").value("EXTRACTED"))
                 .andExpect(jsonPath("$.extraction.extractedAt").isNotEmpty())
                 .andExpect(jsonPath("$.extraction.characterCount").isNumber())
-                // `hasItem` et non `blocks[0]` : ce qui est vérifié est qu'un titre de la
-                // fixture arrive jusqu'à l'écran, pas sa place dans la liste — le préambule
-                // d'un document peut légitimement occuper le premier bloc.
                 .andExpect(jsonPath("$.extraction.blocks[*].heading", hasItem("Journal de bord")))
                 .andExpect(jsonPath("$.extraction.blocks[0].text").isNotEmpty());
     }
@@ -114,8 +106,6 @@ class FindDocumentControllerTest {
 
     @Test
     void rend_le_motif_d_un_document_en_echec_et_aucune_extraction() throws Exception {
-        // Déposé sous un nom en .txt : ce test ne teste pas l'extraction, seulement ce que le
-        // détail montre d'un document déjà marqué en échec.
         Document document = depose(jetonAlice, alice, "scan.txt", Fixtures.BRUT_TXT);
         document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
@@ -143,7 +133,6 @@ class FindDocumentControllerTest {
         Document chezBob =
                 depose(KnowledgeFixture.jeton(accessTokenIssuer, bob), bob, "chez-bob.txt", Fixtures.BRUT_TXT);
 
-        // Un 403 confirmerait que cet identifiant existe : introuvable est le seul refus juste.
         mockMvc.perform(get("/api/documents/" + chezBob.getId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
                 .andExpect(status().isNotFound());
@@ -154,14 +143,6 @@ class FindDocumentControllerTest {
         mockMvc.perform(get("/api/documents/" + UUID.randomUUID())).andExpect(status().isUnauthorized());
     }
 
-    /**
-     * Dépose une fixture par la route réelle et rend le document créé.
-     *
-     * <p>Le propriétaire est un paramètre parce que la route ne le rend pas : le {@code 201}
-     * est sans corps, et il faut bien relire quelque part le document qu'on vient de créer.
-     * Le nom de dépôt et le nom de fixture sont deux arguments distincts à dessein — c'est
-     * l'extension du premier qui décide du format.
-     */
     private Document depose(String jeton, UUID proprietaire, String nom, String fixture) throws Exception {
         mockMvc.perform(multipart("/api/documents")
                         .file(new MockMultipartFile("file", nom, "application/octet-stream", Fixtures.lire(fixture)))

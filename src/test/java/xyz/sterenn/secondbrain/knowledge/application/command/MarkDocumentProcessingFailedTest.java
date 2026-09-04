@@ -24,7 +24,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/** La commande que le consommateur d'événements dispatche depuis son {@code catch} (ADR-0028). */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional

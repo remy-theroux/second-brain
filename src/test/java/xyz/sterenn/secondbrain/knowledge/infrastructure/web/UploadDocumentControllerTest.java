@@ -32,13 +32,9 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 /**
- * Les quatre issues du dépôt.
- *
- * <p>Un refus est toujours le <em>dernier</em> appel HTTP de son test : l'exception qui le
- * porte traverse le proxy transactionnel de {@code SpringCommandBus} et marque la
- * transaction englobante « rollback-only ». Un second appel derrière échouerait sur une
- * {@code UnexpectedRollbackException} sans rien apprendre sur la route. Ce qu'il reste à
- * vérifier après un refus se lit donc par le port, dans la transaction du test.
+ * Un refus est toujours le <em>dernier</em> appel HTTP de son test : l'exception marque la
+ * transaction englobante « rollback-only », et un second appel derrière échouerait sur une
+ * {@code UnexpectedRollbackException}. Ce qui reste à vérifier après un refus se lit par le port.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
@@ -125,7 +121,6 @@ class UploadDocumentControllerTest {
         depose("rapport.pdf", CONTENU);
         UUID existant = documentRepository.findAllByOwnerId(compte).getFirst().getId();
 
-        // Le nom change, le contenu non : c'est le contenu qui fait foi.
         mockMvc.perform(multipart("/api/documents")
                         .file(fichier("copie-du-rapport.pdf", CONTENU))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))

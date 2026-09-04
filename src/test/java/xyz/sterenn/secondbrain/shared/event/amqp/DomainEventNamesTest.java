@@ -21,8 +21,6 @@ class DomainEventNamesTest {
 
     @Test
     void joint_les_mots_de_l_objet_par_un_tiret() {
-        // Le dernier mot est le fait ; tout ce qui précède est l'objet, et l'objet reste un
-        // seul segment : la clé garde ses trois segments quel que soit le nombre de mots.
         assertThat(DomainEventNames.of(DocumentTextExtracted.class)).isEqualTo("knowledge.document-text.extracted");
     }
 
@@ -35,8 +33,6 @@ class DomainEventNamesTest {
 
     @Test
     void refuse_un_evenement_hors_d_un_contexte_borne() {
-        // Ce record est déclaré ici, donc dans shared.event.amqp : `shared` n'est pas un
-        // contexte borné, un événement n'a rien à y faire.
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(HorsContexte.class))
                 .withMessageContaining(HorsContexte.class.getName());
@@ -44,8 +40,6 @@ class DomainEventNamesTest {
 
     @Test
     void refuse_une_lambda_ou_une_classe_anonyme() {
-        // `DomainEvent` n'a qu'une seule méthode abstraite, donc une lambda compile : c'est
-        // le cas à fermer. Ni elle ni une classe anonyme n'ont de nom simple exploitable.
         DomainEvent lambda = () -> Instant.parse("2026-08-25T10:00:00Z");
         DomainEvent anonyme = new DomainEvent() {
             @Override

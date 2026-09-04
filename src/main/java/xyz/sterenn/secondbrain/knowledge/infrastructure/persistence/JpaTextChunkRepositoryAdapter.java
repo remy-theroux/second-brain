@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.TextChunk;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 
-/** Adapter du port {@link TextChunkRepository}. */
 @Component
 public class JpaTextChunkRepositoryAdapter implements TextChunkRepository {
 
@@ -27,11 +26,9 @@ public class JpaTextChunkRepositoryAdapter implements TextChunkRepository {
     }
 
     /**
-     * Le flush n'est pas décoratif, et c'est le même piège qu'à l'extraction : le handler
-     * efface puis écrit dans la même transaction, et {@code (document_id, chunk_position)}
-     * est {@code UNIQUE}. Sans lui, Hibernate ordonnerait les insertions avant les
-     * suppressions au moment du vidage, et la contrainte se refermerait sur des lignes que
-     * l'on venait justement de retirer.
+     * Le handler efface puis écrit dans la même transaction, et
+     * {@code (document_id, chunk_position)} est {@code UNIQUE} : sans ce flush, Hibernate
+     * ordonnerait les insertions avant les suppressions au moment du vidage.
      */
     @Override
     public void deleteByDocumentId(UUID documentId) {

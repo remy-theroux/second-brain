@@ -9,14 +9,6 @@ import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Notification;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Adapter email du port {@link NotificationSender}. Il est le seul à connaître l'URL
- * publique de l'application, le sujet et la rédaction du message : le domaine ne dit que
- * <em>quoi</em> notifier et à qui.
- *
- * <p>Le {@code switch} sur {@link Notification} est exhaustif parce que l'interface est
- * scellée : ajouter un type de notification sans le traiter ici ne compilera pas.
- */
 @Component
 public class EmailNotificationSender implements NotificationSender {
 
@@ -38,7 +30,6 @@ public class EmailNotificationSender implements NotificationSender {
         mailSender.send(buildMessage(notification));
     }
 
-    // Package-private : c'est le contenu rédigé ici qui mérite un test, pas le transport.
     SimpleMailMessage buildMessage(Notification notification) {
         return switch (notification) {
             case VerificationNotification verification -> verificationMessage(verification);

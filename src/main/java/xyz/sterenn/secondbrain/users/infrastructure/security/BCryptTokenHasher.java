@@ -5,16 +5,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.port.TokenHasher;
 
-/**
- * Adapter du port {@link TokenHasher}, adossé à l'encodeur délégant de Spring Security :
- * les empreintes sont préfixées de l'algorithme ({@code {bcrypt}...}), ce qui permettra
- * d'en changer sans invalider les jetons en vol.
- *
- * <p>Le salt est tiré par BCrypt à chaque hachage et embarqué dans l'empreinte : deux
- * hachages du même jeton diffèrent, et la comparaison passe forcément par
- * {@link #matches}. La troncature de BCrypt au 72e octet est sans effet ici — un jeton
- * fait 43 caractères.
- */
+// Le salt est tiré à chaque hachage : deux empreintes du même jeton diffèrent, et la
+// comparaison passe forcément par matches.
 @Component
 public class BCryptTokenHasher implements TokenHasher {
 

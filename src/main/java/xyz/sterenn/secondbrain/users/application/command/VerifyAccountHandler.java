@@ -11,13 +11,6 @@ import xyz.sterenn.secondbrain.users.domain.port.TokenHasher;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 
-/**
- * Orchestre la vérification : interprétation du lien, comparaison du jeton, consommation.
- *
- * <p>Les règles « expiré » et « déjà utilisé » appartiennent à {@code VerificationToken} :
- * ce handler ne fait que les laisser remonter. Aucun {@code @Transactional} ici — la
- * transaction appartient au bus, et la moindre exception annule tout.
- */
 @Component
 public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
 
@@ -44,12 +37,10 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
         VerificationToken token =
                 verificationTokenRepository.findByUserId(accountId).orElseThrow(InvalidVerificationLinkException::new);
 
-        // Le hash est salé : la seule comparaison possible passe par le hasher.
         if (!tokenHasher.matches(command.rawToken(), token.getTokenHash())) {
             throw new InvalidVerificationLinkException();
         }
 
-        // Lève « déjà utilisé » ou « expiré » le cas échéant.
         token.consume(clock.instant());
         verificationTokenRepository.save(token);
 
@@ -62,7 +53,6 @@ public class VerifyAccountHandler implements CommandHandler<VerifyAccount> {
         try {
             return UUID.fromString(accountId);
         } catch (IllegalArgumentException | NullPointerException e) {
-            // Un identifiant illisible se refuse comme un lien invalide, pas comme une panne.
             throw new InvalidVerificationLinkException();
         }
     }

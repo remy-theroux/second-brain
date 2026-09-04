@@ -15,19 +15,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
-/**
- * Adapter entrant : consomme la queue du contexte {@code knowledge}.
- *
- * <p>Un listener par contexte, un handler par événement. La queue reçoit tout ce que le
- * contexte annonce ({@code knowledge.#}), et deux classes {@code @RabbitListener} sur la
- * même queue se disputeraient les messages — celle qui ne connaît pas le type rejetterait
- * sans requeue, et l'événement serait perdu. D'où le {@code @RabbitListener} sur la classe
- * et un {@code @RabbitHandler} par type : c'est l'en-tête de type qui choisit la méthode.
- * Un type déclaré mais sans handler est refusé par Spring AMQP, et rejeté comme un type non
- * déclaré. Chaque handler désérialise et dispatche ; aucune règle métier.
- *
- * <p>{@code @Profile("worker")} : l'API publie, elle ne consomme jamais.
- */
 @Component
 @Profile("worker")
 @RabbitListener(queues = KnowledgeMessagingConfiguration.KNOWLEDGE_EVENTS_QUEUE)
@@ -35,7 +22,6 @@ public class KnowledgeEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeEventListener.class);
 
-    /** Ce qu'on montre quand l'échec n'est pas un refus métier : rien de la panne elle-même. */
     private static final String ECHEC_INATTENDU = "Le traitement de ce document a échoué de façon inattendue.";
 
     private final CommandBus commandBus;
@@ -45,22 +31,8 @@ public class KnowledgeEventListener {
     }
 
     /**
-     * Un document vient d'être déposé : on en extrait le texte.
-     *
-     * <p><strong>Le {@code catch} est la raison d'être de cette méthode.</strong> Le bus
-     * ouvre la transaction et l'annule sur la moindre exception ; marquer l'échec depuis le
-     * handler d'extraction le ferait disparaître avec le rollback, et le document resterait
-     * éternellement en attente. La seconde commande ouvre donc sa <em>propre</em>
-     * transaction. Voir ADR-0028.
-     *
-     * <p>Et l'exception n'est <strong>pas relevée</strong> : rejeter le message n'apporterait
-     * rien, l'issue du traitement étant déjà en base. La relever ne produirait qu'une pile de
-     * plus dans le journal.
-     *
-     * <p>Si la seconde commande échoue à son tour, elle, remonte : le message est rejeté sans
-     * remise en file ({@code default-requeue-rejected=false}) et le document reste
-     * {@code PENDING}. C'est le seul trou, il est journalisé, et il relève du même arbitrage
-     * qu'ADR-0023 — on ne construit pas de filet au filet.
+     * L'échec se marque par une <em>seconde</em> commande, donc une seconde transaction : le
+     * bus vient d'annuler la première, qui emporterait le statut avec elle. Voir ADR-0028.
      */
     @RabbitHandler
     public void on(DocumentUploaded event) {
@@ -72,18 +44,7 @@ public class KnowledgeEventListener {
         }
     }
 
-    /**
-     * Le texte d'un document vient d'être extrait : on le découpe et on le vectorise.
-     *
-     * <p>Même dispositif qu'au dépôt, et pour la même raison (ADR-0028) : le bus annule sa
-     * transaction sur la moindre exception, donc l'échec se consigne depuis une
-     * <em>seconde</em> commande, dans une transaction à elle. Sans quoi le document resterait
-     * éternellement en {@code EXTRACTED}, sans que rien ne dise pourquoi.
-     *
-     * <p>C'est aussi ce qui rend le « tout ou rien » gratuit : la transaction annulée emporte
-     * les extraits déjà écrits, et le document garde son texte extrait. L'écran de détail
-     * montre alors ce qui a marché et où ça a cassé.
-     */
+    /** Même dispositif qu'au dépôt : le statut d'échec s'écrit hors de la transaction annulée (ADR-0028). */
     @RabbitHandler
     public void on(DocumentTextExtracted event) {
         try {
@@ -95,11 +56,8 @@ public class KnowledgeEventListener {
     }
 
     /**
-     * Les extraits d'un document viennent d'être rangés — la fin de la chaîne, pour l'instant.
-     *
-     * <p>Ce handler ne fait que journaliser, et il doit pourtant exister : un type déclaré dans
-     * {@code DomainEventRegistration} mais sans {@code @RabbitHandler} est refusé par Spring
-     * AMQP et rejeté comme un type inconnu.
+     * Ce handler ne journalise que pour exister : un type déclaré dans
+     * {@code DomainEventRegistration} sans {@code @RabbitHandler} est rejeté par Spring AMQP.
      */
     @RabbitHandler
     public void on(DocumentTextIndexed event) {
@@ -109,16 +67,6 @@ public class KnowledgeEventListener {
                 event.chunkCount());
     }
 
-    /**
-     * Un refus métier porte un message affichable tel quel ; le reste n'en porte aucun qu'on
-     * puisse montrer. Le message d'une {@code NullPointerException} n'a rien à faire sous les
-     * yeux de l'utilisateur — il est dans le journal, où il sert.
-     *
-     * <p>C'est {@link DocumentProcessingException} qui est testée, et non la seule
-     * {@code DocumentExtractionException} : un service de vectorisation injoignable doit
-     * s'annoncer comme tel, sans quoi une URL mal saisie serait indiscernable d'un PDF
-     * illisible.
-     */
     private static String motif(RuntimeException echec) {
         return echec instanceof DocumentProcessingException refusMetier ? refusMetier.getMessage() : ECHEC_INATTENDU;
     }

@@ -30,10 +30,6 @@ import xyz.sterenn.secondbrain.users.application.query.FindUserByEmail;
 import xyz.sterenn.secondbrain.users.application.query.UserView;
 import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 
-/**
- * Couvre les scénarios d'écriture du parcours d'inscription au niveau HTTP, désormais en
- * JSON. CSRF est désactivé côté application : aucun jeton à fournir.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -111,21 +107,9 @@ class RegisterUserControllerTest {
                 .andExpect(jsonPath("$.errors.password").exists());
     }
 
-    /**
-     * Isolée dans un contexte Spring distinct : le canal de notification y échoue
-     * systématiquement, ce qui entrerait en conflit avec le
-     * {@link RecordingNotificationSenderConfiguration} de la classe englobante si les deux
-     * définissaient chacune un {@code NotificationSender} {@code @Primary} dans le même
-     * contexte. {@code @NestedTestConfiguration(OVERRIDE)} fait qu'aucune configuration de
-     * {@link RegisterUserControllerTest} n'est héritée ici.
-     *
-     * <p>Volontairement <strong>sans</strong> {@code @Transactional} : le rollback observé
-     * ici est déclenché par {@code SpringCommandBus.dispatch}, une transaction imbriquée
-     * dans celle du test. Tant que la transaction englobante du test n'a pas elle-même
-     * terminé, ce rollback interne n'est que marqué, pas exécuté : une requête dans le même
-     * test verrait encore la ligne. Le nettoyage est donc explicite (voir
-     * {@code CommandBusTransactionTest}).
-     */
+    // OVERRIDE isole le contexte : deux NotificationSender @Primary dans le même contexte
+    // entreraient en conflit. Et sans @Transactional, car le rollback du bus imbriqué dans
+    // une transaction de test ne serait que marqué, pas exécuté — d'où le @AfterEach.
     @Nested
     @NestedTestConfiguration(EnclosingConfiguration.OVERRIDE)
     @Import({TestcontainersConfiguration.class, QuandLenvoiEchoue.EchecEnvoiConfiguration.class})
@@ -142,10 +126,6 @@ class RegisterUserControllerTest {
         @Autowired
         private JdbcTemplate jdbcTemplate;
 
-        /**
-         * Filet de sécurité : si le rollback ne fonctionnait pas, la ligne survivrait et
-         * pourrait perturber d'autres tests de la suite.
-         */
         @AfterEach
         void nettoyer() {
             jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", "erin@example.com");
@@ -160,7 +140,6 @@ class RegisterUserControllerTest {
                     .andExpect(jsonPath("$.message").isNotEmpty())
                     .andExpect(jsonPath("$.errors").doesNotExist());
 
-            // Le rollback de SpringCommandBus doit avoir annulé l'inscription entière.
             assertThat(queryBus.ask(new FindUserByEmail("erin@example.com"))).isEmpty();
         }
 

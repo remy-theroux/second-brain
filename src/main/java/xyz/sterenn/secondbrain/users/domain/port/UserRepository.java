@@ -7,17 +7,13 @@ import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
- * Port sortant vers le stockage des comptes. Le domaine énonce ce dont il a besoin ;
- * l'implémentation vit dans {@code users.infrastructure.persistence}.
+ * Stocke et relit les comptes ; {@code save} lève {@link EmailAlreadyUsedException} si l'unicité
+ * de l'email est violée.
  */
 public interface UserRepository {
 
     boolean existsByEmail(Email email);
 
-    /**
-     * @throws EmailAlreadyUsedException si la contrainte d'unicité est violée à
-     *         l'écriture — l'adapter traduit l'erreur technique en erreur métier
-     */
     User save(User user);
 
     Optional<User> findByEmail(Email email);

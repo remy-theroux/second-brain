@@ -24,14 +24,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.EmbeddingUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Embedding;
 
-/**
- * L'adapter, contre un serveur bouché. Aucun appel ne sort de la machine : c'est la règle
- * du projet — « les deux adapters se testent avec des doublures, sans appel réseau ».
- *
- * <p>Pas de {@code @SpringBootTest} : l'adapter se construit à la main avec un
- * {@code RestClient.Builder} auquel {@link MockRestServiceServer} s'est branché. Démarrer un
- * contexte n'apprendrait rien de plus et coûterait quelques secondes à chaque exécution.
- */
 class OllamaEmbeddingAdapterTest {
 
     private static final String BASE_URL = "http://ollama-de-test:11434";
@@ -71,13 +63,8 @@ class OllamaEmbeddingAdapterTest {
         List<String> textes =
                 IntStream.range(0, 120).mapToObj(i -> "texte " + i).toList();
 
-        // Un lot après l'autre, chacun répondant des valeurs qui identifient son rang. Les
-        // jsonPath sur les corps de requête sont ce qui fait la preuve du bon découpage : un
-        // adapter qui enverrait toujours les mêmes 32 premiers textes, ou qui tranchait
-        // depuis l'index 0 à chaque lot, produirait le même nombre d'appels et la même forme
-        // de réponse assemblée — seul le contenu envoyé le trahirait.
-        // Quatre attentes successives : MockRestServiceServer les consomme dans l'ordre, et
-        // `verify()` échoue s'il en reste une, donc « exactement quatre appels » est vérifié.
+        // MockRestServiceServer consomme les attentes dans l'ordre et `verify()` échoue s'il en
+        // reste une : quatre attentes valent donc « exactement quatre appels ».
         serveur.expect(requestTo(URL_EMBED)).andRespond(reponsePour(32, 0f));
         serveur.expect(requestTo(URL_EMBED))
                 .andExpect(jsonPath("$.input[0]").value("texte 32"))
@@ -142,9 +129,6 @@ class OllamaEmbeddingAdapterTest {
 
     @Test
     void n_insiste_pas_sur_un_refus_4xx_et_en_garde_le_message() {
-        // Le cas nommé par la spec : un nom de modèle mal orthographié. Ollama répond vite,
-        // et une seule requête doit partir — retenter trois fois un refus qui ne se corrige
-        // pas tout seul coûterait ~300 requêtes et 40 s de Thread.sleep sur un vrai PDF.
         String corpsErreur = "{\"error\":\"model \\\"bge-m4\\\" not found, try pulling it first\"}";
         serveur.expect(ExpectedCount.once(), requestTo(URL_EMBED))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND)
@@ -158,7 +142,6 @@ class OllamaEmbeddingAdapterTest {
         serveur.verify();
     }
 
-    /** Un corps JSON portant un vecteur de la bonne dimension par valeur donnée. */
     private static String corpsDeReponse(float... premieresValeurs) {
         StringBuilder corps = new StringBuilder("{\"embeddings\":[");
         for (int i = 0; i < premieresValeurs.length; i++) {
@@ -167,7 +150,6 @@ class OllamaEmbeddingAdapterTest {
         return corps.append("]}").toString();
     }
 
-    /** Une réponse de {@code combien} vecteurs portant tous la même première valeur. */
     private static ResponseCreator reponsePour(int combien, float valeur) {
         StringBuilder corps = new StringBuilder("{\"embeddings\":[");
         for (int i = 0; i < combien; i++) {
