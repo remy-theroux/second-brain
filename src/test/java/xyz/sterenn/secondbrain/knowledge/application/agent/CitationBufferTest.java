@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCandidate;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCatalogue;
@@ -72,13 +73,31 @@ class CitationBufferTest {
     }
 
     @Test
-    void laisse_remonter_l_echec_de_la_sortie() {
+    void laisse_remonter_l_echec_de_la_sortie_a_l_ouverture() {
         CitationBuffer tampon = new CitationBuffer(troisExtraits(), fragment -> {
             throw new IllegalStateException("le client a fermé");
         });
 
         assertThatExceptionOfType(IllegalStateException.class)
                 .isThrownBy(() -> tampon.accepte("Quatorze jours [1]."))
+                .withMessageContaining("le client a fermé");
+    }
+
+    @Test
+    void laisse_remonter_l_echec_de_la_sortie_une_fois_le_flux_ouvert() {
+        List<String> sortis = new ArrayList<>();
+        Consumer<String> sortie = fragment -> {
+            if (!sortis.isEmpty()) {
+                throw new IllegalStateException("le client a fermé");
+            }
+            sortis.add(fragment);
+        };
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortie);
+        tampon.accepte("Quatorze jours [1].");
+        assertThat(tampon.aOuvert()).isTrue();
+
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> tampon.accepte(" Et ensuite."))
                 .withMessageContaining("le client a fermé");
     }
 }
