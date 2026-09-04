@@ -213,13 +213,16 @@ xyz.sterenn.secondbrain
 │   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
 │   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
 │   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
+│   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
 │   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
 │   │   │                    TextChunk (un extrait et son vecteur)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait),
 │   │   │                    Embedding (le vecteur produit par le service de vectorisation),
-│   │   │                    Chunk (un extrait, avant qu'il soit rangé)
+│   │   │                    Chunk (un extrait, avant qu'il soit rangé),
+│   │   │                    Question (la question posée, non vide),
+│   │   │                    ChunkMatch (un extrait retrouvé et son score)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
 │   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
 │   │   │                    TextChunkRepository
@@ -227,13 +230,14 @@ xyz.sterenn.secondbrain
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
+│   │   │                    InvalidQuestionException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
-│   │   └── query/           ListDocuments + DocumentView
+│   │   └── query/           ListDocuments + DocumentView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -539,6 +543,38 @@ réémet `DocumentTextExtracted` pour lui, et il n'existe aujourd'hui aucune rou
 réindexe — ce sera RAG-7. La seule façon de le faire avancer est de le supprimer et de le
 redéposer, ou de republier à la main son événement `knowledge.document-text.extracted` sur le
 broker.
+
+### Le flux de la recherche
+
+`GET /api/search?q=…` vectorise la question par le même port qu'à l'indexation, puis rend les
+huit extraits les plus proches au cosinus, chacun avec son texte, le nom de son document, sa
+position et son score. Huit est une règle du domaine (`SearchPolicy.RESULTS`) et non un
+réglage d'exploitant : c'est RAG-9 qui les consommera pour composer une réponse. Aucun `?k=`
+n'anticipe une question qu'on ne se pose pas encore.
+
+**Le score est une similarité — `1 - distance`, donc 1 pour identique — et aucun plancher ne
+le filtre.** C'est une route de diagnostic : les scores faibles sont précisément ce qu'on
+vient y regarder, un défaut de pertinence ne s'instruisant pas autrement. Une liste vide ne
+vient donc que d'une base vide.
+
+La requête est du **SQL natif** sur `SpringDataTextChunkRepository`, avec un `CAST` explicite
+en `vector` — pgvector n'accepte aucune conversion implicite — et une jointure vers
+`knowledge_documents` qui porte à la fois le cloisonnement et le nom du document. C'est cette
+jointure imposée qui écarte le HQL, deux agrégats ne se référençant que par identifiant
+(ADR-0006). Le littéral `[0.1,0.2,…]` se fabrique dans l'adapter : le domaine ne connaît
+qu'`Embedding` et ne reçoit que des `ChunkMatch`.
+
+**La question part nue**, sans le préfixe `Document: … — Section: …` que porte l'extrait à
+l'indexation : `bge-m3` ne réclame aucune instruction de rôle, contrairement à un e5 — voir
+la spec de la recherche vectorielle, décision 5.
+
+L'appel de vectorisation a lieu **dans la transaction `readOnly` du query bus**, comme tout ce
+qu'un handler déclenche : la seconde d'aller-retour vers Ollama y tient une connexion
+PostgreSQL, ce qui est tenable pour une lecture qui n'écrit rien dans une application
+mono-utilisateur. Un Ollama à terre rend `503`, une question vide `422` sur le champ `q`.
+
+**Un document resté `EXTRACTED` n'est pas cherchable**, et rien ici ne le rattrape : c'est
+RAG-7.
 
 ### Les deux bus (`shared/bus`)
 
