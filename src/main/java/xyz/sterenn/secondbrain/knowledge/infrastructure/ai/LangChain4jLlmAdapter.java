@@ -29,13 +29,13 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolCall;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 
-public class LangChain4jLlmAdapter implements LlmPort {
+class LangChain4jLlmAdapter implements LlmPort {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final StreamingChatModel chatModel;
 
-    public LangChain4jLlmAdapter(StreamingChatModel chatModel) {
+    LangChain4jLlmAdapter(StreamingChatModel chatModel) {
         this.chatModel = chatModel;
     }
 
