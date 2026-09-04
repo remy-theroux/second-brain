@@ -19,7 +19,7 @@ class GroundingPolicyTest {
     private static SourceCatalogue troisExtraits() {
         UUID document = UUID.randomUUID();
         return SourceCatalogue.empty()
-                .absorbe(List.of(
+                .absorb(List.of(
                         new SourceCandidate(document, "a.pdf", 0, "", "un"),
                         new SourceCandidate(document, "a.pdf", 1, "", "deux"),
                         new SourceCandidate(document, "a.pdf", 2, "", "trois")))
@@ -81,7 +81,7 @@ class GroundingPolicyTest {
 
     @Test
     void rend_l_aveu_quand_le_budget_est_epuise() {
-        Answer reponse = GroundingPolicy.budgetDepasse(AGENT);
+        Answer reponse = GroundingPolicy.budgetExceeded(AGENT);
 
         assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
         assertThat(reponse.text()).isEqualTo(AgentDeTest.AVEU);

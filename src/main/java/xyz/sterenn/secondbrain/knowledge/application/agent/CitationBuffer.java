@@ -29,7 +29,7 @@ final class CitationBuffer {
         }
         // Sur le texte accumulé, jamais sur le fragment : un [3] arrive volontiers coupé
         // en « [ » puis « 3] ».
-        if (CitationPolicy.finDeLaPremiereCitationValide(accumule.toString(), catalogue::contient)
+        if (CitationPolicy.endOfFirstValidCitation(accumule.toString(), catalogue::contains)
                 .isPresent()) {
             ouvert = true;
             sortie.accept(accumule.toString());

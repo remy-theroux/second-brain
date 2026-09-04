@@ -63,7 +63,7 @@ class LangChain4jLlmAdapterTest {
         LlmTurn tour = adapter.stream(
                 new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(OUTIL), 0.2), fragments::add);
 
-        assertThat(tour.demandeUnOutil()).isFalse();
+        assertThat(tour.requestsATool()).isFalse();
         assertThat(tour.text()).isEqualTo("Le délai est de quatorze jours [2].");
         assertThat(fragments).containsExactly("Le délai ", "est de quatorze jours [2].");
     }
@@ -96,7 +96,7 @@ class LangChain4jLlmAdapterTest {
         LlmTurn tour = adapter.stream(
                 new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(OUTIL), 0.2), fragment -> {});
 
-        assertThat(tour.demandeUnOutil()).isTrue();
+        assertThat(tour.requestsATool()).isTrue();
         assertThat(tour.toolCalls()).hasSize(1);
         assertThat(tour.toolCalls().getFirst().name()).isEqualTo("rechercher_dans_les_documents");
         assertThat(tour.toolCalls().getFirst().argument("question")).isEqualTo("délai de rétractation");

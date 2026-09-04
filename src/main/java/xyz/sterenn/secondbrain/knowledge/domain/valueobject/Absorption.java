@@ -8,7 +8,7 @@ public record Absorption(SourceCatalogue catalogue, List<Source> nouveaux, int d
         nouveaux = List.copyOf(nouveaux);
     }
 
-    public boolean vide() {
+    public boolean isEmpty() {
         return nouveaux.isEmpty() && dejaVus == 0;
     }
 }

@@ -21,7 +21,7 @@ public final class SourceCatalogue {
         return new SourceCatalogue(Map.of());
     }
 
-    public Absorption absorbe(List<SourceCandidate> candidats) {
+    public Absorption absorb(List<SourceCandidate> candidats) {
         Map<Cle, Source> fusionne = new LinkedHashMap<>(parCle);
         List<Source> nouveaux = new ArrayList<>();
         int dejaVus = 0;
@@ -44,14 +44,14 @@ public final class SourceCatalogue {
                 .toList();
     }
 
-    public boolean contient(int numero) {
+    public boolean contains(int numero) {
         return numero >= 1 && numero <= parCle.size();
     }
 
-    public List<Source> citees(List<Integer> numeros) {
+    public List<Source> cited(List<Integer> numeros) {
         List<Source> toutes = sources();
         return numeros.stream()
-                .filter(this::contient)
+                .filter(this::contains)
                 .map(numero -> toutes.get(numero - 1))
                 .toList();
     }

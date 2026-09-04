@@ -39,7 +39,7 @@ public class ConversationAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConversationAgent.class);
 
-    private record ResultatDOutil(String texte, SourceCatalogue catalogue, Optional<String> requete) {}
+    private record ToolOutcome(String texte, SourceCatalogue catalogue, Optional<String> requete) {}
 
     private final Agent agent;
     private final LlmPort llmPort;
@@ -53,15 +53,15 @@ public class ConversationAgent {
         this.clock = clock;
     }
 
-    public Question valide(String question) {
+    public Question validate(String question) {
         return new Question(question);
     }
 
-    public String nomDeLAgent() {
+    public String agentName() {
         return agent.name();
     }
 
-    public String versionDeLAgent() {
+    public String agentVersion() {
         return agent.version();
     }
 
@@ -69,7 +69,7 @@ public class ConversationAgent {
     public ConversationOutcome answer(Question question, UUID ownerId, Consumer<String> onToken) {
         Instant debut = clock.instant();
         List<LlmMessage> messages =
-                new ArrayList<>(List.of(PromptBuilder.messageSysteme(agent), LlmMessage.user(question.value())));
+                new ArrayList<>(List.of(PromptBuilder.systemMessage(agent), LlmMessage.user(question.value())));
         SourceCatalogue catalogue = SourceCatalogue.empty();
         List<String> recherches = new ArrayList<>();
         int tours = 0;
@@ -81,7 +81,7 @@ public class ConversationAgent {
             LlmTurn tour =
                     llmPort.stream(new LlmRequest(messages, agent.tools(), agent.temperature()), tampon::accepte);
 
-            if (!tour.demandeUnOutil()) {
+            if (!tour.requestsATool()) {
                 if (tampon.texte().isBlank()) {
                     LOG.warn("Le modèle a rendu un tour vide (tour {}) ; tour consommé sans relance.", tours);
                     continue;
@@ -95,29 +95,29 @@ public class ConversationAgent {
 
             messages.add(LlmMessage.toolRequest(tour.toolCalls()));
             for (ToolCall appel : tour.toolCalls()) {
-                ResultatDOutil resultat = execute(appel, ownerId, catalogue);
+                ToolOutcome resultat = execute(appel, ownerId, catalogue);
                 catalogue = resultat.catalogue();
                 resultat.requete().ifPresent(recherches::add);
                 messages.add(LlmMessage.toolResult(appel.id(), resultat.texte()));
             }
         }
 
-        Answer reponse = GroundingPolicy.budgetDepasse(agent);
+        Answer reponse = GroundingPolicy.budgetExceeded(agent);
         onToken.accept(reponse.text());
         return new ConversationOutcome(reponse, recherches, tours, ecoule(debut));
     }
 
-    private ResultatDOutil execute(ToolCall appel, UUID ownerId, SourceCatalogue catalogue) {
-        if (!agent.connait(appel.name())) {
+    private ToolOutcome execute(ToolCall appel, UUID ownerId, SourceCatalogue catalogue) {
+        if (!agent.knows(appel.name())) {
             String connus = agent.tools().stream().map(ToolSpecification::name).collect(Collectors.joining(", "));
-            return new ResultatDOutil(
+            return new ToolOutcome(
                     "L'outil « " + appel.name() + " » n'existe pas. Outils disponibles : " + connus + ".",
                     catalogue,
                     Optional.empty());
         }
         String requete = appel.argument(DocumentAgent.PARAMETRE_QUESTION);
         if (requete == null || requete.isBlank()) {
-            return new ResultatDOutil(
+            return new ToolOutcome(
                     "L'appel est incomplet : le paramètre « " + DocumentAgent.PARAMETRE_QUESTION
                             + " » est obligatoire.",
                     catalogue,
@@ -127,12 +127,10 @@ public class ConversationAgent {
         try {
             candidats = documentSearchTool.rechercher(requete, ownerId);
         } catch (InvalidQuestionException refus) {
-            return new ResultatDOutil(
-                    "La recherche a été refusée : " + refus.getMessage(), catalogue, Optional.empty());
+            return new ToolOutcome("La recherche a été refusée : " + refus.getMessage(), catalogue, Optional.empty());
         }
-        Absorption absorption = catalogue.absorbe(candidats);
-        return new ResultatDOutil(
-                PromptBuilder.resultatDeRecherche(absorption), absorption.catalogue(), Optional.of(requete));
+        Absorption absorption = catalogue.absorb(candidats);
+        return new ToolOutcome(PromptBuilder.searchResult(absorption), absorption.catalogue(), Optional.of(requete));
     }
 
     private boolean budgetEcoule(Instant debut) {

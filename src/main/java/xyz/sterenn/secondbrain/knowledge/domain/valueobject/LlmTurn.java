@@ -9,7 +9,7 @@ public record LlmTurn(String text, List<ToolCall> toolCalls) {
         toolCalls = toolCalls == null ? List.of() : List.copyOf(toolCalls);
     }
 
-    public boolean demandeUnOutil() {
+    public boolean requestsATool() {
         return !toolCalls.isEmpty();
     }
 }

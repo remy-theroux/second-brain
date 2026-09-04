@@ -10,12 +10,12 @@ public final class PromptBuilder {
 
     private PromptBuilder() {}
 
-    public static LlmMessage messageSysteme(Agent agent) {
+    public static LlmMessage systemMessage(Agent agent) {
         return LlmMessage.system(agent.systemPrompt());
     }
 
-    public static String resultatDeRecherche(Absorption absorption) {
-        if (absorption.vide()) {
+    public static String searchResult(Absorption absorption) {
+        if (absorption.isEmpty()) {
             return "Aucun extrait ne correspond à cette recherche.";
         }
         if (absorption.nouveaux().isEmpty()) {

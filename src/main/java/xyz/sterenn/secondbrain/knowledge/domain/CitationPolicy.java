@@ -30,7 +30,7 @@ public final class CitationPolicy {
         return List.copyOf(vues);
     }
 
-    public static OptionalInt finDeLaPremiereCitationValide(String texte, IntPredicate connu) {
+    public static OptionalInt endOfFirstValidCitation(String texte, IntPredicate connu) {
         Matcher chercheur = CITATION.matcher(texte);
         while (chercheur.find()) {
             if (connu.test(Integer.parseInt(chercheur.group(1)))) {

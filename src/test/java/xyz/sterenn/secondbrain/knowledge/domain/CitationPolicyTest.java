@@ -36,14 +36,14 @@ class CitationPolicyTest {
     void situe_la_fin_de_la_premiere_citation_connue() {
         String texte = "Le délai est de quatorze jours [2] selon vos documents.";
 
-        OptionalInt fin = CitationPolicy.finDeLaPremiereCitationValide(texte, HUIT_EXTRAITS);
+        OptionalInt fin = CitationPolicy.endOfFirstValidCitation(texte, HUIT_EXTRAITS);
 
         assertThat(fin).hasValue(texte.indexOf("[2]") + "[2]".length());
     }
 
     @Test
     void ne_situe_rien_quand_la_seule_citation_est_inconnue() {
-        assertThat(CitationPolicy.finDeLaPremiereCitationValide("Le délai [9] est long.", HUIT_EXTRAITS))
+        assertThat(CitationPolicy.endOfFirstValidCitation("Le délai [9] est long.", HUIT_EXTRAITS))
                 .isEmpty();
     }
 
@@ -51,15 +51,15 @@ class CitationPolicyTest {
     void saute_une_citation_inconnue_pour_trouver_la_suivante() {
         String texte = "Faux [9] mais vrai [4] ensuite.";
 
-        assertThat(CitationPolicy.finDeLaPremiereCitationValide(texte, HUIT_EXTRAITS))
+        assertThat(CitationPolicy.endOfFirstValidCitation(texte, HUIT_EXTRAITS))
                 .hasValue(texte.indexOf("[4]") + "[4]".length());
     }
 
     @Test
     void ne_situe_rien_dans_une_citation_encore_coupee_en_deux() {
-        assertThat(CitationPolicy.finDeLaPremiereCitationValide("Le délai [", HUIT_EXTRAITS))
+        assertThat(CitationPolicy.endOfFirstValidCitation("Le délai [", HUIT_EXTRAITS))
                 .isEmpty();
-        assertThat(CitationPolicy.finDeLaPremiereCitationValide("Le délai [2", HUIT_EXTRAITS))
+        assertThat(CitationPolicy.endOfFirstValidCitation("Le délai [2", HUIT_EXTRAITS))
                 .isEmpty();
     }
 }

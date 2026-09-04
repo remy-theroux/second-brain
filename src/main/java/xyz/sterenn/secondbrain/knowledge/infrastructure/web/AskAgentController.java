@@ -57,7 +57,7 @@ public class AskAgentController {
     @SecurityRequirement(name = "bearer")
     public SseEmitter chat(@RequestBody AskAgentRequest request, @AuthenticationPrincipal Jwt jwt) {
         // Validé sur le thread servlet : une question refusée doit rendre 422, pas un flux.
-        Question question = conversationAgent.valide(request.question());
+        Question question = conversationAgent.validate(request.question());
         UUID ownerId = JwtSubject.accountId(jwt);
         SseEmitter emitter = new SseEmitter(TIMEOUT_MILLIS);
         AtomicBoolean expire = new AtomicBoolean(false);
@@ -93,7 +93,7 @@ public class AskAgentController {
                     Map.of("verdict", resultat.answer().verdict().name()));
             emitter.complete();
             tracer(question, ownerId, resultat);
-        } catch (ClientPartiException clientParti) {
+        } catch (ClientGoneException clientParti) {
             // Une expiration marque déjà l'emitter complet : le compléter à nouveau n'a pas lieu d'être.
             if (expire.get()) {
                 LOG.info("La génération a été interrompue par l'expiration du flux (ownerId={}).", ownerId);
@@ -122,8 +122,8 @@ public class AskAgentController {
         try {
             commandBus.dispatch(new RecordAgentRun(
                     ownerId,
-                    conversationAgent.nomDeLAgent(),
-                    conversationAgent.versionDeLAgent(),
+                    conversationAgent.agentName(),
+                    conversationAgent.agentVersion(),
                     question.value(),
                     resultat.answer().text(),
                     resultat.answer().verdict(),
@@ -149,7 +149,7 @@ public class AskAgentController {
         try {
             emitter.send(SseEmitter.event().name(evenement).data(donnees));
         } catch (IOException | IllegalStateException clientParti) {
-            throw new ClientPartiException(clientParti);
+            throw new ClientGoneException(clientParti);
         }
     }
 
@@ -165,9 +165,9 @@ public class AskAgentController {
     }
 
     /** Traverse la boucle sans être rattrapée : c'est ainsi qu'une déconnexion arrête la génération. */
-    private static final class ClientPartiException extends RuntimeException {
+    private static final class ClientGoneException extends RuntimeException {
 
-        ClientPartiException(Throwable cause) {
+        ClientGoneException(Throwable cause) {
             super(cause);
         }
     }

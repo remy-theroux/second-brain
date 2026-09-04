@@ -15,14 +15,14 @@ public final class GroundingPolicy {
         if (!rechercheEffectuee) {
             return new Answer(texte, List.of(), AnswerVerdict.CONVERSATIONNELLE);
         }
-        List<Source> citees = catalogue.citees(CitationPolicy.citations(texte));
+        List<Source> citees = catalogue.cited(CitationPolicy.citations(texte));
         if (citees.isEmpty()) {
             return new Answer(agent.refusals().introuvable(), List.of(), AnswerVerdict.SANS_SOURCE);
         }
         return new Answer(texte, citees, AnswerVerdict.SOURCEE);
     }
 
-    public static Answer budgetDepasse(Agent agent) {
+    public static Answer budgetExceeded(Agent agent) {
         return new Answer(agent.refusals().introuvable(), List.of(), AnswerVerdict.BUDGET_DEPASSE);
     }
 }

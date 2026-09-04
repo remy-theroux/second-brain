@@ -26,7 +26,7 @@ public record Agent(
         tools = List.copyOf(tools);
     }
 
-    public boolean connait(String outil) {
+    public boolean knows(String outil) {
         return tools.stream().anyMatch(declare -> declare.name().equals(outil));
     }
 }

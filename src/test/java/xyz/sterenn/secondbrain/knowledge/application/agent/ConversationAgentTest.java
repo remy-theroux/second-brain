@@ -192,7 +192,7 @@ class ConversationAgentTest {
     @Test
     void refuse_une_question_vide_avant_d_appeler_le_modele() {
         assertThatExceptionOfType(InvalidQuestionException.class)
-                .isThrownBy(() -> agentAvec(List.of()).valide("   "));
+                .isThrownBy(() -> agentAvec(List.of()).validate("   "));
     }
 
     @Test

@@ -20,6 +20,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.LlmUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.LlmPort;
@@ -31,6 +33,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 
 class LangChain4jLlmAdapter implements LlmPort {
 
+    private static final Logger LOG = LoggerFactory.getLogger(LangChain4jLlmAdapter.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final StreamingChatModel chatModel;
@@ -55,7 +58,7 @@ class LangChain4jLlmAdapter implements LlmPort {
                 } catch (RuntimeException abandon) {
                     // Emballée pour être reconnue à la sortie : c'est le client qui est parti,
                     // pas le service de génération qui a échoué.
-                    attendu.completeExceptionally(new AbandonDuConsommateur(abandon));
+                    attendu.completeExceptionally(new ConsumerFailure(abandon));
                     throw abandon;
                 }
             }
@@ -80,7 +83,7 @@ class LangChain4jLlmAdapter implements LlmPort {
             return attendu.join();
         } catch (CompletionException echec) {
             Throwable cause = echec.getCause() == null ? echec : echec.getCause();
-            if (cause instanceof AbandonDuConsommateur abandon) {
+            if (cause instanceof ConsumerFailure abandon) {
                 throw (RuntimeException) abandon.getCause();
             }
             throw new LlmUnavailableException(
@@ -89,9 +92,9 @@ class LangChain4jLlmAdapter implements LlmPort {
     }
 
     /** Distingue « le client est parti » de « le service a échoué » sans deviner un type de la bibliothèque. */
-    private static final class AbandonDuConsommateur extends RuntimeException {
+    private static final class ConsumerFailure extends RuntimeException {
 
-        AbandonDuConsommateur(RuntimeException cause) {
+        ConsumerFailure(RuntimeException cause) {
             super(cause);
         }
     }
@@ -103,13 +106,13 @@ class LangChain4jLlmAdapter implements LlmPort {
         List<ToolCall> appels = new ArrayList<>();
         for (ToolExecutionRequest demande : message.toolExecutionRequests()) {
             String identifiant = demande.id() == null ? UUID.randomUUID().toString() : demande.id();
-            appels.add(new ToolCall(identifiant, demande.name(), arguments(demande.arguments())));
+            appels.add(new ToolCall(identifiant, demande.name(), arguments(demande.name(), demande.arguments())));
         }
         return appels;
     }
 
     /** Les arguments arrivent en JSON ; le domaine ne connaît que des paires de chaînes. */
-    private static Map<String, String> arguments(String json) {
+    private static Map<String, String> arguments(String nomDeLOutil, String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }
@@ -119,7 +122,8 @@ class LangChain4jLlmAdapter implements LlmPort {
             brut.forEach((cle, valeur) -> arguments.put(String.valueOf(cle), String.valueOf(valeur)));
         } catch (RuntimeException jsonIllisible) {
             // Un petit modèle produit des arguments illisibles : la boucle en fait une erreur
-            // d'outil rendue au modèle, pas une panne.
+            // d'outil rendue au modèle, pas une panne — mais l'exploitant doit pouvoir l'imputer.
+            LOG.warn("Arguments illisibles pour l'outil « {} » : {}", nomDeLOutil, jsonIllisible.getMessage());
             return Map.of();
         }
         return arguments;

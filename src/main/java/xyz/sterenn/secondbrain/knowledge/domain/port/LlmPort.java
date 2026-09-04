@@ -9,6 +9,10 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn;
  * jusqu'à la fin du tour ; les fragments de texte sont remis à {@code onToken} au fil de leur
  * production. Une exception levée par {@code onToken} interrompt le tour — c'est ainsi que la
  * déconnexion d'un client arrête la génération.
+ *
+ * <p>Tout le texte d'assistant du tour doit passer par {@code onToken} ; {@link
+ * xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn#text()} n'en est qu'une
+ * récapitulation, jamais l'unique porteur.
  */
 public interface LlmPort {
 

@@ -25,10 +25,6 @@ public record LlmMessage(LlmMessage.Role role, String content, List<ToolCall> to
         return new LlmMessage(Role.USER, content, List.of(), null);
     }
 
-    public static LlmMessage assistant(String content) {
-        return new LlmMessage(Role.ASSISTANT, content, List.of(), null);
-    }
-
     public static LlmMessage toolRequest(List<ToolCall> toolCalls) {
         return new LlmMessage(Role.ASSISTANT, "", toolCalls, null);
     }

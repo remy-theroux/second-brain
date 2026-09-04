@@ -18,12 +18,12 @@ class SourceCatalogueTest {
     @Test
     void part_vide() {
         assertThat(SourceCatalogue.empty().sources()).isEmpty();
-        assertThat(SourceCatalogue.empty().contient(1)).isFalse();
+        assertThat(SourceCatalogue.empty().contains(1)).isFalse();
     }
 
     @Test
     void numerote_les_extraits_a_partir_de_un_dans_l_ordre_recu() {
-        Absorption absorption = SourceCatalogue.empty().absorbe(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)));
+        Absorption absorption = SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)));
 
         assertThat(absorption.nouveaux()).extracting(Source::number).containsExactly(1, 2);
         assertThat(absorption.dejaVus()).isZero();
@@ -33,10 +33,10 @@ class SourceCatalogueTest {
     @Test
     void rend_son_numero_d_origine_a_un_extrait_deja_vu() {
         SourceCatalogue premier = SourceCatalogue.empty()
-                .absorbe(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)))
+                .absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)))
                 .catalogue();
 
-        Absorption seconde = premier.absorbe(List.of(extrait(RAPPORT, 1), extrait(NOTES, 0)));
+        Absorption seconde = premier.absorb(List.of(extrait(RAPPORT, 1), extrait(NOTES, 0)));
 
         assertThat(seconde.nouveaux()).extracting(Source::number).containsExactly(3);
         assertThat(seconde.dejaVus()).isEqualTo(1);
@@ -45,7 +45,7 @@ class SourceCatalogueTest {
 
     @Test
     void distingue_deux_extraits_par_leur_document_autant_que_par_leur_position() {
-        Absorption absorption = SourceCatalogue.empty().absorbe(List.of(extrait(RAPPORT, 0), extrait(NOTES, 0)));
+        Absorption absorption = SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0), extrait(NOTES, 0)));
 
         assertThat(absorption.nouveaux()).hasSize(2);
     }
@@ -53,9 +53,9 @@ class SourceCatalogueTest {
     @Test
     void n_apprend_rien_d_une_recherche_qui_ne_ramene_que_du_deja_vu() {
         SourceCatalogue premier =
-                SourceCatalogue.empty().absorbe(List.of(extrait(RAPPORT, 0))).catalogue();
+                SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0))).catalogue();
 
-        Absorption seconde = premier.absorbe(List.of(extrait(RAPPORT, 0)));
+        Absorption seconde = premier.absorb(List.of(extrait(RAPPORT, 0)));
 
         assertThat(seconde.nouveaux()).isEmpty();
         assertThat(seconde.dejaVus()).isEqualTo(1);
@@ -66,7 +66,7 @@ class SourceCatalogueTest {
     void ne_modifie_pas_le_catalogue_qu_il_absorbe() {
         SourceCatalogue depart = SourceCatalogue.empty();
 
-        depart.absorbe(List.of(extrait(RAPPORT, 0)));
+        depart.absorb(List.of(extrait(RAPPORT, 0)));
 
         assertThat(depart.sources()).isEmpty();
     }
@@ -74,11 +74,9 @@ class SourceCatalogueTest {
     @Test
     void ne_rend_que_les_sources_reellement_citees_et_connues() {
         SourceCatalogue catalogue = SourceCatalogue.empty()
-                .absorbe(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1), extrait(RAPPORT, 2)))
+                .absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1), extrait(RAPPORT, 2)))
                 .catalogue();
 
-        assertThat(catalogue.citees(List.of(3, 9, 1)))
-                .extracting(Source::number)
-                .containsExactly(3, 1);
+        assertThat(catalogue.cited(List.of(3, 9, 1))).extracting(Source::number).containsExactly(3, 1);
     }
 }
