@@ -139,7 +139,10 @@ GPU**. Deux exigences tombent :
   retenu en décision 6 : le client serait coupé pendant que le serveur travaille encore. Bug
   invisible en test unitaire, visible seulement sur une vraie question lente.
 
-L'emitter est donc fixé à **150 s**, et c'est le budget de 120 s qui tranche.
+L'emitter est donc fixé à **330 s**, dérivés du budget de l'agent plutôt que d'une valeur
+choisie à part : 120 s de budget, plus un tour au pire puisque la limite n'est vérifiée qu'en
+tête de boucle et n'est donc pas une échéance murale — le délai de lecture d'Ollama, 180 s —,
+plus 30 s de marge. 120 + 180 + 30 = 330.
 
 ### 4. Ollama local, `qwen3:4b`, sans mesure préalable
 
@@ -279,8 +282,11 @@ non fondée n'atteint **jamais** l'écran.
 
 Deux propriétés qui en découlent et qu'il faut connaître :
 
-- Le tampon ne s'arme **que si une recherche a eu lieu**. Sinon « bonjour » resterait bloqué
-  à jamais.
+- Le tampon est **toujours armé**, même sans recherche : un tour peut porter à la fois du
+  texte et un appel d'outil, et un tampon non armé laisserait ce texte — potentiellement une
+  réponse inventée avant toute recherche — partir tel quel vers le client. Conséquence : une
+  réponse conversationnelle n'est plus streamée fragment par fragment ; elle est émise en un
+  bloc par la boucle, une fois le tour terminé et le verdict rendu.
 - Si le modèle rédige lui-même correctement l'aveu d'ignorance, le tampon ne s'ouvre jamais
   et le garde-fou le remplace par… le même message. Aucun dégât.
 
@@ -426,7 +432,7 @@ Décision candidate à un ADR (non écrit).
 
 ```
 POST /api/chat  {"question": "..."}          AskAgentController  (infrastructure/web)
-   │  lit `sub` du JWT, crée le SseEmitter (150 s), dispatche sur un thread virtuel
+   │  lit `sub` du JWT, crée le SseEmitter (330 s), dispatche sur un thread virtuel
    ▼
 ConversationAgent                             (application/agent)  ← AUCUNE transaction
    │  boucle bornée : 4 tours max, budget 120 s
@@ -453,11 +459,11 @@ d'une conversation vide, et le catalogue naît et meurt avec la requête.
 
 **Domaine** (`knowledge/domain/`)
 
-- `valueobject/Agent`, `ToolSpecification`, `FewShotExample`, `ExecutionBudget`,
+- `valueobject/Agent`, `ToolSpecification`, `ExecutionBudget`,
   `AgentRefusals`, `SourceCatalogue`, `Source`, `Answer`, `AnswerVerdict`, `LlmRequest`,
   `LlmMessage`, `ToolCall`, `LlmTurn`
 - `DocumentAgent` (outils, budget, température — la moitié Java de l'agent unique),
-  `CitationPolicy`, `PromptBuilder`, `CitationParser`, `GroundingPolicy` — à la racine, aux
+  `CitationPolicy`, `PromptBuilder`, `GroundingPolicy` — à la racine, aux
   côtés de `SearchPolicy`
 - `port/LlmPort`, `port/AgentRunRepository`
 - `exception/LlmUnavailableException`
