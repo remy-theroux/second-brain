@@ -57,6 +57,14 @@ public class ConversationAgent {
         return new Question(question);
     }
 
+    public String nomDeLAgent() {
+        return agent.name();
+    }
+
+    public String versionDeLAgent() {
+        return agent.version();
+    }
+
     /** Au retour, le texte de l'{@code Answer} rendue a déjà été émis par {@code onToken} : ne pas le réémettre. */
     public ConversationOutcome answer(Question question, UUID ownerId, Consumer<String> onToken) {
         Instant debut = clock.instant();

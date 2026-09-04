@@ -139,9 +139,11 @@ le premier démarrage, donc sans conteneur d'amorçage. Pour l'interroger à la 
 nommés (`garage-meta`, `garage-data`) sont propres au projet Compose, comme `db-data` :
 **chaque worktree a donc son propre Garage**, tout comme il a sa propre base.
 
-Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions), tiré au premier
-démarrage par le conteneur one-shot `ollama-pull`. Il ne publie aucun port : seul le worker
-lui parle, par le réseau de la pile. Pour l'interroger à la main,
+Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions) et le modèle de
+génération (`qwen3:4b`), tous deux tirés au premier démarrage par le conteneur one-shot
+`ollama-pull` — **deux modèles**, donc un premier démarrage plus long, et un Ollama de plus
+par worktree en tire deux plutôt qu'un. Il ne publie aucun port : seuls le worker et l'app
+lui parlent, par le réseau de la pile. Pour l'interroger à la main,
 `docker compose exec ollama ollama list`. Le worker **ne l'attend pas** pour démarrer — un
 document traité pendant le téléchargement du modèle échoue avec un motif qui nomme la
 vectorisation.
@@ -576,6 +578,49 @@ mono-utilisateur. Un Ollama à terre rend `503`, une question vide `422` sur le 
 **Un document resté `EXTRACTED` n'est pas cherchable**, et rien ici ne le rattrape : c'est
 RAG-7.
 
+### Le flux de la conversation
+
+`POST /api/chat` confie la question à un **agent** qui dispose d'un outil de recherche et
+**décide** s'il l'appelle. Ce n'est pas un RAG en un coup : une question conversationnelle
+n'ouvre aucune recherche, et une question documentaire peut en enchaîner plusieurs avant de
+répondre.
+
+La boucle vit dans `ConversationAgent`, **hors des bus et sans transaction** : une
+conversation dure des minutes, et une transaction ouverte tiendrait tout ce temps une
+connexion PostgreSQL. Chaque recherche qu'elle déclenche passe par le `QueryBus`
+(transaction courte, le temps d'un appel), la trace finale par le `CommandBus`, **après la
+fermeture du flux** — son échec ne doit rien coûter à une réponse déjà livrée au client.
+
+**Les tokens sont retenus jusqu'à la première citation valide.** `CitationBuffer` les
+tamponne le temps qu'une référence `[n]` complète apparaisse dans le texte produit ; une
+réponse qui a cherché sans rien citer n'atteint jamais l'écran, elle est remplacée par
+l'aveu d'ignorance — c'est le garde-fou qui interdit qu'une invention parte sourcée par
+erreur.
+
+Le catalogue des sources (`SourceCatalogue`) est **cumulatif et dédoublonné** sur
+`(documentId, position)` : un extrait déjà cité garde son numéro pour toute la
+conversation, même retrouvé par une recherche ultérieure — le modèle ne cite jamais deux
+numéros pour un même passage.
+
+La définition de l'agent se partage entre deux fichiers qui doivent rester en phase : la
+prose dans `src/main/resources/agents/document-agent.md`, l'outil, le budget et la
+température dans `DocumentAgent`. `AgentDefinitionLoader` échoue au démarrage si un
+placeholder du fichier markdown reste non résolu — mieux vaut un démarrage refusé qu'un
+prompt à moitié rédigé envoyé en production.
+
+Bornes du dispositif : **4 tours**, **120 s** de budget d'exécution pour l'agent, un
+emitter SSE à **150 s** — la marge est nécessaire, un emitter qui expire pendant que le
+serveur travaille encore couperait le client sans rien lui dire. Un nom d'outil inventé ou
+un argument manquant — attendus d'un petit modèle à outils — sont rendus au modèle comme
+des erreurs d'outil ordinaires et consomment un tour, pas une panne.
+
+**Quatre décisions attendent leur ADR**, faute d'accord préalable du propriétaire du
+dépôt sur leur rédaction — voir `docs/superpowers/specs/2026-09-04-reponse-sourcee-design.md`,
+section « Ce qui reste à arbitrer » : l'orchestration hors des bus et sans transaction, la
+génération confiée à LangChain4j là où la vectorisation est écrite à la main, la rétention
+des tokens jusqu'à la première citation valide, et l'agent qui choisit lui-même s'il
+cherche.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -687,6 +732,16 @@ colonne, et doit rester égale à `EmbeddingPolicy.DIMENSIONS`. Elle cascade ell
 suppression du document : c'est la deuxième fois qu'un ticket ajoute des tables sans toucher
 à `DeleteDocumentHandler`.
 
+La trace de chaque conversation vit dans `knowledge_agent_runs`, avec deux tables filles
+cascadées (`knowledge_agent_run_searches`, les requêtes envoyées à l'outil de recherche, et
+`knowledge_agent_run_sources`, les sources citées). **Aucune clé étrangère ne relie une
+source citée à la ligne `knowledge_text_chunks` dont elle vient** : `CitedSource` recopie ce
+qu'il faut pour se relire (document, section, texte) plutôt que de référencer l'extrait, qui
+peut disparaître — un document supprimé ne doit pas invalider rétroactivement une trace déjà
+écrite. C'est la même logique qui a valu à deux agrégats de se référencer par identifiant
+plutôt que par `@ManyToOne` (ADR-0006), poussée un cran plus loin : ici, `documentId` reste
+en colonne pour le diagnostic, mais sans contrainte qui l'oblige à désigner encore quelqu'un.
+
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
 objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket
 `second-brain-originals` (servi par Garage en développement, voir la section « Commandes »
@@ -743,8 +798,9 @@ remplace — voir `.claude/rules/decisions.md`.
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 + pgvector · Spring AMQP · RabbitMQ 4 ·
 springdoc-openapi · commonmark-java · Apache POI · PDFBox · jtokkit (comptage de tokens) ·
-hibernate-vector · AWS SDK for Java v2 (stockage objet des originaux) · JUnit 5 + AssertJ +
-Testcontainers · Gradle Kotlin DSL avec version catalog (`gradle/libs.versions.toml`).
+hibernate-vector · AWS SDK for Java v2 (stockage objet des originaux) · LangChain4j 1.19.0
+(transport de la génération) · JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec
+version catalog (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
 Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
