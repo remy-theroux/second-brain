@@ -55,8 +55,4 @@ public final class SourceCatalogue {
                 .map(numero -> toutes.get(numero - 1))
                 .toList();
     }
-
-    public int taille() {
-        return parCle.size();
-    }
 }

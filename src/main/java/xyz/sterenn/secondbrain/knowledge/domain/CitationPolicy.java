@@ -1,6 +1,5 @@
 package xyz.sterenn.secondbrain.knowledge.domain;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.OptionalInt;
@@ -28,7 +27,7 @@ public final class CitationPolicy {
         while (chercheur.find()) {
             vues.add(Integer.parseInt(chercheur.group(1)));
         }
-        return List.copyOf(new ArrayList<>(vues));
+        return List.copyOf(vues);
     }
 
     public static OptionalInt finDeLaPremiereCitationValide(String texte, IntPredicate connu) {
