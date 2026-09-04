@@ -216,29 +216,53 @@ xyz.sterenn.secondbrain
 │   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
 │   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
 │   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
+│   │   ├── DocumentAgent    la moitié Java de l'agent documentaire : outil, budget, température
+│   │   ├── GroundingPolicy  décide le verdict d'une réponse — sourcée, conversationnelle,
+│   │   │                    sans source, ou budget dépassé
+│   │   ├── CitationPolicy   l'unique syntaxe de citation `[n]`, un seul endroit qui la connaisse
+│   │   ├── PromptBuilder    message système de l'agent, mise en forme d'un résultat de recherche
 │   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
-│   │   │                    TextChunk (un extrait et son vecteur)
+│   │   │                    TextChunk (un extrait et son vecteur), AgentRun (la trace d'une
+│   │   │                    conversation : question, réponse, recherches, sources citées)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait),
 │   │   │                    Embedding (le vecteur produit par le service de vectorisation),
 │   │   │                    Chunk (un extrait, avant qu'il soit rangé),
 │   │   │                    Question (la question posée, non vide),
-│   │   │                    ChunkMatch (un extrait retrouvé et son score)
+│   │   │                    ChunkMatch (un extrait retrouvé et son score),
+│   │   │                    Agent (nom, version, prompt système, outils, budget, température),
+│   │   │                    AgentRefusals (les messages figés d'un aveu d'ignorance),
+│   │   │                    ExecutionBudget (tours et durée maximum d'une conversation),
+│   │   │                    LlmMessage + LlmRequest + LlmTurn (le dialogue avec le service de
+│   │   │                    génération), ToolSpecification + ToolParameter + ToolCall (un outil
+│   │   │                    déclaré à l'agent, et un appel que le modèle en fait),
+│   │   │                    SourceCandidate + SourceCatalogue + Absorption (les extraits
+│   │   │                    retrouvés par une recherche, et leur numérotation cumulative),
+│   │   │                    Source + CitedSource (une source numérotée dans la réponse, puis
+│   │   │                    sa forme persistée dans la trace),
+│   │   │                    Answer + AnswerVerdict (la réponse rendue, et son verdict)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
 │   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
-│   │   │                    TextChunkRepository
+│   │   │                    TextChunkRepository, LlmPort (le service de génération),
+│   │   │                    AgentRunRepository (les traces de conversation, par propriétaire)
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
-│   │   │                    InvalidQuestionException,
+│   │   │                    InvalidQuestionException, LlmUnavailableException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
+│   │   ├── agent/           ConversationAgent (la boucle qui décide, hors des bus et sans
+│   │   │                    transaction), ConversationOutcome (son résultat : réponse,
+│   │   │                    recherches, tours, durée), DocumentSearchTool (l'outil que l'agent
+│   │   │                    appelle, par le QueryBus), CitationBuffer (retient les tokens
+│   │   │                    jusqu'à la première citation valide)
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
-│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
+│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
+│   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
 │   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
 │   │                        + TextExtractionView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
@@ -247,7 +271,12 @@ xyz.sterenn.secondbrain
 │       ├── storage/         ADAPTER S3 du port DocumentStorage + S3ClientConfiguration (le client)
 │       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
 │       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
-│       │                    et JtokkitTokenCounter
+│       │                    JtokkitTokenCounter, et ADAPTER du port LlmPort :
+│       │                    LangChain4jLlmAdapter + OllamaChatConfiguration — seul endroit du
+│       │                    dépôt où `dev.langchain4j.*` peut être importé
+│       ├── agent/           AgentConfiguration (le bean Agent et l'exécuteur de la
+│       │                    conversation), AgentDefinitionLoader (charge et valide la prose
+│       │                    de l'agent au démarrage)
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
 │                            KnowledgeEventListener (profil worker), catalogue des
@@ -585,11 +614,20 @@ RAG-7.
 n'ouvre aucune recherche, et une question documentaire peut en enchaîner plusieurs avant de
 répondre.
 
+La réponse voyage en **Server-Sent Events**, toujours dans cet ordre : `token` (un fragment
+de texte, zéro ou plusieurs fois), `sources` (une fois, les extraits cités), puis `done` (le
+verdict de la réponse). Un échec en cours de génération émet `error` à la place — `sources`
+et `done` **ne sont alors jamais émis** : un client qui reçoit `error` sait qu'aucune
+conversation complète ne suivra sur ce flux.
+
 La boucle vit dans `ConversationAgent`, **hors des bus et sans transaction** : une
 conversation dure des minutes, et une transaction ouverte tiendrait tout ce temps une
 connexion PostgreSQL. Chaque recherche qu'elle déclenche passe par le `QueryBus`
 (transaction courte, le temps d'un appel), la trace finale par le `CommandBus`, **après la
 fermeture du flux** — son échec ne doit rien coûter à une réponse déjà livrée au client.
+Cette trace n'est écrite que sur le chemin nominal : **une conversation interrompue par une
+erreur ou une déconnexion n'en laisse aucune**, `RecordAgentRun` n'étant dispatché qu'après
+un `answer()` allé à son terme.
 
 **Les tokens sont retenus jusqu'à la première citation valide.** `CitationBuffer` les
 tamponne le temps qu'une référence `[n]` complète apparaisse dans le texte produit ; une
@@ -608,11 +646,21 @@ température dans `DocumentAgent`. `AgentDefinitionLoader` échoue au démarrage
 placeholder du fichier markdown reste non résolu — mieux vaut un démarrage refusé qu'un
 prompt à moitié rédigé envoyé en production.
 
-Bornes du dispositif : **4 tours**, **120 s** de budget d'exécution pour l'agent, un
-emitter SSE à **150 s** — la marge est nécessaire, un emitter qui expire pendant que le
-serveur travaille encore couperait le client sans rien lui dire. Un nom d'outil inventé ou
-un argument manquant — attendus d'un petit modèle à outils — sont rendus au modèle comme
-des erreurs d'outil ordinaires et consomment un tour, pas une panne.
+Bornes du dispositif : **4 tours**, **120 s** de budget d'exécution pour l'agent — vérifié
+**en tête de boucle seulement**, donc un tour déjà lancé va à son terme même au-delà. Un
+nom d'outil inventé ou un argument manquant — attendus d'un petit modèle à outils — sont
+rendus au modèle comme des erreurs d'outil ordinaires et consomment un tour, pas une panne.
+
+**L'emitter SSE se dimensionne sur le pire cas, pas sur le seul budget de l'agent** : 120 s
++ un tour au pire (le délai de lecture d'Ollama, 180 s — `OllamaChatConfiguration`) + 30 s
+de marge, soit **330 s**. Un emitter plus court expirerait pendant que le serveur travaille
+encore, et pas seulement dans un cas dégradé : un tour mesuré prend ~40 s sur cette machine,
+et le cas nominal de quatre tours en fait ~160 s à lui seul, au-dessus d'un emitter à 150 s.
+L'emitter journalise son propre cycle de vie (`onTimeout`, `onError`, `onCompletion`), avec
+l'`ownerId` en contexte — sans corrélation, une ligne de journal sur une pile qui sert
+plusieurs conversations ne se relie à aucune d'elles. Une expiration et une déconnexion
+empruntent le même chemin d'exception (`SseEmitter.send` lève au prochain envoi), mais un
+drapeau posé par `onTimeout` distingue les deux causes dans le message.
 
 **Quatre décisions attendent leur ADR**, faute d'accord préalable du propriétaire du
 dépôt sur leur rédaction — voir `docs/superpowers/specs/2026-09-04-reponse-sourcee-design.md`,
@@ -809,9 +857,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
 `RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
-conteneur `worker` de la même image que `app`, un service `ollama` qui sert le modèle
-d'embedding, et un service `garage` (image `dxflrs/garage:v2.3.0`) qui sert le stockage
-objet des originaux.
+conteneur `worker` de la même image que `app`, un service `ollama` qui sert les modèles
+d'embedding et de génération, et un service `garage` (image `dxflrs/garage:v2.3.0`) qui sert
+le stockage objet des originaux.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit

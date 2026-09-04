@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -32,10 +33,10 @@ import xyz.sterenn.secondbrain.shared.web.ValidationErrorResponse;
 public class AskAgentController {
 
     /**
-     * Au-dessus du budget d'exécution de l'agent : un emitter qui expire pendant que le serveur
-     * travaille encore couperait le client sans rien lui dire.
+     * Budget de l'agent (120 s) + un tour au pire, le délai de lecture d'Ollama (180 s) + 30 s
+     * de marge : la génération peut légitimement dépasser le budget pendant son dernier tour.
      */
-    private static final long TIMEOUT_MILLIS = 150_000L;
+    private static final long TIMEOUT_MILLIS = 330_000L;
 
     private static final Logger LOG = LoggerFactory.getLogger(AskAgentController.class);
 
@@ -59,11 +60,26 @@ public class AskAgentController {
         Question question = conversationAgent.valide(request.question());
         UUID ownerId = JwtSubject.accountId(jwt);
         SseEmitter emitter = new SseEmitter(TIMEOUT_MILLIS);
-        conversationExecutor.execute(() -> conduire(emitter, question, ownerId));
+        AtomicBoolean expire = new AtomicBoolean(false);
+        enregistreLeCycleDeVie(emitter, ownerId, expire);
+        conversationExecutor.execute(() -> conduire(emitter, question, ownerId, expire));
         return emitter;
     }
 
-    private void conduire(SseEmitter emitter, Question question, UUID ownerId) {
+    /** Demandés par le ticket : ils journalisent le cycle de vie du flux, l'ownerId en contexte. */
+    private void enregistreLeCycleDeVie(SseEmitter emitter, UUID ownerId, AtomicBoolean expire) {
+        emitter.onTimeout(() -> {
+            expire.set(true);
+            LOG.warn(
+                    "Le flux SSE a expiré après {} ms sans que la conversation ne se termine (ownerId={}).",
+                    TIMEOUT_MILLIS,
+                    ownerId);
+        });
+        emitter.onError(erreur -> LOG.warn("Le flux SSE s'est terminé en erreur (ownerId={}).", ownerId, erreur));
+        emitter.onCompletion(() -> LOG.debug("Le flux SSE est terminé (ownerId={}).", ownerId));
+    }
+
+    private void conduire(SseEmitter emitter, Question question, UUID ownerId, AtomicBoolean expire) {
         try {
             ConversationOutcome resultat =
                     conversationAgent.answer(question, ownerId, fragment -> emettre(emitter, "token", fragment));
@@ -78,17 +94,26 @@ public class AskAgentController {
             emitter.complete();
             tracer(question, ownerId, resultat);
         } catch (ClientPartiException clientParti) {
-            LOG.info("Le client a fermé sa connexion : la génération est interrompue.");
-            emitter.complete();
+            // Une expiration marque déjà l'emitter complet : le compléter à nouveau n'a pas lieu d'être.
+            if (expire.get()) {
+                LOG.info("La génération a été interrompue par l'expiration du flux (ownerId={}).", ownerId);
+            } else {
+                LOG.info("Le client a fermé sa connexion : la génération est interrompue (ownerId={}).", ownerId);
+                emitter.complete();
+            }
         } catch (LlmUnavailableException | EmbeddingUnavailableException serviceInjoignable) {
-            LOG.error("La conversation a échoué : un service d'IA n'a pas répondu.", serviceInjoignable);
+            LOG.error(
+                    "La conversation a échoué : un service d'IA n'a pas répondu (ownerId={}).",
+                    ownerId,
+                    serviceInjoignable);
             echouer(
                     emitter,
+                    ownerId,
                     "La conversation est momentanément indisponible : un service d'IA n'a pas "
                             + "répondu. Réessayez dans quelques instants.");
         } catch (RuntimeException echec) {
-            LOG.error("La conversation a échoué.", echec);
-            echouer(emitter, "La conversation a échoué. Réessayez dans quelques instants.");
+            LOG.error("La conversation a échoué (ownerId={}).", ownerId, echec);
+            echouer(emitter, ownerId, "La conversation a échoué. Réessayez dans quelques instants.");
         }
     }
 
@@ -107,15 +132,15 @@ public class AskAgentController {
                     resultat.recherches(),
                     resultat.answer().sources()));
         } catch (RuntimeException tracePerdue) {
-            LOG.error("La trace de cette conversation n'a pas pu être écrite.", tracePerdue);
+            LOG.error("La trace de cette conversation n'a pas pu être écrite (ownerId={}).", ownerId, tracePerdue);
         }
     }
 
-    private void echouer(SseEmitter emitter, String message) {
+    private void echouer(SseEmitter emitter, UUID ownerId, String message) {
         try {
             emitter.send(SseEmitter.event().name("error").data(new ErrorResponse(message)));
         } catch (IOException | IllegalStateException clientDejaParti) {
-            LOG.info("Le client était déjà parti quand l'erreur a été émise.");
+            LOG.info("Le client était déjà parti quand l'erreur a été émise (ownerId={}).", ownerId);
         }
         emitter.complete();
     }

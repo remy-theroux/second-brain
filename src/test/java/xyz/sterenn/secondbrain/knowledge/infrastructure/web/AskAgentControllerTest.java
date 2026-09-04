@@ -1,8 +1,10 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +48,8 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 })
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AskAgentControllerTest {
+
+    private static final Duration DELAI = Duration.ofSeconds(5);
 
     @LocalServerPort
     private int port;
@@ -148,7 +152,7 @@ class AskAgentControllerTest {
 
         String flux = conversation("Quel est le délai de rétractation ?");
 
-        assertThat(flux).contains("event:token").contains("Quatorze jours [1].");
+        assertThat(flux).contains("event:token").containsOnlyOnce("Quatorze jours [1].");
         assertThat(flux).contains("event:sources").contains("rapport.pdf");
         assertThat(flux).contains("event:done");
         assertThat(flux.indexOf("event:sources")).isLessThan(flux.indexOf("event:done"));
@@ -174,11 +178,14 @@ class AskAgentControllerTest {
 
         conversation("Quel est le délai de rétractation ?");
 
-        assertThat(agentRunRepository.findByOwnerId(alice)).singleElement().satisfies(trace -> {
-            assertThat(trace.getVerdict()).isEqualTo(AnswerVerdict.SOURCEE);
-            assertThat(trace.getSearches()).containsExactly("délai");
-            assertThat(trace.getSources()).hasSize(1);
-        });
+        // emitter.complete() ne bloque pas : la trace peut s'écrire après le retour de l'appel HTTP.
+        await().atMost(DELAI).untilAsserted(() -> assertThat(agentRunRepository.findByOwnerId(alice))
+                .singleElement()
+                .satisfies(trace -> {
+                    assertThat(trace.getVerdict()).isEqualTo(AnswerVerdict.SOURCEE);
+                    assertThat(trace.getSearches()).containsExactly("délai");
+                    assertThat(trace.getSources()).hasSize(1);
+                }));
     }
 
     @Test
