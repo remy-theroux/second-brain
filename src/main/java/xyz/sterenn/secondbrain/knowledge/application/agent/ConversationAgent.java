@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.DocumentAgent;
 import xyz.sterenn.secondbrain.knowledge.domain.GroundingPolicy;
@@ -35,6 +37,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 @Component
 public class ConversationAgent {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ConversationAgent.class);
+
     private record ResultatDOutil(String texte, SourceCatalogue catalogue, Optional<String> requete) {}
 
     private final Agent agent;
@@ -53,6 +57,7 @@ public class ConversationAgent {
         return new Question(question);
     }
 
+    /** Au retour, le texte de l'{@code Answer} rendue a déjà été émis par {@code onToken} : ne pas le réémettre. */
     public ConversationOutcome answer(Question question, UUID ownerId, Consumer<String> onToken) {
         Instant debut = clock.instant();
         List<LlmMessage> messages =
@@ -63,15 +68,17 @@ public class ConversationAgent {
 
         while (tours < agent.budget().maxTurns() && !budgetEcoule(debut)) {
             tours++;
-            CitationBuffer tampon = new CitationBuffer(catalogue, !recherches.isEmpty(), onToken);
+            boolean rechercheEffectuee = !recherches.isEmpty();
+            CitationBuffer tampon = new CitationBuffer(catalogue, onToken);
             LlmTurn tour =
                     llmPort.stream(new LlmRequest(messages, agent.tools(), agent.temperature()), tampon::accepte);
 
             if (!tour.demandeUnOutil()) {
                 if (tampon.texte().isBlank()) {
+                    LOG.warn("Le modèle a rendu un tour vide (tour {}) ; tour consommé sans relance.", tours);
                     continue;
                 }
-                Answer reponse = GroundingPolicy.verdict(agent, tampon.texte(), catalogue, !recherches.isEmpty());
+                Answer reponse = GroundingPolicy.verdict(agent, tampon.texte(), catalogue, rechercheEffectuee);
                 if (!tampon.aOuvert()) {
                     onToken.accept(reponse.text());
                 }

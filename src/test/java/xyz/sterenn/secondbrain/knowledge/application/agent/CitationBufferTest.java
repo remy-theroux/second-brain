@@ -23,21 +23,9 @@ class CitationBufferTest {
     }
 
     @Test
-    void laisse_tout_passer_quand_aucune_recherche_n_a_eu_lieu() {
-        List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(SourceCatalogue.empty(), false, sortis::add);
-
-        tampon.accepte("Bonjour");
-        tampon.accepte(", je vous écoute.");
-
-        assertThat(sortis).containsExactly("Bonjour", ", je vous écoute.");
-        assertThat(tampon.aOuvert()).isTrue();
-    }
-
-    @Test
     void ne_laisse_rien_passer_tant_qu_aucune_citation_n_est_apparue() {
         List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), true, sortis::add);
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
 
         tampon.accepte("Canberra est ");
         tampon.accepte("la capitale de l'Australie.");
@@ -50,7 +38,7 @@ class CitationBufferTest {
     @Test
     void ouvre_les_vannes_a_la_premiere_citation_et_rejoue_ce_qui_precede() {
         List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), true, sortis::add);
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
 
         tampon.accepte("Quatorze jours ");
         tampon.accepte("[2].");
@@ -63,7 +51,7 @@ class CitationBufferTest {
     @Test
     void reconnait_une_citation_coupee_entre_deux_fragments() {
         List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), true, sortis::add);
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
 
         tampon.accepte("Quatorze jours [");
         assertThat(sortis).isEmpty();
@@ -75,7 +63,7 @@ class CitationBufferTest {
     @Test
     void n_ouvre_pas_sur_une_citation_hors_catalogue() {
         List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), true, sortis::add);
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
 
         tampon.accepte("Canberra [9] est la capitale.");
 
@@ -85,12 +73,12 @@ class CitationBufferTest {
 
     @Test
     void laisse_remonter_l_echec_de_la_sortie() {
-        CitationBuffer tampon = new CitationBuffer(SourceCatalogue.empty(), false, fragment -> {
+        CitationBuffer tampon = new CitationBuffer(troisExtraits(), fragment -> {
             throw new IllegalStateException("le client a fermé");
         });
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> tampon.accepte("Bonjour"))
+                .isThrownBy(() -> tampon.accepte("Quatorze jours [1]."))
                 .withMessageContaining("le client a fermé");
     }
 }

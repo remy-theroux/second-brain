@@ -47,6 +47,7 @@ class ConversationAgentTest {
             @SuppressWarnings("unchecked")
             public <R> R ask(Query<R> query) {
                 assertThat(query).isInstanceOf(SearchChunks.class);
+                assertThat(((SearchChunks) query).ownerId()).isEqualTo(ALICE);
                 return (R) resultatsDeRecherche;
             }
         };
@@ -68,7 +69,7 @@ class ConversationAgentTest {
         ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
 
         assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
-        assertThat(sortis).containsExactly("Bonjour", ", je vous écoute.");
+        assertThat(sortis).containsExactly("Bonjour, je vous écoute.");
         assertThat(resultat.recherches()).isEmpty();
         assertThat(resultat.tours()).isEqualTo(1);
     }
@@ -115,9 +116,29 @@ class ConversationAgentTest {
     void rend_au_modele_une_erreur_quand_l_argument_obligatoire_manque() {
         llmPort.appelleOutilSansArgument(DocumentAgent.OUTIL_RECHERCHE).texte("Pardon.");
 
-        agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
 
         assertThat(llmPort.dernierResultatDOutil()).contains(DocumentAgent.PARAMETRE_QUESTION);
+        assertThat(resultat.recherches()).isEmpty();
+        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
+    }
+
+    @Test
+    void ne_compte_pas_comme_recherche_une_recherche_refusee_par_la_question() {
+        llmPort.appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "capitale").texte("Pardon.");
+        QueryBus queryBus = new QueryBus() {
+            @Override
+            public <R> R ask(Query<R> query) {
+                throw new InvalidQuestionException("La question ne peut pas dépasser 2 000 caractères.");
+            }
+        };
+        ConversationAgent agent =
+                new ConversationAgent(AgentDeTest.unAgent(), llmPort, new DocumentSearchTool(queryBus), horloge);
+
+        ConversationOutcome resultat = agent.answer(laQuestion(), ALICE, sortis::add);
+
+        assertThat(resultat.recherches()).isEmpty();
+        assertThat(llmPort.dernierResultatDOutil()).contains("refusée");
     }
 
     @Test
@@ -174,6 +195,29 @@ class ConversationAgentTest {
                 .isThrownBy(() -> agentAvec(List.of()).valide("   "));
     }
 
+    @Test
+    void consomme_un_tour_qui_ne_rend_ni_texte_ni_appel_d_outil() {
+        llmPort.tourVide().texte("Bonjour");
+
+        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+
+        assertThat(resultat.tours()).isEqualTo(2);
+        assertThat(sortis).containsExactly("Bonjour");
+        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
+        assertThat(resultat.recherches()).isEmpty();
+    }
+
+    @Test
+    void epuise_ses_tours_quand_le_modele_ne_rend_jamais_rien() {
+        llmPort.tourVide().tourVide().tourVide().tourVide();
+
+        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+
+        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
+        assertThat(resultat.tours()).isEqualTo(4);
+        assertThat(sortis).containsExactly(AgentDeTest.AVEU);
+    }
+
     private static final class HorlogeDeTest extends Clock {
 
         private Instant maintenant = Instant.parse("2026-09-04T10:00:00Z");
@@ -214,6 +258,11 @@ class ConversationAgentTest {
 
         LlmPortScripte texte(String... fragments) {
             script.add(new TourScripte(List.of(fragments), List.of()));
+            return this;
+        }
+
+        LlmPortScripte tourVide() {
+            script.add(new TourScripte(List.of(), List.of()));
             return this;
         }
 

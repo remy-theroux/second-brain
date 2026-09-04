@@ -16,10 +16,9 @@ final class CitationBuffer {
 
     private boolean ouvert;
 
-    CitationBuffer(SourceCatalogue catalogue, boolean arme, Consumer<String> sortie) {
+    CitationBuffer(SourceCatalogue catalogue, Consumer<String> sortie) {
         this.catalogue = catalogue;
         this.sortie = sortie;
-        this.ouvert = !arme;
     }
 
     void accepte(String fragment) {
