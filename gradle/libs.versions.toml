@@ -19,6 +19,11 @@ jtokkit = "1.1.0"
 # Stockage objet : aucun BOM Spring ne porte AWS, contrairement à Flyway ou PostgreSQL
 # ci-dessus — il faut donc l'épingler nous-mêmes.
 awsSdk = "2.54.11"
+# Génération : LangChain4j fournit le transport (HTTP, protocole de tool-calling,
+# streaming) et rien d'autre — la boucle d'agent reste au projet, voir la spec du
+# 2026-09-04, décision 12. Aucun BOM Spring ne porte ces modules. Le starter Spring Boot
+# de LangChain4j n'est PAS utilisé : encore en 1.19.0-beta29, et ciblé Boot 3.
+langchain4j = "1.19.0"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -94,6 +99,8 @@ awssdk-s3 = { module = "software.amazon.awssdk:s3" }
 # trois ne nous concerne — un objet est un byte[] déjà en mémoire, plafonné à 20 Mo par
 # spring.servlet.multipart.max-file-size.
 awssdk-url-connection-client = { module = "software.amazon.awssdk:url-connection-client" }
+langchain4j = { module = "dev.langchain4j:langchain4j", version.ref = "langchain4j" }
+langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama", version.ref = "langchain4j" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

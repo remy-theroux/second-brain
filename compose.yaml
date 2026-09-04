@@ -105,7 +105,7 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["/bin/sh", "-c"]
-    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}"]
+    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3} && ollama pull ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}"]
     depends_on:
       ollama:
         condition: service_healthy
@@ -172,6 +172,7 @@ services:
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
+      SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
       # Endpoint en dur sur le nom de service, comme les autres adresses internes de ce
       # fichier. Les trois autres variables recopient ce que Garage a reçu pour créer sa
       # clé et son bucket par défaut (voir le service `garage`).
@@ -245,6 +246,7 @@ services:
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
+      SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
       SECONDBRAIN_S3_ENDPOINT: http://garage:3900
       SECONDBRAIN_S3_BUCKET: ${S3_BUCKET:-second-brain-originals}
       SECONDBRAIN_S3_ACCESS_KEY: ${S3_ACCESS_KEY:-second-brain}

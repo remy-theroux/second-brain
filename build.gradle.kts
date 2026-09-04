@@ -95,6 +95,10 @@ dependencies {
     // Comptage de tokens pour le découpage. Derrière le port TokenCounter : le domaine
     // compte, il ne sait pas avec quelle toise.
     implementation(libs.jtokkit)
+    // Génération : derrière le port LlmPort. Ses imports ne sortent jamais de
+    // knowledge/infrastructure/ai — même verrou que pour tout fournisseur.
+    implementation(libs.langchain4j)
+    implementation(libs.langchain4j.ollama)
     // Stockage objet des originaux (Garage, compatible S3 — voir compose.yaml). Un
     // platform(...) Gradle et non le plugin io.spring.dependency-management : ce dernier
     // tient déjà le BOM Spring Boot, et rien du BOM AWS ne le recoupe — le SDK S3 ne

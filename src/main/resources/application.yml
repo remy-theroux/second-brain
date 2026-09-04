@@ -166,6 +166,13 @@ secondbrain:
     # EmbeddingPolicy, parce qu'elle est le contrat entre le modèle, la colonne et l'index.
     # Changer de modèle est une migration et une réindexation, pas une variable.
     model: ${SECONDBRAIN_EMBEDDING_MODEL:bge-m3}
+  llm:
+    # Où joindre le service de génération. Même Ollama que l'embedding, et même statut de
+    # défaut : il sert le développement hors conteneur.
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # Le modèle, et lui seul, est configurable. Sa TEMPÉRATURE ne l'est pas : elle vit dans
+    # DocumentAgent, parce qu'elle fait partie de la façon dont l'agent répond.
+    model: ${SECONDBRAIN_LLM_MODEL:qwen3:4b}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   jwt:
