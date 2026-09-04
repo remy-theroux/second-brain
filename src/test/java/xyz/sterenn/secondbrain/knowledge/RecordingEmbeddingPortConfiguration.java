@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -29,6 +30,7 @@ public class RecordingEmbeddingPortConfiguration {
 
         private final List<String> recus = new CopyOnWriteArrayList<>();
         private final AtomicBoolean enPanne = new AtomicBoolean(false);
+        private final AtomicReference<Embedding> reponseImposee = new AtomicReference<>();
 
         @Override
         public List<Embedding> embed(List<String> texts) {
@@ -38,7 +40,8 @@ public class RecordingEmbeddingPortConfiguration {
             }
             List<Embedding> vecteurs = new ArrayList<>();
             for (String texte : texts) {
-                vecteurs.add(vecteurDuRang(recus.size()));
+                Embedding impose = reponseImposee.get();
+                vecteurs.add(impose != null ? impose : vecteurDuRang(recus.size()));
                 recus.add(texte);
             }
             return vecteurs;
@@ -57,9 +60,14 @@ public class RecordingEmbeddingPortConfiguration {
             enPanne.set(true);
         }
 
+        public void repondra(Embedding vecteur) {
+            reponseImposee.set(vecteur);
+        }
+
         public void clear() {
             recus.clear();
             enPanne.set(false);
+            reponseImposee.set(null);
         }
     }
 }

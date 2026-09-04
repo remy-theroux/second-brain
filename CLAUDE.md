@@ -213,13 +213,16 @@ xyz.sterenn.secondbrain
 │   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
 │   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
 │   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
+│   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
 │   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
 │   │   │                    TextChunk (un extrait et son vecteur)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait),
 │   │   │                    Embedding (le vecteur produit par le service de vectorisation),
-│   │   │                    Chunk (un extrait, avant qu'il soit rangé)
+│   │   │                    Chunk (un extrait, avant qu'il soit rangé),
+│   │   │                    Question (la question posée, non vide),
+│   │   │                    ChunkMatch (un extrait retrouvé et son score)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
 │   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
 │   │   │                    TextChunkRepository
@@ -227,13 +230,15 @@ xyz.sterenn.secondbrain
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
+│   │   │                    InvalidQuestionException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
-│   │   └── query/           ListDocuments + DocumentView
+│   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
+│   │                        + TextExtractionView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -381,15 +386,14 @@ et `exp` — **pas d'email, pas d'`iss`**. La durée de vie (1 h) est une règle
 (`AccessTokenPolicy.LIFETIME`), pas une propriété de configuration : un exploitant ne doit
 pas pouvoir la porter à trente jours par un fichier.
 
-`GET /api/profile` est la seule route authentifiée. Le filtre resource server valide le
+`GET /api/profile` est une route authentifiée. Le filtre resource server valide le
 jeton en amont ; le contrôleur ne lit que `sub` et interroge `FindUserById`. Un jeton bien
 signé dont le compte a disparu répond `401` et non `404` : il n'identifie plus personne, et
 le front n'a ainsi qu'un seul cas d'échec à traiter.
 
-`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique,
-et `GET /api/profile` reste aujourd'hui la seule route authentifiée. Une nouvelle route
-publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ; sans quoi elle
-répond `401`.
+`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique.
+Une nouvelle route publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ;
+sans quoi elle répond `401`.
 
 Le secret de signature (`secondbrain.jwt.secret`, 32 octets minimum) **n'a aucune valeur
 par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
@@ -540,6 +544,38 @@ réindexe — ce sera RAG-7. La seule façon de le faire avancer est de le suppr
 redéposer, ou de republier à la main son événement `knowledge.document-text.extracted` sur le
 broker.
 
+### Le flux de la recherche
+
+`GET /api/search?q=…` vectorise la question par le même port qu'à l'indexation, puis rend les
+huit extraits les plus proches au cosinus, chacun avec son texte, le nom de son document, sa
+position et son score. Huit est une règle du domaine (`SearchPolicy.RESULTS`) et non un
+réglage d'exploitant : c'est RAG-9 qui les consommera pour composer une réponse. Aucun `?k=`
+n'anticipe une question qu'on ne se pose pas encore.
+
+**Le score est une similarité — `1 - distance`, donc 1 pour identique — et aucun plancher ne
+le filtre.** C'est une route de diagnostic : les scores faibles sont précisément ce qu'on
+vient y regarder, un défaut de pertinence ne s'instruisant pas autrement. Une liste vide ne
+vient donc que d'une base vide.
+
+La requête est du **SQL natif** sur `SpringDataTextChunkRepository`, avec un `CAST` explicite
+en `vector` — pgvector n'accepte aucune conversion implicite — et une jointure vers
+`knowledge_documents` qui porte à la fois le cloisonnement et le nom du document. C'est cette
+jointure imposée qui écarte le HQL, deux agrégats ne se référençant que par identifiant
+(ADR-0006). Le littéral `[0.1,0.2,…]` se fabrique dans l'adapter : le domaine ne connaît
+qu'`Embedding` et ne reçoit que des `ChunkMatch`.
+
+**La question part nue**, sans le préfixe `Document: … — Section: …` que porte l'extrait à
+l'indexation : `bge-m3` ne réclame aucune instruction de rôle, contrairement à un e5 — voir
+la spec de la recherche vectorielle, décision 5.
+
+L'appel de vectorisation a lieu **dans la transaction `readOnly` du query bus**, comme tout ce
+qu'un handler déclenche : la seconde d'aller-retour vers Ollama y tient une connexion
+PostgreSQL, ce qui est tenable pour une lecture qui n'écrit rien dans une application
+mono-utilisateur. Un Ollama à terre rend `503`, une question vide `422` sur le champ `q`.
+
+**Un document resté `EXTRACTED` n'est pas cherchable**, et rien ici ne le rattrape : c'est
+RAG-7.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -643,10 +679,13 @@ rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
 
 Les extraits vectorisés vivent dans une troisième table, `knowledge_text_chunks` : une ligne
 par extrait, son vecteur en colonne (`vector(1024)`), `UNIQUE (document_id, chunk_position)`
-et un index HNSW en `vector_cosine_ops` que **personne n'interroge encore** — RAG-8 écrira la
-requête. La dimension est figée dans le type de la colonne, et doit rester égale à
-`EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la suppression du document : c'est la
-deuxième fois qu'un ticket ajoute des tables sans toucher à `DeleteDocumentHandler`.
+et un index HNSW en `vector_cosine_ops` : **c'est la recherche qui l'interroge**, voir « Le
+flux de la recherche » ci-dessus. Le planificateur lui préfère encore un parcours séquentiel
+aux volumes d'aujourd'hui — comportement normal de pgvector, qui n'invalide pas l'index : il
+prendra le relais quand le volume le justifiera. La dimension est figée dans le type de la
+colonne, et doit rester égale à `EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la
+suppression du document : c'est la deuxième fois qu'un ticket ajoute des tables sans toucher
+à `DeleteDocumentHandler`.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
 objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket

@@ -68,4 +68,23 @@ public final class KnowledgeFixture {
         Arrays.fill(valeurs, valeur);
         return Embedding.of(valeurs);
     }
+
+    /**
+     * La question de référence des tests de proximité : orientée sur la seule dimension 0.
+     * {@link #unVecteur} ne convient pas — elle rend des vecteurs tous colinéaires, donc à
+     * distance cosinus nulle deux à deux.
+     */
+    public static Embedding uneQuestion() {
+        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
+        valeurs[0] = 1f;
+        return Embedding.of(valeurs);
+    }
+
+    /** D'autant plus proche de {@link #uneQuestion()} que {@code proximite} approche de 1. */
+    public static Embedding unVecteurProche(float proximite) {
+        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
+        valeurs[0] = proximite;
+        valeurs[1] = 1f - proximite;
+        return Embedding.of(valeurs);
+    }
 }
