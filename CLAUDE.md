@@ -669,6 +669,35 @@ génération confiée à LangChain4j là où la vectorisation est écrite à la 
 des tokens jusqu'à la première citation valide, et l'agent qui choisit lui-même s'il
 cherche.
 
+**Quatre limites du garde-fou sont assumées, et ne doivent pas se lire comme une garantie
+totale :**
+
+- **Il ne s'applique que si une recherche a eu lieu.** Si le modèle répond de mémoire sans
+  jamais appeler l'outil, la conversation est classée `CONVERSATIONNELLE` et son texte part
+  inchangé : la seule défense contre l'invention y est alors la consigne écrite dans
+  `document-agent.md`, pas un contrôle programmatique. C'est le trou assumé de la spec, et
+  c'est le ticket d'évaluation (RAG-14) qui le mesurera.
+- **Un `[n]` recopié depuis un extrait compte comme une citation valide.** Les documents
+  réels portent souvent leurs propres appels de note (`[2]`, `[12]`) ; un modèle qui recopie
+  une phrase qui en contient un rouvre le tampon et fait attacher une source sans rapport à
+  la réponse. C'est le mode d'échec le plus probable du garde-fou sur un vrai corpus.
+- **L'abandon du client n'est détecté qu'après la première citation.** Seuls les envois qui
+  traversent le tampon touchent la socket ; tant qu'il est fermé, une déconnexion est
+  invisible et la génération va au bout de son budget. Corollaire : le flux peut rester
+  **silencieux plusieurs dizaines de secondes** avant son premier octet, ce qu'un proxy
+  intermédiaire peut mal prendre. Un heartbeat réglerait les deux, et c'est un ticket à
+  part : un envoi périodique depuis un second thread sur un `SseEmitter`, qui n'est pas
+  thread-safe en écriture concurrente, se conçoit, il ne s'improvise pas.
+- **Un tour qui porte à la fois un texte cité et un appel d'outil** ouvre le tampon et
+  streame ce texte, puis la boucle continue. Le garde-fou du tour suivant ne voit que le
+  dernier texte : l'événement `sources` peut alors partir **vide** alors que l'écran affiche
+  un texte portant un `[n]`. Improbable, non corrigé, et le correctif demande de faire vivre
+  le tampon d'un tour à l'autre.
+
+Conséquence pour le premier client de la route : **`POST` + SSE ne se consomme pas avec
+`EventSource`** côté navigateur, qui ne fait que du `GET` — il faut un `fetch` et la lecture
+manuelle de son `ReadableStream`.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
