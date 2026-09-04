@@ -24,6 +24,11 @@ public class OllamaChatConfiguration {
                 .baseUrl(baseUrl)
                 .modelName(model)
                 .timeout(DELAI_DE_LECTURE)
+                // qwen3 raisonne toujours avant de répondre ou d'appeler un outil : ce n'est pas
+                // un bascule qui évite le raisonnement, seulement son canal. Explicite pour
+                // qu'un `false` ultérieur, qui ferait fuir le raisonnement brut dans le texte de
+                // réponse, ne passe pas pour une optimisation de latence.
+                .think(true)
                 .build();
         return new LangChain4jLlmAdapter(chatModel);
     }

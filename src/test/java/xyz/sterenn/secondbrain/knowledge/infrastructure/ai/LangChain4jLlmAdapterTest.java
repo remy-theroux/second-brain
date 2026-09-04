@@ -69,6 +69,25 @@ class LangChain4jLlmAdapterTest {
     }
 
     @Test
+    void n_expose_jamais_le_raisonnement_recu_sur_son_propre_canal() throws IOException {
+        demarrer(200, """
+                {"message":{"role":"assistant","content":"","thinking":"L'utilisateur demande "},"done":false}
+                {"message":{"role":"assistant","content":"","thinking":"le délai, je dois chercher."},"done":false}
+                {"message":{"role":"assistant","content":"Le délai "},"done":false}
+                {"message":{"role":"assistant","content":"est de quatorze jours."},"done":false}
+                {"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}
+                """);
+        List<String> fragments = new ArrayList<>();
+
+        LlmTurn tour = adapter.stream(
+                new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(), 0.2), fragments::add);
+
+        assertThat(fragments).containsExactly("Le délai ", "est de quatorze jours.");
+        assertThat(tour.text()).isEqualTo("Le délai est de quatorze jours.");
+        assertThat(fragments).noneMatch(fragment -> fragment.contains("utilisateur") || fragment.contains("chercher"));
+    }
+
+    @Test
     void rend_un_appel_d_outil_avec_ses_arguments_decodes() throws IOException {
         demarrer(200, """
                 {"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"rechercher_dans_les_documents","arguments":{"question":"délai de rétractation"}}}]},"done":true,"done_reason":"stop"}
