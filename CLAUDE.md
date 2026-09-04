@@ -237,7 +237,8 @@ xyz.sterenn.secondbrain
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
-│   │   └── query/           ListDocuments + DocumentView, SearchChunks + ChunkMatchView
+│   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
+│   │                       + TextExtractionView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -679,10 +680,13 @@ rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
 
 Les extraits vectorisés vivent dans une troisième table, `knowledge_text_chunks` : une ligne
 par extrait, son vecteur en colonne (`vector(1024)`), `UNIQUE (document_id, chunk_position)`
-et un index HNSW en `vector_cosine_ops` que **personne n'interroge encore** — RAG-8 écrira la
-requête. La dimension est figée dans le type de la colonne, et doit rester égale à
-`EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la suppression du document : c'est la
-deuxième fois qu'un ticket ajoute des tables sans toucher à `DeleteDocumentHandler`.
+et un index HNSW en `vector_cosine_ops` : **c'est la recherche qui l'interroge**, voir « Le
+flux de la recherche » ci-dessus. Le planificateur lui préfère encore un parcours séquentiel
+aux volumes d'aujourd'hui — comportement normal de pgvector, qui n'invalide pas l'index : il
+prendra le relais quand le volume le justifiera. La dimension est figée dans le type de la
+colonne, et doit rester égale à `EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la
+suppression du document : c'est la deuxième fois qu'un ticket ajoute des tables sans toucher
+à `DeleteDocumentHandler`.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
 objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket
