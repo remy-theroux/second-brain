@@ -17,15 +17,6 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 import xyz.sterenn.secondbrain.users.domain.valueobject.RawVerificationToken;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Orchestre l'inscription : conversion en value objects, contrôles métier, écriture, puis
- * émission du jeton de vérification et notification.
- *
- * <p>Aucun {@code @Transactional} ici — la transaction est ouverte par
- * {@code SpringCommandBus.dispatch} et couvre tout ce qui suit, envoi compris. Une panne
- * du canal de notification annule donc l'inscription : tant qu'il n'existe pas de renvoi
- * de lien, un compte créé sans notification serait définitivement invérifiable.
- */
 @Component
 public class RegisterUserHandler implements CommandHandler<RegisterUser> {
 
@@ -53,10 +44,8 @@ public class RegisterUserHandler implements CommandHandler<RegisterUser> {
 
     @Override
     public void handle(RegisterUser command) {
-        // Le constructeur d'Email normalise et lève InvalidEmailException si besoin.
         Email email = new Email(command.email());
 
-        // Contrôles locaux d'abord, aller-retour base ensuite.
         if (!PasswordPolicy.isAcceptable(command.rawPassword())) {
             throw new WeakPasswordException();
         }
@@ -66,8 +55,6 @@ public class RegisterUserHandler implements CommandHandler<RegisterUser> {
 
         User user = userRepository.save(User.register(email, passwordHasher.hash(command.rawPassword())));
 
-        // Le clair ne quitte jamais cette méthode autrement que dans la notification :
-        // ce qui est persisté, c'est uniquement son empreinte salée.
         RawVerificationToken rawToken = RawVerificationToken.generate();
         verificationTokenRepository.save(
                 VerificationToken.issue(user.getId(), tokenHasher.hash(rawToken.value()), clock.instant()));

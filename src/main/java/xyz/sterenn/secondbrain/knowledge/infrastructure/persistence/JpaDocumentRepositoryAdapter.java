@@ -10,10 +10,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDocumentExcep
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 
-/**
- * Adapter du port {@link DocumentRepository}. Aucune exception Spring ne franchit cette
- * classe : ce qui remonte à l'application est déjà du vocabulaire métier.
- */
 @Component
 public class JpaDocumentRepositoryAdapter implements DocumentRepository {
 
@@ -24,15 +20,9 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     }
 
     /**
-     * {@code saveAndFlush} : la traduction de la violation d'unicité doit se faire dans ce
-     * {@code try}, or sans flush explicite l'erreur ne surviendrait qu'au commit, hors de
-     * portée du {@code catch}.
-     *
-     * <p>Le handler a déjà écarté le doublon par une lecture ; ce filet ne se referme donc
-     * que sur deux dépôts simultanés du même contenu, où les deux lectures passent avant
-     * que l'une ait commité. Le refus perd alors sa capacité à désigner le document
-     * existant — {@code null} plutôt qu'un identifiant inventé : le perdant de la course
-     * apprend qu'il n'a rien créé, et sa liste lui montrera le gagnant.
+     * {@code saveAndFlush} : sans flush explicite, la violation d'unicité ne surviendrait
+     * qu'au commit, hors de portée du {@code catch}. L'identifiant du doublon est alors
+     * inconnu, d'où le {@code null}.
      */
     @Override
     public Document save(Document document) {
@@ -61,8 +51,8 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     @Override
     public void delete(Document document) {
         springDataDocumentRepository.delete(document);
-        // La suppression du fichier suit immédiatement, côté handler : sans flush, la ligne
-        // partirait au commit, donc après l'effacement de l'original qu'elle désigne.
+        // Sans flush, la ligne partirait au commit, donc après l'effacement de l'original
+        // qu'elle désigne.
         springDataDocumentRepository.flush();
     }
 }

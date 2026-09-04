@@ -15,16 +15,6 @@ import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.AccessToken;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Orchestre la connexion : normalisation de l'email, comparaison du mot de passe, contrôle
- * de vérification, émission du jeton.
- *
- * <p>Aucun {@code @Transactional} ici : {@code SpringQueryBus.ask} ouvre déjà une
- * transaction en lecture seule, et cette query n'écrit rien.
- *
- * <p>L'ordre des contrôles est un choix de sécurité, pas une commodité : le refus « compte
- * non vérifié » ne peut être obtenu qu'après avoir donné le bon mot de passe.
- */
 @Component
 public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, AccessTokenView> {
 
@@ -51,6 +41,8 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
         if (!passwordHasher.matches(query.rawPassword(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
         }
+        // Mot de passe avant vérification d'adresse : ne pas inverser, le refus « compte non
+        // vérifié » ne doit s'obtenir qu'après avoir donné le bon mot de passe.
         if (!user.isVerified()) {
             throw new UnverifiedAccountException();
         }
@@ -66,7 +58,6 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
         try {
             return new Email(email);
         } catch (InvalidEmailException e) {
-            // Une saisie mal formée ne correspond à aucun compte : même refus, même message.
             throw new InvalidCredentialsException();
         }
     }

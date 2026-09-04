@@ -24,11 +24,6 @@ import xyz.sterenn.secondbrain.users.domain.exception.InvalidVerificationLinkExc
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Les commandes sont dispatchées par le bus, chemin réel de production. Le jeton en clair
- * est relu dans l'enregistreur de notifications, comme l'utilisateur le lirait dans sa
- * boîte mail.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @Transactional
@@ -62,16 +57,16 @@ class VerifyAccountHandlerTest {
     }
 
     private void vieillitLeJeton(UUID compte, Duration age) {
-        // Le jeton est écrit par le handler avec l'horloge réelle : le faire vieillir en
-        // base est le seul moyen d'observer l'expiration sans figer l'horloge du contexte.
+        // Le handler écrit le jeton avec l'horloge réelle : le vieillir en base est le seul
+        // moyen d'observer l'expiration sans figer l'horloge du contexte.
         entityManager.flush();
         jdbcTemplate.update(
                 "UPDATE users_verification_tokens "
                         + "SET expires_at = expires_at - CAST(? AS interval) WHERE user_id = ?",
                 age.toHours() + " hours",
                 compte);
-        // Sans ce clear, le cache de premier niveau d'Hibernate resservirait l'entité
-        // telle qu'elle était avant l'UPDATE, et l'expiration passerait inaperçue.
+        // Sans ce clear, le cache de premier niveau d'Hibernate resservirait l'entité telle
+        // qu'elle était avant l'UPDATE.
         entityManager.clear();
     }
 
@@ -150,7 +145,6 @@ class VerifyAccountHandlerTest {
                         notification.rawToken().value())))
                 .isInstanceOf(AlreadyUsedVerificationLinkException.class);
 
-        // Le compte reste vérifié : le second clic ne défait rien.
         assertThat(userRepository
                         .findById(notification.accountId())
                         .orElseThrow()

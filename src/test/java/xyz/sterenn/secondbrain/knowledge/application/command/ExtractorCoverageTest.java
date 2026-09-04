@@ -11,16 +11,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentType;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 
-/**
- * Le contrôle de couverture des extracteurs, exercé sans Spring.
- *
- * <p>Il vit dans {@link ExtractDocumentTextHandler} et s'exécute à la construction du bean :
- * en production, un trou fait échouer le démarrage. Ici, on l'appelle directement — c'est la
- * seule façon de vérifier ce qu'il refuse sans casser le contexte de toute la suite.
- */
 class ExtractorCoverageTest {
 
-    /** Extracteur d'essai : il ne sait rien lire, seul le format qu'il revendique compte. */
     private record ExtracteurFactice(DocumentFormat format) implements DocumentTextExtractor {
         @Override
         public ExtractedText extract(byte[] content) {
@@ -63,11 +55,6 @@ class ExtractorCoverageTest {
 
     @Test
     void n_exige_un_extracteur_que_des_formats_de_typologie_textuelle() {
-        // Aucun format non textuel n'existe encore : ce que ce test fige, c'est que le
-        // contrôle interroge la typologie du format, et non la seule appartenance à
-        // `DocumentFormat.values()`. Il deviendra un vrai cas de refus le jour où la
-        // deuxième typologie arrivera ; en attendant il constate que les deux ensembles
-        // coïncident, donc que la restriction ne retire rien aujourd'hui.
         assertThat(DocumentFormat.of(DocumentType.TEXTUAL)).containsExactlyElementsOf(List.of(DocumentFormat.values()));
     }
 }

@@ -13,22 +13,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import xyz.sterenn.secondbrain.users.domain.exception.AlreadyUsedVerificationLinkException;
 import xyz.sterenn.secondbrain.users.domain.exception.ExpiredVerificationLinkException;
 
-/**
- * Jeton de vérification d'une adresse email. Il porte deux règles métier : il expire, et
- * il ne sert qu'une fois.
- *
- * <p>{@code tokenHash} ne contient jamais le jeton en clair, seulement son empreinte
- * salée. Le compte est référencé par son identifiant, pas par une association JPA : deux
- * agrégats distincts ne se tiennent pas par un {@code @ManyToOne}.
- *
- * <p>Le temps entre toujours par paramètre, jamais par un {@code Instant.now()} interne :
- * c'est ce qui rend l'expiration testable sans Spring et sans attendre.
- */
 @Entity
 @Table(name = "users_verification_tokens")
 public class VerificationToken {
 
-    /** Assez long pour un mail lu le lendemain, assez court pour qu'un lien oublié ne vaille rien. */
     public static final Duration VALIDITY = Duration.ofHours(24);
 
     @Id
@@ -52,9 +40,7 @@ public class VerificationToken {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    protected VerificationToken() {
-        // requis par JPA
-    }
+    protected VerificationToken() {}
 
     private VerificationToken(UUID userId, String tokenHash, Instant expiresAt) {
         this.userId = userId;
@@ -62,9 +48,6 @@ public class VerificationToken {
         this.expiresAt = expiresAt;
     }
 
-    /**
-     * Émet un jeton valide {@link #VALIDITY} à compter de {@code maintenant}.
-     */
     public static VerificationToken issue(UUID userId, String tokenHash, Instant maintenant) {
         return new VerificationToken(userId, tokenHash, maintenant.plus(VALIDITY));
     }
@@ -77,13 +60,7 @@ public class VerificationToken {
         return consumedAt != null;
     }
 
-    /**
-     * Consomme le jeton, définitivement.
-     *
-     * @throws AlreadyUsedVerificationLinkException si le jeton a déjà servi — vérifié en
-     *         premier, car c'est l'information utile à qui reclique un lien déjà utilisé
-     * @throws ExpiredVerificationLinkException si le jeton a dépassé sa validité
-     */
+    /** L'usage unique ne tient qu'à ce lire-puis-écrire, sans verrou en base : voir ADR-0008. */
     public void consume(Instant maintenant) {
         if (isConsumed()) {
             throw new AlreadyUsedVerificationLinkException();

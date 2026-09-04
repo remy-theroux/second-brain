@@ -25,7 +25,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   db:
-    image: postgres:17-alpine
+    # pgvector/pgvector et non postgres:17-alpine : l'extension `vector` doit être fournie
+    # par l'image, la migration V9 se charge de l'activer. Version épinglée comme le reste
+    # de la pile. Debian et non Alpine : c'est ce que publie pgvector — un volume db-data
+    # initialisé par l'ancienne image se jette (`docker compose down -v`), musl et glibc ne
+    # trient pas le texte de la même façon.
+    image: pgvector/pgvector:0.8.6-pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-second_brain}
       POSTGRES_USER: ${POSTGRES_USER:-second_brain}
@@ -56,6 +61,14 @@ services:
       # les interfaces : c'est un secret de développement, du même rang que POSTGRES_PASSWORD.
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-second_brain}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-second_brain}
+      # Le worker tient une seule livraison AMQP pendant tout le temps que prend la
+      # vectorisation d'un document, potentiellement plusieurs minutes. Le défaut du
+      # broker (30 minutes) est atteignable sur un document volumineux, et un broker qui
+      # dépasse ce délai ferme le canal — ce qui remet le message en file quoi que dise
+      # `default-requeue-rejected`, réglage qui ne gouverne que `basicNack`, pas une
+      # fermeture de canal. Le document repartirait de zéro, indéfiniment, avec l'unique
+      # consommateur bloqué dessus. Deux heures couvrent large sans masquer un vrai blocage.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 7200000"
     ports:
       # AMQP pour l'application, console de gestion pour voir passer les messages. Même
       # statut que Mailpit : un outil de développement, pas routé par Traefik.
@@ -66,6 +79,41 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+  ollama:
+    # `latest` et non une version épinglée, même statut que mailpit : un outil de
+    # développement, pas un composant dont la version décide d'un comportement du produit.
+    image: ollama/ollama:latest
+    volumes:
+      # Les modèles pèsent des gigaoctets : un volume nommé, jamais le bind mount.
+      - ollama-models:/root/.ollama
+    healthcheck:
+      # `ollama list` répond dès que le serveur écoute, sans rien télécharger.
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 30s
+      retries: 10
+    # Aucun port publié, à la différence de db, rabbitmq et mailpit. Deux raisons : seul le
+    # worker lui parle, depuis le réseau de la pile ; et un port de plus devrait entrer dans
+    # le décalage d'indices du skill `worktree`, sans quoi deux features se le disputeraient.
+    # Pour l'interroger à la main : `docker compose exec ollama ollama list`.
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    # Un client, pas un serveur : OLLAMA_HOST le fait parler au conteneur voisin, qui
+    # télécharge dans SON volume. Le puller n'a donc aucun volume à monter.
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    # Il tire le modèle et s'arrête. `no` est déjà le défaut de Compose — la ligne ne change
+    # rien, elle dit explicitement qu'un conteneur qui s'arrête après avoir tiré le modèle
+    # est attendu, pour qui lirait ce fichier en pensant qu'un service qui s'arrête est une
+    # panne à corriger.
+    restart: "no"
 
   app:
     build:
@@ -84,6 +132,8 @@ services:
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals
+      OLLAMA_BASE_URL: http://ollama:11434
+      SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
     labels:
       - "traefik.enable=true"
       # /verification est hors /api à dessein : c'est une navigation, pas un appel XHR.
@@ -148,6 +198,8 @@ services:
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       SECONDBRAIN_ORIGINALS_PATH: /data/originals
+      OLLAMA_BASE_URL: http://ollama:11434
+      SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       # Cache Gradle propre : deux conteneurs qui partagent un GRADLE_USER_HOME se bloquent
       # sur ses verrous (la contention passe par un port local, invisible de l'autre
       # conteneur). Prix : un second téléchargement des dépendances au premier démarrage.
@@ -163,6 +215,8 @@ services:
         condition: service_healthy
       app:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   frontend:
     image: node:24-alpine
@@ -193,4 +247,5 @@ volumes:
   gradle-cache:
   gradle-cache-worker:
   originals:
+  ollama-models:
   frontend-node-modules:

@@ -24,16 +24,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * On teste le <strong>port</strong>, jamais l'adapter : c'est le contrat du domaine qui doit
- * tenir. Le montage du propriétaire est celui de {@link JpaDocumentRepositoryAdapterTest} —
- * la clé étrangère de {@code knowledge_documents} traverse les deux contextes bornés.
- *
- * <p>La cascade depuis {@code knowledge_documents} n'est pas vérifiée ici, et c'est
- * délibéré : dans une transaction, Hibernate rendrait le {@code TextExtraction} depuis son
- * cache de premier niveau sans jamais interroger la base, et le test passerait au vert quelle
- * que soit la migration. Elle l'est par {@code DeleteDocumentCascadeTest}, non transactionnel.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional

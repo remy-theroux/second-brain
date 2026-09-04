@@ -9,11 +9,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/**
- * L'adapter se teste sans Spring : il ne dépend que d'un chemin. C'est le seul endroit du
- * contexte où regarder le système de fichiers est légitime — ailleurs, c'est le port qui
- * fait foi.
- */
 class FilesystemDocumentStorageTest {
 
     private static final byte[] CONTENU = "le contenu d'origine".getBytes(StandardCharsets.UTF_8);

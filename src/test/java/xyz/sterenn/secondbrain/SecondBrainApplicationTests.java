@@ -9,7 +9,5 @@ import org.springframework.context.annotation.Import;
 class SecondBrainApplicationTests {
 
     @Test
-    void contextLoads() {
-        // Vérifie que le contexte démarre et que Flyway migre la base Testcontainers.
-    }
+    void contextLoads() {}
 }

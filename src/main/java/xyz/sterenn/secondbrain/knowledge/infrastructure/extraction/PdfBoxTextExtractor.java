@@ -17,23 +17,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
-/**
- * Le {@code .pdf} : le format le plus fragile, parce qu'il ne porte <em>aucune</em>
- * sémantique de titre. Il n'y a que des glyphes posés à des coordonnées.
- *
- * <p>Deux stratégies, dans cet ordre, et c'est ADR-0027 :
- *
- * <ol>
- *   <li><strong>Le sommaire</strong> quand le document en a un. Il est écrit par l'auteur,
- *       et vaut mieux que n'importe quelle mesure.
- *   <li><strong>La taille de police</strong> sinon, par {@link HeadingHeuristic}.
- * </ol>
- *
- * <p><strong>Limite du chemin par sommaire : la granularité est la page.</strong> PDFBox ne
- * découpe qu'en plages de pages ; deux signets tombant sur la même page sont fusionnés sous
- * le titre du premier, faute de quoi le texte de cette page serait rendu deux fois — et pour
- * un RAG, un texte dupliqué est bien pire qu'un titre manquant.
- */
+/** Le sommaire d'abord, la taille de police en repli : voir ADR-0027. */
 @Component
 public class PdfBoxTextExtractor implements DocumentTextExtractor {
 
@@ -54,20 +38,12 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
         } catch (IOException illisible) {
             throw new UnreadableDocumentException(illisible);
         }
-        // Hors du try : un PDF numérisé s'ouvre parfaitement, il ne dit simplement rien.
-        // C'est un refus métier, pas une panne de lecture.
+        // Hors du try : un PDF numérisé s'ouvre parfaitement, son refus est métier.
         return Section.assemble(sections);
     }
 
-    /** Un signet : son titre, sa profondeur dans le sommaire, et la page qu'il vise. */
     private record Bookmark(String title, int level, int pageIndex) {}
 
-    /**
-     * Parcours en profondeur du sommaire : son ordre est l'ordre de lecture du document.
-     *
-     * <p>Un signet sans titre ou dont la destination ne mène à aucune page est écarté : ces
-     * deux cas existent dans la nature, et un titre vide ne rattacherait rien à rien.
-     */
     private static List<Bookmark> signets(PDDocument pdf, PDOutlineNode noeud, int niveau) throws IOException {
         List<Bookmark> trouves = new ArrayList<>();
         for (PDOutlineItem item : noeud.children()) {
@@ -84,8 +60,8 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
     }
 
     private static List<Section> parSignets(PDDocument pdf, List<Bookmark> signets) throws IOException {
-        // Deux signets sur la même page sont fusionnés sous le titre du premier : PDFBox ne
-        // découpe qu'en pages, et le texte de cette page serait sinon rendu deux fois.
+        // PDFBox ne découpe qu'en plages de pages : deux signets sur la même page sont
+        // fusionnés sous le titre du premier, sinon cette page serait rendue deux fois.
         List<Bookmark> parPage = new ArrayList<>();
         for (Bookmark signet : signets) {
             if (parPage.isEmpty() || parPage.getLast().pageIndex() != signet.pageIndex()) {
@@ -98,8 +74,6 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
         stripper.setLineSeparator("\n");
 
         List<Section> sections = new ArrayList<>();
-        // Ce qui précède le premier signet — page de garde, résumé — n'appartient à aucune
-        // section, et le perdre serait perdre du texte que l'auteur a bien écrit.
         if (parPage.getFirst().pageIndex() > 0) {
             sections.add(
                     Section.untitled(texte(stripper, pdf, 0, parPage.getFirst().pageIndex() - 1)));
@@ -113,13 +87,7 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
         return sections;
     }
 
-    /**
-     * Bornes en index de page, inclusives ; {@link PDFTextStripper} les compte à partir de 1.
-     *
-     * <p>Un sommaire mal formé, dont les signets ne sont pas dans l'ordre des pages, donne
-     * une plage vide plutôt qu'une erreur : la section est alors écartée par
-     * {@link Section#assemble}, comme toute section sans corps.
-     */
+    /** Bornes inclusives en index de page ; {@link PDFTextStripper} les compte à partir de 1. */
     private static String texte(PDFTextStripper stripper, PDDocument pdf, int premierePage, int dernierePage)
             throws IOException {
         stripper.setStartPage(premierePage + 1);

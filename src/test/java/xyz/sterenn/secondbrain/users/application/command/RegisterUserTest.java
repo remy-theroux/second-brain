@@ -4,10 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Test unitaire pur : pas besoin de Spring ni de Testcontainers pour vérifier la
- * représentation textuelle d'un record.
- */
 class RegisterUserTest {
 
     @Test

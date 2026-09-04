@@ -7,22 +7,10 @@ import xyz.sterenn.secondbrain.users.application.command.RegisterUser;
 import xyz.sterenn.secondbrain.users.application.command.VerifyAccount;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * Crée des comptes dans les tests <em>par le chemin réel</em> : inscription par le bus,
- * puis lecture du jeton dans l'enregistreur de notifications et vérification par la
- * commande dédiée. Aucun test ne bascule {@code verified} à la main — un raccourci qui
- * contournerait le domaine finirait par cacher une régression du domaine.
- *
- * <p>L'enregistreur est un bean partagé par tout le contexte et n'est pas vidé par le
- * rollback : appeler {@code clear()} en {@code @BeforeEach} avant d'utiliser cette classe.
- */
 public final class AccountFixture {
 
-    private AccountFixture() {
-        // classe utilitaire
-    }
+    private AccountFixture() {}
 
-    /** Crée un compte non vérifié et rend son identifiant. */
     public static UUID register(
             CommandBus commandBus,
             RecordingNotificationSender recordingNotificationSender,
@@ -32,7 +20,6 @@ public final class AccountFixture {
         return recordingNotificationSender.derniere().accountId();
     }
 
-    /** Crée un compte puis suit son lien de vérification, comme le ferait l'utilisateur. */
     public static UUID registerVerified(
             CommandBus commandBus,
             RecordingNotificationSender recordingNotificationSender,

@@ -54,6 +54,20 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  http:
+    clients:
+      # Seul RestClient du projet (OllamaEmbeddingAdapter), donc un réglage global plutôt
+      # qu'un client nommé. Même statut que les timeouts Jakarta Mail et le
+      # connection-timeout RabbitMQ ci-dessous : sans lui, un Ollama qui accepte la
+      # connexion TCP puis ne répond plus fige le thread du worker pour toujours — le
+      # seul thread qui consomme domain.knowledge.events — sans log, sans FAILED, sans
+      # retentative, puisque rien ne lève d'exception. connect-timeout court : soit
+      # Ollama écoute, soit non. read-timeout volontairement généreux, choisi pour
+      # détecter un service figé et non pour borner un traitement normal : un lot de 32
+      # extraits par bge-m3 sur CPU peut légitimement prendre près d'une minute.
+      connect-timeout: 5s
+      read-timeout: 120s
+
   rabbitmq:
     # Même statut que la datasource : le défaut sert le développement hors conteneur,
     # compose.yaml pose les vrais. guest/guest sont les identifiants par défaut de l'image
@@ -82,6 +96,13 @@ spring:
         # dead-letter queue ni de retry (spec, décision 7) : un échec doit finir en FAILED
         # sur le document, pas être rejoué.
         default-requeue-rejected: false
+        # Explicite plutôt qu'implicite : l'idempotence de KnowledgeEventListener repose sur
+        # un seul consommateur à la fois. Ses handlers effacent puis réécrivent derrière des
+        # contraintes UNIQUE — correct pour une redélivrance séquentielle, mais deux
+        # livraisons simultanées du même événement effaceraient et écriraient toutes les
+        # deux, et se heurteraient l'une l'autre sur ces contraintes au lieu de se remplacer
+        # proprement.
+        concurrency: 1
 
 management:
   endpoints:
@@ -114,6 +135,15 @@ secondbrain:
     # identifiant. Comme `base-url`, le défaut sert le développement : hors conteneur,
     # `/data` n'est pas écrivable, et c'est SECONDBRAIN_ORIGINALS_PATH qui fait foi.
     originals-path: ${SECONDBRAIN_ORIGINALS_PATH:/data/originals}
+  embedding:
+    # Où joindre le service de vectorisation. Comme la datasource, le défaut sert le
+    # développement hors conteneur — 11434 est le port d'Ollama. En production, la variable
+    # visera l'Ollama déjà en place plutôt qu'un second, embarqué pour rien.
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # Le modèle, et lui seul, est configurable. Sa DIMENSION ne l'est pas : elle vit dans
+    # EmbeddingPolicy, parce qu'elle est le contrat entre le modèle, la colonne et l'index.
+    # Changer de modèle est une migration et une réindexation, pas une variable.
+    model: ${SECONDBRAIN_EMBEDDING_MODEL:bge-m3}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   jwt:

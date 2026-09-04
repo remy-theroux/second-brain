@@ -227,6 +227,41 @@ Avant d'écrire une classe, décider de sa couche :
 - Ne pinner que ce que le BOM ne couvre pas (plugins, springdoc).
 - Toute dépendance nouvelle passe par le version catalog quand elle porte une version.
 
+## Commentaires
+
+**Le raisonnement ne vit pas dans le code.** Il vit dans les ADR (`docs/decisions/`), dans
+`CLAUDE.md` et dans les plans (`docs/superpowers/plans/`). Le code dit ce qu'il fait, les
+tests disent ce qu'on attend de lui. Cette règle est arrivée après coup, sur un dépôt où une
+ligne de Java sur trois était de la prose : la Javadoc y racontait des décisions déjà écrites
+ailleurs, et chaque relecture payait deux fois le même texte.
+
+- **Un commentaire est une exception, pas une habitude.** Par défaut, on n'en écrit pas.
+  En écrire un, c'est constater que le code seul ne suffit pas — et la réponse à ce constat
+  est d'abord de rendre le code explicite : un meilleur nom, une constante nommée, une
+  méthode privée extraite. Le commentaire ne vient qu'après l'échec des trois.
+- **Ce qui en justifie un** : un piège qu'aucune lecture attentive ne déduirait — une paire
+  de substituts UTF-8 qu'on se refuse à couper, un cast en `long` qui évite un débordement,
+  un comptage sorti d'une boucle pour ne pas rendre l'algorithme quadratique —, le
+  contournement d'un comportement de bibliothèque, ou le renvoi d'une ligne vers un ADR.
+  Toujours le *pourquoi*, jamais le *quoi*.
+- **Ce qui n'en justifie pas** : paraphraser le nom de la classe ou de la méthode ;
+  réécrire une signature en `@param` et `@return` ; raconter l'histoire d'une décision, qui
+  est un ADR ; énumérer les étapes d'une méthode — si elle a besoin d'un sommaire, c'est
+  elle qu'il faut découper.
+- **Trois lignes est un plafond.** Au-delà, le propos appartient à un ADR ou à une section
+  de `CLAUDE.md`, et le code n'en garde que le renvoi : `// voir ADR-0020`.
+- **Pas de Javadoc de façade** sur une classe, une méthode ou un champ dont le nom suffit,
+  donc sur l'immense majorité. Un port du domaine est le cas où une phrase se justifie
+  encore : son contrat n'a aucune implémentation sous les yeux du lecteur.
+- Pas de commentaire de section (`// --- validation ---`), pas de code commenté, pas de
+  `TODO` sans ticket, pas d'en-tête de fichier.
+- Vaut pour les tests : c'est le nom de la méthode qui dit le scénario. Un commentaire ne
+  s'y justifie que pour une acrobatie de montage (voir les mises en garde de la section
+  « Tests »).
+- **Supprimer un commentaire, c'est supprimer les imports qu'il justifiait seul** : un
+  `{@link}` compte comme un usage pour l'IDE, pas pour le compilateur, et l'import survit
+  sans que rien ne le signale.
+
 ## Formatage
 
 - **Le style est décidé par Spotless + palantir-java-format**, pas par le rédacteur :
@@ -238,8 +273,8 @@ Avant d'écrire une classe, décider de sa couche :
   code si loin à droite que les commentaires de fin de ligne se retrouvent redécoupés en
   milieu de phrase.
 - **Le Javadoc et les commentaires ne sont jamais reformatés** — seule leur indentation
-  suit le code. Leur mise en forme reste donc entièrement à la charge du rédacteur : c'est
-  voulu, ce sont eux qui portent le raisonnement.
+  suit le code. Leur mise en forme reste donc entièrement à la charge du rédacteur : une
+  raison de plus pour qu'il y en ait peu, voir « Commentaires » ci-dessus.
 - `spotlessCheck` est accroché à la tâche `check`, donc à `build` : la CI échoue sur du
   Java mal formaté sans qu'aucune étape dédiée n'apparaisse dans `ci.yml`.
 - Les `--add-exports` de `gradle.properties` sont la condition pour que le formateur

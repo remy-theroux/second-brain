@@ -4,15 +4,9 @@ import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Projette le value object {@link Email} sur une colonne texte. Un mapping est un détail
- * de persistance, donc de l'infrastructure : le domaine ne nomme cette classe nulle part.
- *
- * <p><strong>Aucune ligne de code ne référence ce converter.</strong> {@code autoApply} le
- * fait appliquer à tout attribut de type {@link Email}, et Hibernate ne le connaît que
- * parce que le scan d'entités part du package de {@code SecondBrainApplication}. Le
- * supprimer au motif qu'il paraît inutilisé fait échouer le démarrage de l'application.
- */
+// Aucune ligne de code ne référence ce converter : autoApply l'applique à tout attribut Email,
+// et Hibernate ne le trouve que par le scan de packages. Le supprimer au motif qu'il paraît
+// inutilisé fait échouer le démarrage.
 @Converter(autoApply = true)
 public class EmailAttributeConverter implements AttributeConverter<Email, String> {
 

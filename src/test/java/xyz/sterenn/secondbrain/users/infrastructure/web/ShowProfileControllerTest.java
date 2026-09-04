@@ -32,10 +32,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * Les cinq issues du profil, plus le parcours complet. Les jetons ne sont pas simulés :
- * ils sont émis par le port réel, ou obtenus par la vraie route de connexion.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -87,9 +83,8 @@ class ShowProfileControllerTest {
 
     @Test
     void refuse_un_jeton_signe_par_une_autre_cle() throws Exception {
-        // Protège la garantie centrale du porteur : un jeton ne peut pas être forgé sans le
-        // secret. Les revendications sont par ailleurs valides en tout point (sub, iat, exp
-        // cohérents) pour que seule la signature explique le refus.
+        // Revendications volontairement valides en tout point : seule la signature doit
+        // expliquer le refus.
         JwtEncoder encodeurEtranger = NimbusJwtEncoder.withSecretKey(new SecretKeySpec(
                         "une-autre-cle-de-signature-32-octets-au-moins".getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
                 .build();

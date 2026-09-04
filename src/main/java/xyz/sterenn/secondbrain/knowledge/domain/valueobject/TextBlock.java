@@ -5,34 +5,12 @@ import jakarta.persistence.Embeddable;
 import java.text.Normalizer;
 import java.util.Objects;
 
-/**
- * Un bloc de texte extrait d'un document, rattaché au titre de sa section.
- *
- * <p><strong>Un bloc est une section, pas un paragraphe.</strong> C'est ce que tranche le
- * second scénario du ticket : un document sans titre rend « un unique bloc contenant tout
- * le texte », or un texte sans titre compte bien plusieurs paragraphes. Voir ADR-0024.
- *
- * <p>Le titre est vide et son niveau nul quand le document n'en porte pas — jamais
- * {@code null} : un consommateur qui préfixe ses extraits n'a pas à distinguer deux formes
- * d'absence.
- *
- * <p>{@code headingLevel} n'a aujourd'hui aucun consommateur. Il est conservé parce qu'il
- * est la seule information permettant plus tard de reconstruire un chemin de section
- * (« Chapitre 1 &gt; Introduction ») sans réextraire toute la base : le niveau, l'extraction
- * est seule à le connaître, le chemin se recalcule à tout moment.
- *
- * <p>{@code @Embeddable} dans le domaine : c'est ADR-0002 — les entités JPA vivent dans le
- * domaine, sans classe miroir ni mapper — étendu à un objet-valeur possédé par une entité.
- * La position dans le document n'est <em>pas</em> un champ : elle appartient à la liste, et
- * c'est {@code @OrderColumn} qui la porte côté {@code TextExtraction}.
- */
+/** Voir ADR-0002 : l'écart qui autorise les annotations JPA dans le domaine. */
 @Embeddable
 public class TextBlock {
 
-    /** Ce que la colonne accepte, et bien au-delà de ce qu'un titre lisible réclame. */
     public static final int MAX_HEADING_LENGTH = 255;
 
-    /** Six niveaux, comme HTML et comme les styles Heading1..6 de Word. */
     public static final int MAX_HEADING_LEVEL = 6;
 
     @Column(nullable = false, length = MAX_HEADING_LENGTH)
@@ -46,9 +24,7 @@ public class TextBlock {
     @Column(nullable = false, columnDefinition = "text")
     private String text;
 
-    protected TextBlock() {
-        // requis par JPA
-    }
+    protected TextBlock() {}
 
     private TextBlock(String heading, int headingLevel, String text) {
         this.heading = heading;
@@ -56,12 +32,6 @@ public class TextBlock {
         this.text = text;
     }
 
-    /**
-     * @throws IllegalArgumentException si le texte est vide une fois normalisé, ou si un
-     *     titre renseigné porte un niveau hors de 1 à {@value #MAX_HEADING_LEVEL}. C'est une
-     *     erreur de programmation d'un extracteur, pas un refus métier : un document sans
-     *     texte se refuse à l'échelle du document, par {@link ExtractedText}.
-     */
     public static TextBlock of(String heading, int headingLevel, String text) {
         String titre = normaliseHeading(heading);
         String corps = normalise(text);
@@ -75,29 +45,10 @@ public class TextBlock {
         return new TextBlock(titre, titre.isEmpty() ? 0 : headingLevel, corps);
     }
 
-    /** Le document ne portait pas de titre à cet endroit : niveau nul, titre vide. */
     public static TextBlock untitled(String text) {
         return of("", 0, text);
     }
 
-    /**
-     * Normalise un texte extrait, sans jamais toucher à ce qui porte du sens.
-     *
-     * <p>Les fins de ligne sont ramenées à {@code \n}, les espaces de fin de ligne effacés,
-     * et toute suite de trois sauts de ligne ou plus ramenée à deux : <strong>la frontière
-     * de paragraphe survit, la mise en page non</strong>. C'est cette double ligne que RAG-5
-     * cherchera pour découper.
-     *
-     * <p>NFC parce que deux extracteurs peuvent rendre le même « é » sous deux formes, et
-     * que deux blocs identiques doivent être égaux. Quatre caractères invisibles sont
-     * traités à part : la marque d'ordre des octets ({@code U+FEFF}) et l'espace insécable
-     * ({@code U+00A0}) deviennent des espaces — les effacer collerait les mots —, tandis que
-     * l'octet nul ({@code U+0000}, qu'un PDF mal formé sème) et le trait d'union conditionnel
-     * ({@code U+00AD}, qui couperait les mots) disparaissent.
-     *
-     * <p>Package-private : {@link ExtractedTextBuilder} en a besoin pour décider si une
-     * section a un corps, avant de tenter de construire un bloc qui serait refusé.
-     */
     static String normalise(String brut) {
         if (brut == null) {
             return "";
@@ -110,11 +61,10 @@ public class TextBlock {
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
                 .replaceAll("[ \\t\\x0B\\f]+(?=\\n)", "")
-                .replaceAll("\n{3,}", "\n\n")
+                .replaceAll("\n{3,}", "\n\n") // la frontière de paragraphe survit, la mise en page non
                 .strip();
     }
 
-    /** Un titre tient sur une ligne : ses blancs sont aplatis, sa longueur bornée. */
     private static String normaliseHeading(String brut) {
         String titre = normalise(brut).replaceAll("\\s+", " ").strip();
         return titre.length() > MAX_HEADING_LENGTH
@@ -147,7 +97,6 @@ public class TextBlock {
         return Objects.hash(heading, headingLevel, text);
     }
 
-    /** Volontairement sans le corps : un bloc pèse parfois plusieurs milliers de caractères. */
     @Override
     public String toString() {
         return "TextBlock[heading=" + heading + ", level=" + headingLevel + ", " + text.length() + " caractères]";

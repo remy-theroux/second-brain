@@ -20,13 +20,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.exception.InvalidCredentialsException;
 import xyz.sterenn.secondbrain.users.domain.exception.UnverifiedAccountException;
 
-/**
- * Les cinq issues de la connexion, dispatchées par le bus — le chemin réel de production —
- * plus deux cas au-delà du strict design : la casse de l'email, qui vérifie que la
- * normalisation a bien lieu avant comparaison, et l'absence d'oracle d'existence de compte
- * (un mot de passe faux sur un compte non vérifié échoue comme sur un compte inexistant),
- * qui protège une propriété de sécurité qu'aucun des cinq scénarios nommés ne couvre seul.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @Transactional
@@ -87,8 +80,6 @@ class AuthenticateUserHandlerTest {
 
     @Test
     void refuse_un_email_mal_forme_comme_un_identifiant_faux() {
-        // Pas d'InvalidEmailException ici : du dehors, une saisie mal formée est un
-        // identifiant qui ne correspond à rien, pas une panne à distinguer.
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("pas-un-email", MOT_DE_PASSE)))
                 .isInstanceOf(InvalidCredentialsException.class);
     }
@@ -104,8 +95,6 @@ class AuthenticateUserHandlerTest {
 
     @Test
     void ne_revele_pas_qu_un_compte_existe_a_qui_ignore_le_mot_de_passe() {
-        // Le contrôle de vérification vient APRÈS celui du mot de passe : sans le bon mot
-        // de passe, le refus est le même que pour un compte inexistant.
         AccountFixture.register(commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
 
         assertThatThrownBy(() -> queryBus.ask(new AuthenticateUser("bob@exemple.fr", "chevalpile43")))

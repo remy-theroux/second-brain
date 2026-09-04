@@ -29,10 +29,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * Supprimer, c'est faire disparaître les deux : la ligne et son original. Un test qui ne
- * regarderait que la liste laisserait passer un disque qui se remplit indéfiniment.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -106,8 +102,6 @@ class DeleteDocumentControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
                 .andExpect(status().isNoContent());
 
-        // Ni la ligne ni l'original ne subsistent : le refus d'écrasement de l'adapter de
-        // stockage ne doit pas transformer une suppression en cul-de-sac.
         depose(jetonAlice, alice, "rapport.pdf");
 
         assertThat(documentRepository.findAllByOwnerId(alice)).hasSize(1);

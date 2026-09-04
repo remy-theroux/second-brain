@@ -20,23 +20,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
-/**
- * Orchestre l'extraction : relecture du document et de son original, choix de l'extracteur,
- * remplacement du texte, changement de statut, puis annonce.
- *
- * <p>Aucun {@code @Transactional} ici — la transaction est ouverte par
- * {@code SpringCommandBus.dispatch}. Une extraction qui échoue n'écrit donc rien : ni texte
- * partiel, ni statut. C'est ce qui oblige le consommateur d'événements à marquer l'échec dans
- * une <em>seconde</em> transaction (ADR-0028).
- *
- * <p><strong>L'effacement avant l'écriture n'est pas une précaution de style.</strong> AMQP
- * livre au moins une fois et {@code document_id} est {@code UNIQUE} : sans lui, une
- * redélivrance de {@code DocumentUploaded} ferait échouer l'écriture sur la contrainte, et le
- * document passerait en {@code FAILED} pour un traitement qui avait réussi.
- *
- * <p>L'annonce en dernier, comme au dépôt : elle ne prend effet qu'au commit, donc sa place
- * n'a aucune portée transactionnelle — elle est dernière pour se lire comme ce qu'elle est.
- */
 @Component
 public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumentText> {
 
@@ -62,25 +45,6 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
         this.clock = clock;
     }
 
-    /**
-     * Indexe les extracteurs, et <strong>fait échouer le démarrage</strong> si un format
-     * <em>textuel</em> accepté au dépôt n'a pas le sien.
-     *
-     * <p>C'est la contrepartie du choix d'un extracteur par format (ADR-0026) : ajouter une
-     * constante à {@link DocumentFormat} sans écrire son adapter serait, sinon, un document
-     * accepté puis irrémédiablement en échec. Même dispositif que la table de routage des
-     * bus : le défaut se voit au démarrage, pas en production.
-     *
-     * <p><strong>La boucle porte sur {@link DocumentType#TEXTUAL}, pas sur tous les
-     * formats.</strong> Un format d'une autre typologie — un enregistrement sonore, une
-     * image — ne se découpe pas en blocs titrés : lui réclamer un extracteur de texte
-     * empêcherait l'application de démarrer pour un besoin qui n'existe pas. Symétriquement,
-     * un extracteur de texte qui revendiquerait un format non textuel est un branchement
-     * faux, et il est refusé ici plutôt qu'au premier document traité.
-     *
-     * <p>Package-private plutôt que privée : c'est un contrôle, et un contrôle se teste.
-     * Voir {@code ExtractorCoverageTest}.
-     */
     static Map<DocumentFormat, DocumentTextExtractor> indexeParFormat(
             List<DocumentTextExtractor> documentTextExtractors) {
         Map<DocumentFormat, DocumentTextExtractor> parFormat = new EnumMap<>(DocumentFormat.class);
@@ -115,12 +79,13 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
 
         byte[] contenu = documentStorage
                 .read(document.getId())
-                // La ligne existe, l'original non : c'est la fuite qu'ADR-0020 assume dans
-                // l'autre sens. Illisible est le mot juste — il n'y a rien à lire.
+                // La ligne existe, l'original non : voir ADR-0020.
                 .orElseThrow(UnreadableDocumentException::new);
 
         ExtractedText texte = extractorsByFormat.get(document.getFormat()).extract(contenu);
 
+        // Effacer avant d'écrire : AMQP livre au moins une fois et document_id est UNIQUE,
+        // une redélivrance échouerait sinon sur la contrainte.
         textExtractionRepository.deleteByDocumentId(document.getId());
         textExtractionRepository.save(TextExtraction.of(document.getId(), texte, clock.instant()));
 

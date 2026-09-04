@@ -130,6 +130,13 @@ qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même « Tim
 to lock » qu'entre `gtest` et la pile. Le prix est un second téléchargement des dépendances
 au premier démarrage.
 
+Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions), tiré au premier
+démarrage par le conteneur one-shot `ollama-pull`. Il ne publie aucun port : seul le worker
+lui parle, par le réseau de la pile. Pour l'interroger à la main,
+`docker compose exec ollama ollama list`. Le worker **ne l'attend pas** pour démarrer — un
+document traité pendant le téléchargement du modèle échoue avec un motif qui nomme la
+vectorisation.
+
 Au premier démarrage, `bootRun` peut perdre la course contre la compilation continue et
 échouer sur « Main class name has not been configured » — `build/classes` était encore vide.
 `docker compose run --rm --no-deps app ./gradlew --no-daemon classes` puis
@@ -171,6 +178,10 @@ Le cache Gradle et le `node_modules` ne se partagent pas entre worktrees — c'e
 « Timeout waiting to lock » ci-dessus. Chaque pile paie donc un premier démarrage long, et
 le `gtest` d'un worktree vise un volume `second-brain-gradle-home-<slug>` qui lui est propre.
 
+`ollama-models` non plus ne se partage pas : c'est un volume nommé, donc propre au projet
+Compose comme `db-data`, et chaque nom de projet en a le sien. Une feature de plus en
+parallèle, c'est un modèle de plus téléchargé et un Ollama de plus qui tourne.
+
 ## Architecture
 
 Architecture **hexagonale par bounded context**, avec un **CQRS minimal** posé sur
@@ -190,23 +201,37 @@ xyz.sterenn.secondbrain
 ├── knowledge/               bounded context — base de connaissance
 │   ├── domain/
 │   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
-│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part)
+│   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
+│   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
+│   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
+│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
+│   │   │                    TextChunk (un extrait et son vecteur)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
-│   │   │                    TextBlock + ExtractedText (le format du texte extrait)
+│   │   │                    TextBlock + ExtractedText (le format du texte extrait),
+│   │   │                    Embedding (le vecteur produit par le service de vectorisation),
+│   │   │                    Chunk (un extrait, avant qu'il soit rangé)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
-│   │   │                    DocumentTextExtractor
+│   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
+│   │   │                    TextChunkRepository
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
-│   │   │                    et ses deux filles (Unreadable…, Unextractable…)
-│   │   └── event/           DocumentUploaded, DocumentTextExtracted
+│   │   │                    et ses deux filles (Unreadable…, Unextractable…),
+│   │   │                    EmbeddingUnavailableException, DocumentProcessingException
+│   │   │                    (mère de tous les refus de traitement, c'est elle que le worker
+│   │   │                    interroge)
+│   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
-│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText
+│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
+│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
 │   │   └── query/           ListDocuments + DocumentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
 │       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
+│       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
+│       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
+│       │                    et JtokkitTokenCounter
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
 │                            KnowledgeEventListener (profil worker), catalogue des
@@ -463,6 +488,48 @@ c'est le cas du PDF numérisé, et le vide silencieux ne se verrait qu'à la pre
 restée sans réponse. L'effacement du texte précédent avant l'écriture n'est pas décoratif :
 AMQP livre au moins une fois et `document_id` est `UNIQUE`.
 
+### Le flux du découpage et de la vectorisation
+
+Le worker reçoit `DocumentTextExtracted` et dispatche `IndexDocumentText`, qui relit le
+document et son texte, découpe, vectorise, remplace les extraits, pose `READY` et annonce
+`DocumentTextIndexed`.
+
+**Le découpage est une logique de domaine pure** — `RecursiveChunker`, aux côtés des trois
+policies — et quatre niveaux de repli : une section sous le plafond donne un extrait ; sinon
+on coupe aux paragraphes (la double ligne vide que `TextBlock.normalise` garantit), puis aux
+phrases (`BreakIterator`, le JDK), puis net, faute de frontière. Deux extraits consécutifs
+d'une même section se recouvrent d'environ 90 tokens repris **en phrases entières** ; le
+recouvrement ne franchit jamais une frontière de section, et il cède devant le plafond — c'est
+un confort, le plafond est un invariant.
+
+**Le comptage passe par un port** (`TokenCounter`, adapter jtokkit en `cl100k_base`) parce que
+c'est la toise d'un autre : `bge-m3` s'appuie sur un sentencepiece XLM-RoBERTa. C'est sans
+danger — `cl100k` sur-compte le français, donc le plafond est conservateur — mais 600 est un
+proxy, pas une mesure. Les tests du découpage prennent un compteur « un mot égale un token »,
+ce qui rend les frontières lisibles dans les assertions.
+
+**Ce qui part au modèle est préfixé, ce qui est stocké ne l'est pas.**
+`Chunk.contextualised(filename)` rend `Document: rapport.pdf — Section: Introduction` suivi du
+corps, et c'est la seule méthode qui connaisse cette forme ; la colonne `text` porte le corps
+nu. Changer la forme du préfixe ne demandera donc pas de réécrire la base, seulement de
+revectoriser — et l'écran reste lisible. Ce que ça suppose et qui est vrai : aucune route ne
+renomme un document.
+
+**Tout tient dans la transaction du bus, appels Ollama compris.** Le « tout ou rien » est
+gratuit : c'est le rollback. Un Ollama à terre ne laisse aucun extrait derrière lui, le
+document passe `FAILED` en gardant son texte extrait, et le motif nomme la vectorisation —
+c'est à ça que sert `DocumentProcessingException`, mère commune des refus d'extraction et de
+vectorisation, seule famille dont le listener montre les messages. Le prix est une connexion
+PostgreSQL tenue plusieurs minutes par document — une centaine d'extraits fait quatre lots, et
+un lot de 32 auprès de `bge-m3` sur CPU prend près d'une minute : pesé, et tenable pour une
+application mono-utilisateur dont le worker consomme en séquence.
+
+**Un document extrait avant l'arrivée de cette fonctionnalité reste `EXTRACTED`.** Rien ne
+réémet `DocumentTextExtracted` pour lui, et il n'existe aujourd'hui aucune route qui
+réindexe — ce sera RAG-7. La seule façon de le faire avancer est de le supprimer et de le
+redéposer, ou de republier à la main son événement `knowledge.document-text.extracted` sur le
+broker.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -520,9 +587,17 @@ exception dans un listener rejette le message **sans remise en file**
 (`default-requeue-rejected=false`) : sans ce réglage, un message toxique tournerait en
 boucle. Pas de dead-letter queue, pas de retry : un échec finit en `FAILED` sur le document,
 pas rejoué. **Et il y finit depuis une seconde transaction** — `KnowledgeEventListener`
-rattrape l'exception, dispatche `MarkDocumentExtractionFailed`, puis acquitte. Un statut
+rattrape l'exception, dispatche `MarkDocumentProcessingFailed`, puis acquitte. Un statut
 d'erreur écrit dans la transaction que le bus vient d'annuler disparaîtrait avec elle, et le
 document resterait éternellement en attente (ADR-0028).
+
+**Le worker tient une livraison AMQP le temps de vectoriser tout un document**, ce qui peut
+se compter en minutes — voir plus haut. `compose.yaml` pose `consumer_timeout` à deux heures
+côté broker de développement pour cette raison : au-delà du défaut de 30 minutes, RabbitMQ
+ferme le canal et remet le message en file quoi que dise `default-requeue-rejected`, qui ne
+gouverne que `basicNack`. Un broker de production doit recevoir le même réglage — il vit dans
+Coolify, hors de ce dépôt (ADR-0013). Le symptôme sans lui : un document volumineux qui ne
+quitte jamais `EXTRACTED`, et le journal du worker qui rejoue la même indexation en boucle.
 
 Les tests du socle observent des commits : ils ne sont pas `@Transactional` et nettoient
 en `@AfterEach`. Le rôle worker se teste avec `@ActiveProfiles("worker")` et
@@ -555,6 +630,13 @@ Elles portent le nom de leur **typologie**, pas celui du document : une typologi
 visuelle aura les siennes, d'une autre forme (ADR-0030). Les deux cascadent à la suppression du
 document — c'est le `ON DELETE CASCADE` que `DeleteDocumentHandler` annonçait, et il n'a
 rien changé à ce handler. Le format lui-même est décrit par ADR-0024.
+
+Les extraits vectorisés vivent dans une troisième table, `knowledge_text_chunks` : une ligne
+par extrait, son vecteur en colonne (`vector(1024)`), `UNIQUE (document_id, chunk_position)`
+et un index HNSW en `vector_cosine_ops` que **personne n'interroge encore** — RAG-8 écrira la
+requête. La dimension est figée dans le type de la colonne, et doit rester égale à
+`EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la suppression du document : c'est la
+deuxième fois qu'un ticket ajoute des tables sans toucher à `DeleteDocumentHandler`.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent sur disque, un par
 document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
@@ -609,10 +691,10 @@ remplace — voir `.claude/rules/decisions.md`.
 ## Stack et versions
 
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
-Validation, Mail) · Flyway · PostgreSQL 17 · Spring AMQP · RabbitMQ 4 · springdoc-openapi ·
-commonmark-java · Apache POI · PDFBox ·
-JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version catalog
-(`gradle/libs.versions.toml`).
+Validation, Mail) · Flyway · PostgreSQL 17 + pgvector · Spring AMQP · RabbitMQ 4 ·
+springdoc-openapi · commonmark-java · Apache POI · PDFBox · jtokkit (comptage de tokens) ·
+hibernate-vector · JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version
+catalog (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
 Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
@@ -620,8 +702,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
-`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), et un
-conteneur `worker` de la même image que `app`.
+`RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
+conteneur `worker` de la même image que `app`, et un service `ollama` qui sert le modèle
+d'embedding.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit

@@ -29,11 +29,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * La liste est la seule façon pour l'utilisateur de savoir ce que contient sa base de
- * connaissance. Ce qu'elle ne doit jamais montrer — le dépôt d'un autre compte — compte
- * donc autant que ce qu'elle montre.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -135,7 +130,7 @@ class ListDocumentsControllerTest {
     void expose_le_motif_d_un_document_en_echec() throws Exception {
         depose(jetonAlice, "scan.pdf", "un contenu quelconque");
         Document document = documentRepository.findAllByOwnerId(alice).getFirst();
-        document.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
 
         mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))

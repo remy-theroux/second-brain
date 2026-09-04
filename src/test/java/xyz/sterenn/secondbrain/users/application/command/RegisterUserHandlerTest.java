@@ -25,11 +25,6 @@ import xyz.sterenn.secondbrain.users.domain.port.VerificationTokenRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-/**
- * La commande est toujours dispatchée par le bus, jamais appelée en direct : c'est le
- * chemin réel de production. Le canal de notification est remplacé par un enregistreur en
- * mémoire — c'est le port qui est vérifié, pas l'adapter email.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @Transactional
@@ -57,8 +52,6 @@ class RegisterUserHandlerTest {
 
     @BeforeEach
     void vide_les_notifications() {
-        // L'enregistreur est un bean partagé par le contexte : le rollback de la
-        // transaction de test ne le vide pas.
         notifications.clear();
     }
 

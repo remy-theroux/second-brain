@@ -10,10 +10,6 @@ import org.junit.jupiter.api.Test;
 import xyz.sterenn.secondbrain.users.domain.exception.AlreadyUsedVerificationLinkException;
 import xyz.sterenn.secondbrain.users.domain.exception.ExpiredVerificationLinkException;
 
-/**
- * Agrégat sans dépendance : test unitaire pur. Le temps entre par paramètre, ce qui
- * permet de vérifier l'expiration sans attendre 24 heures.
- */
 class VerificationTokenTest {
 
     private static final Instant EMISSION = Instant.parse("2026-08-06T10:00:00Z");
@@ -73,8 +69,6 @@ class VerificationTokenTest {
 
     @Test
     void signale_d_abord_le_double_usage_quand_le_jeton_est_aussi_expire() {
-        // L'utilisateur qui reclique un vieux lien déjà utilisé a besoin de savoir
-        // qu'il a déjà vérifié son compte, pas que le lien a vieilli.
         VerificationToken jeton = emis();
         jeton.consume(EMISSION.plus(Duration.ofMinutes(5)));
 

@@ -19,18 +19,6 @@ import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 import xyz.sterenn.secondbrain.users.domain.exception.WeakPasswordException;
 
-/**
- * Adapter entrant : traduit une demande JSON en commande, puis les exceptions métier en
- * erreurs de champ. Aucune règle métier ne vit ici.
- *
- * <p>Le {@link BindingResult} est déclaré en paramètre à dessein : sa présence empêche
- * Spring de lever {@code MethodArgumentNotValidException}, donc la traduction des refus
- * reste dans ce contrôleur plutôt que de partir dans un {@code @RestControllerAdvice}
- * qui vaudrait pour tout le contexte.
- *
- * <p>Le {@code 201} n'a ni corps ni en-tête {@code Location} : le compte créé n'est
- * lisible par personne tant qu'il n'est pas vérifié et qu'aucun jeton n'a été délivré.
- */
 @RestController
 public class RegisterUserController {
 
@@ -40,6 +28,9 @@ public class RegisterUserController {
         this.commandBus = commandBus;
     }
 
+    // Déclarer le BindingResult en paramètre empêche Spring de lever
+    // MethodArgumentNotValidException : la traduction des refus reste dans ce contrôleur,
+    // sans @RestControllerAdvice global.
     @PostMapping("/api/registrations")
     public ResponseEntity<Object> register(
             @Valid @RequestBody RegistrationRequest registrationRequest, BindingResult bindingResult) {
@@ -54,8 +45,7 @@ public class RegisterUserController {
         } catch (WeakPasswordException e) {
             return unprocessable(Map.of("password", e.getMessage()));
         } catch (MailException e) {
-            // Le rollback a déjà eu lieu côté SpringCommandBus : aucune faute de champ ici,
-            // c'est le canal de notification qui a échoué, pas la saisie de l'utilisateur.
+            // Le rollback a déjà eu lieu côté SpringCommandBus.
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new ErrorResponse(
                             "Votre compte n'a pas pu être créé : l'email de vérification n'a pas pu être "
@@ -69,10 +59,8 @@ public class RegisterUserController {
         return ResponseEntity.unprocessableEntity().body(new ValidationErrorResponse(errors));
     }
 
-    /**
-     * {@code LinkedHashMap} et non {@code Map.of} : l'ordre de déclaration des champs est
-     * conservé, ce qui rend la réponse stable d'une exécution à l'autre.
-     */
+    // LinkedHashMap et non Map.of : l'ordre des champs rend la réponse stable d'une exécution
+    // à l'autre.
     private static Map<String, String> champsFautifs(BindingResult bindingResult) {
         Map<String, String> errors = new LinkedHashMap<>();
         for (FieldError erreur : bindingResult.getFieldErrors()) {

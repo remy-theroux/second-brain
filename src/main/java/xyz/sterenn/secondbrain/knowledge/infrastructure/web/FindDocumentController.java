@@ -15,18 +15,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundExcept
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 import xyz.sterenn.secondbrain.shared.web.ErrorResponse;
 
-/**
- * Adapter entrant du détail d'un document : ce qu'il est, et ce qui en a été extrait.
- *
- * <p><strong>Une seule requête pour tout l'écran</strong> — le nom, le statut, le motif
- * d'échec et les blocs. Une route {@code /extraction} séparée aurait rendu {@code 404} sur un
- * document en attente, ce qui se lit « ce document n'existe pas » alors qu'il est simplement
- * en file.
- *
- * <p>Le vide de l'{@link java.util.Optional} devient {@code 404} ici, et nulle part ailleurs :
- * la query ne lève pas. Le message est celui de {@link DocumentNotFoundException#MESSAGE} — le
- * même que rend la suppression, parce que c'est le même refus.
- */
 @RestController
 public class FindDocumentController {
 

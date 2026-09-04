@@ -6,9 +6,6 @@ import org.junit.jupiter.api.Test;
 import xyz.sterenn.secondbrain.users.domain.port.TokenHasher;
 import xyz.sterenn.secondbrain.users.domain.valueobject.RawVerificationToken;
 
-/**
- * L'adapter n'a besoin d'aucun contexte Spring : il s'instancie directement.
- */
 class BCryptTokenHasherTest {
 
     private final TokenHasher hasher = new BCryptTokenHasher();
@@ -37,8 +34,6 @@ class BCryptTokenHasherTest {
 
     @Test
     void produit_une_empreinte_differente_a_chaque_appel_pour_un_meme_jeton() {
-        // Le salt est tiré au hasard et embarqué dans l'empreinte : deux hachages du
-        // même jeton diffèrent, et aucune table précalculée n'est exploitable.
         String jeton = RawVerificationToken.generate().value();
 
         assertThat(hasher.hash(jeton)).isNotEqualTo(hasher.hash(jeton));

@@ -8,14 +8,17 @@ import Tag from 'primevue/tag'
 const LABELS = {
   PENDING: 'En attente de traitement',
   EXTRACTED: 'Texte extrait',
+  READY: 'Prêt à être interrogé',
   FAILED: 'Traitement en échec',
 }
 
 // La sévérité est une décision de rendu, pas une donnée : « en attente » n'est ni un
-// succès ni une erreur.
+// succès ni une erreur. `EXTRACTED` passe de `success` à `info` : ce n'est plus un
+// aboutissement mais une étape, et c'est `READY` qui porte désormais le vert.
 const SEVERITIES = {
   PENDING: 'secondary',
-  EXTRACTED: 'success',
+  EXTRACTED: 'info',
+  READY: 'success',
   FAILED: 'danger',
 }
 

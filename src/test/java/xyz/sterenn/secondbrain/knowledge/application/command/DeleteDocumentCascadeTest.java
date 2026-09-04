@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.knowledge.application.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -16,22 +17,21 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextChunk;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Chunk;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
- * La seule vérification que le {@code ON DELETE CASCADE} de la migration V7 fonctionne
- * réellement.
- *
- * <p><strong>Pas de {@code @Transactional} sur la classe, et c'est le tout.</strong> Dans une
- * transaction, Hibernate rendrait le {@code TextExtraction} depuis son cache de premier niveau
- * sans jamais interroger la base : le test passerait au vert quelle que soit la migration, et
- * ne vérifierait rien. D'où le nettoyage explicite en {@code @AfterEach}.
+ * Pas de {@code @Transactional} : dans une transaction, Hibernate rendrait le
+ * {@code TextExtraction} depuis son cache de premier niveau sans interroger la base, et le test
+ * passerait au vert quelle que soit la migration. D'où le nettoyage en {@code @AfterEach}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -45,6 +45,9 @@ class DeleteDocumentCascadeTest {
 
     @Autowired
     private TextExtractionRepository textExtractionRepository;
+
+    @Autowired
+    private TextChunkRepository textChunkRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -73,9 +76,24 @@ class DeleteDocumentCascadeTest {
         commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
-        // Les blocs partent avec leur texte : la seconde cascade, que le port ne montre pas.
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM knowledge_text_blocks", Integer.class))
                 .isZero();
+    }
+
+    @Test
+    void la_suppression_d_un_document_emporte_ses_extraits() {
+        Document document = unDocumentDepose();
+        textChunkRepository.saveAll(List.of(TextChunk.of(
+                document.getId(),
+                0,
+                new Chunk("Titre", "Un corps."),
+                KnowledgeFixture.unVecteur(0.5f),
+                Instant.now())));
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).isNotEmpty();
+
+        commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
+
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).isEmpty();
     }
 
     private Document unDocumentDepose() {

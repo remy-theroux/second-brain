@@ -13,12 +13,19 @@ palantirJavaFormat = "2.78.0"
 commonmark = "0.24.0"
 poi = "5.5.1"
 pdfbox = "3.0.7"
+# Comptage de tokens : jtokkit est la seule implémentation Java des BPE d'OpenAI, et
+# `cl100k_base` la toise que le ticket impose. Aucun BOM ne la porte.
+jtokkit = "1.1.0"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
 # Boot 4, l'auto-config vit dans le starter dédié spring-boot-starter-flyway ;
 # flyway-database-postgresql fournit le support spécifique PostgreSQL.
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+# Vecteurs : le module qui apprend à Hibernate le type `vector` de pgvector, donc
+# @JdbcTypeCode(SqlTypes.VECTOR) sur un float[]. Version alignée par le BOM Spring Boot
+# (elle suit hibernate-core) : ne pas la pinner.
+hibernate-vector = { module = "org.hibernate.orm:hibernate-vector" }
 postgresql = { module = "org.postgresql:postgresql" }
 springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 # Markdown : le parseur de référence CommonMark en Java. Il donne les titres comme des
@@ -31,6 +38,10 @@ poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 # PDF : PDFBox donne le sommaire du document et, à défaut, la taille de police de chaque
 # glyphe — les deux seules pistes de titre qu'un PDF puisse offrir (ADR-0027).
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+# Tokenizer : jtokkit rend `cl100k_base` sans réseau ni modèle à télécharger — les tables
+# BPE sont dans le jar. Ce n'est PAS le tokenizer de bge-m3 (voir TokenCounter) ; c'est un
+# proxy conservateur, et c'est la raison d'être du port.
+jtokkit = { module = "com.knuddels:jtokkit", version.ref = "jtokkit" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

@@ -12,18 +12,6 @@ import xyz.sterenn.secondbrain.users.application.query.AuthenticateUser;
 import xyz.sterenn.secondbrain.users.domain.exception.InvalidCredentialsException;
 import xyz.sterenn.secondbrain.users.domain.exception.UnverifiedAccountException;
 
-/**
- * Adapter entrant de la délivrance de jeton. Il a la <em>forme</em> du {@code password
- * grant} de RFC 6749 §4.3 sans serveur d'autorisation derrière : OAuth 2.1 a supprimé ce
- * type d'autorisation, et un client first-party n'a ni redirection ni consentement à gérer.
- *
- * <p>Les paramètres sont lus avec {@code defaultValue = ""}, comme dans
- * {@code VerifyAccountController} : un paramètre absent doit produire <em>notre</em> erreur
- * de protocole, pas le {@code 400} générique de Spring.
- *
- * <p>Aucune règle métier ici : le refus vient du handler, ce contrôleur choisit le code
- * d'erreur du protocole qui lui correspond.
- */
 @RestController
 public class IssueAccessTokenController {
 
@@ -36,6 +24,8 @@ public class IssueAccessTokenController {
         this.queryBus = queryBus;
     }
 
+    // defaultValue = "" : un paramètre absent doit produire notre erreur de protocole et non
+    // le 400 générique de Spring.
     @PostMapping(path = "/api/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<Object> issueAccessToken(
             @RequestParam(name = "grant_type", defaultValue = "") String grantType,

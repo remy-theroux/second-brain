@@ -22,10 +22,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * Le test injecte le <em>port</em>, pas l'adapter : c'est le contrat du domaine qui est
- * vérifié. {@code @Transactional} fait rouler chaque test en arrière.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -62,8 +58,6 @@ class JpaDocumentRepositoryAdapterTest {
 
     @Test
     void projette_l_empreinte_sur_une_colonne_texte() {
-        // Le converter est appliqué par autoApply, sans qu'aucune ligne de code le nomme :
-        // seule la lecture du contenu réel de la colonne le prouve.
         UUID proprietaire = compteExistant("bob@exemple.fr");
         Document enregistre = documentRepository.save(document(proprietaire, "notes.md", "contenu"));
 
@@ -98,7 +92,6 @@ class JpaDocumentRepositoryAdapterTest {
 
     @Test
     void laisse_deux_comptes_deposer_le_meme_contenu() {
-        // L'unicité porte sur (propriétaire, empreinte) : chacun a sa base de connaissance.
         UUID alice = compteExistant("alice3@exemple.fr");
         UUID bob = compteExistant("bob3@exemple.fr");
 
@@ -112,8 +105,6 @@ class JpaDocumentRepositoryAdapterTest {
 
     @Test
     void refuse_deux_fois_le_meme_contenu_pour_un_meme_compte() {
-        // Le filet de la contrainte d'unicité, que le handler n'atteint qu'en cas de dépôts
-        // simultanés : ici on l'exerce directement, sans passer par lui.
         UUID proprietaire = compteExistant("david@exemple.fr");
         documentRepository.save(document(proprietaire, "rapport.pdf", "contenu"));
 
@@ -170,7 +161,7 @@ class JpaDocumentRepositoryAdapterTest {
         UUID proprietaire = compteExistant("denis@exemple.fr");
         Document enregistre = documentRepository.save(document(proprietaire, "scan.pdf", "contenu"));
 
-        enregistre.markExtractionFailed("Ce document ne contient pas de texte exploitable.");
+        enregistre.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(enregistre);
 
         assertThat(documentRepository.findByIdAndOwnerId(enregistre.getId(), proprietaire))

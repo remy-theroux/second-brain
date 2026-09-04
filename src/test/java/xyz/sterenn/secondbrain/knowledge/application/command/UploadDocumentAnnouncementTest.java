@@ -30,13 +30,9 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 
 /**
- * Le premier scénario du socle : un dépôt réussi est annoncé, par le chemin réel — le bus,
- * sa transaction, son commit.
- *
- * <p>Pas de {@code @Transactional} : l'annonce ne part qu'au commit, une transaction de test
- * l'empêcherait de partir. Le compte et le document sont donc réellement écrits, et effacés
- * en {@code @AfterEach} — la clé étrangère en cascade emporte le document avec le compte,
- * le disque se vide à part.
+ * Pas de {@code @Transactional} : l'annonce ne part qu'au commit, une transaction de test
+ * l'empêcherait de partir. Le compte et le document sont donc réellement écrits, et effacés en
+ * {@code @AfterEach} — la cascade emporte le document avec le compte, le disque se vide à part.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest

@@ -21,18 +21,6 @@ import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.shared.web.ErrorResponse;
 import xyz.sterenn.secondbrain.shared.web.ValidationErrorResponse;
 
-/**
- * Adapter entrant du dépôt d'un document. Aucune règle métier ne vit ici : le contrôleur
- * lit le multipart, dispatche, et traduit les refus du domaine en codes HTTP.
- *
- * <p>Le {@code 201} n'a ni corps ni en-tête {@code Location}, comme
- * {@code POST /api/registrations} : une commande ne retourne rien, et {@code GET
- * /api/documents} rend l'état complet de la base — c'est lui que l'appelant relit.
- *
- * <p>Trois refus, trois codes, parce qu'ils appellent trois gestes différents : changer de
- * fichier ({@code 415}), aller voir le document existant ({@code 409}), alléger son dépôt
- * ({@code 413}).
- */
 @RestController
 public class UploadDocumentController {
 
@@ -56,8 +44,6 @@ public class UploadDocumentController {
         try {
             contenu = file.getBytes();
         } catch (IOException e) {
-            // Le corps de la requête s'est interrompu en cours de lecture : rien n'a été
-            // dispatché, il n'y a donc rien à annuler.
             throw new UncheckedIOException(e);
         }
 
@@ -74,13 +60,9 @@ public class UploadDocumentController {
     }
 
     /**
-     * Le dépassement du plafond de téléversement.
-     *
-     * <p>Ce {@code @ExceptionHandler} ne voit l'exception que parce que
-     * {@code spring.servlet.multipart.resolve-lazily} est à {@code true} : sans lui, le
-     * multipart est résolu par {@code DispatcherServlet} <em>avant</em> qu'un contrôleur
-     * soit choisi, et seul un {@code @RestControllerAdvice} global la capterait — ce que ce
-     * projet évite, pour que la traduction des refus reste auprès de la route concernée.
+     * Ne voit l'exception que parce que {@code spring.servlet.multipart.resolve-lazily} est à
+     * {@code true} : sinon le multipart est résolu par {@code DispatcherServlet} avant qu'un
+     * contrôleur soit choisi, et seul un {@code @RestControllerAdvice} global la capterait.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> tropVolumineux() {

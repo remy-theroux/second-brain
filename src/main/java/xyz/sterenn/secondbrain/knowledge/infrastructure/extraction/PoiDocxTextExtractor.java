@@ -23,16 +23,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 /**
- * Le {@code .docx} : les titres y sont explicites, mais nommés par le producteur du fichier.
- *
- * <p>Un titre Word est un paragraphe dont le <em>style</em> s'appelle {@code Heading1} à
- * {@code Heading9}. Deux pièges : un paragraphe simplement mis en gras et en grand n'est pas
- * un titre — et il ne doit pas en devenir un —, et l'identifiant du style n'est pas toujours
- * l'anglais. D'où les deux essais de {@link #niveauDeTitre} : l'identifiant d'abord, puis le
- * nom déclaré du style, où un Word français écrit « Titre 1 ».
- *
- * <p>Les tableaux ne sont pas lus : {@code getParagraphs()} rend le corps du document, pas
- * les cellules. C'est le hors-périmètre du ticket, pas un oubli.
+ * Les cellules de tableau ne sont pas lues : {@code getParagraphs()} ne rend que le corps du
+ * document.
  */
 @Component
 public class PoiDocxTextExtractor implements DocumentTextExtractor {
@@ -82,7 +74,6 @@ public class PoiDocxTextExtractor implements DocumentTextExtractor {
                 niveau = Math.min(niveauDuTitre.getAsInt(), TextBlock.MAX_HEADING_LEVEL);
                 corps.setLength(0);
             } else {
-                // Un paragraphe Word est un paragraphe : la double ligne le dit à RAG-5.
                 corps.append(texte).append("\n\n");
             }
         }
@@ -90,7 +81,7 @@ public class PoiDocxTextExtractor implements DocumentTextExtractor {
         return sections;
     }
 
-    /** L'identifiant du style d'abord, son nom déclaré ensuite. Vide si ce n'est pas un titre. */
+    /** L'identifiant du style, puis son nom déclaré : un Word français écrit « Titre 1 ». */
     private static OptionalInt niveauDeTitre(XWPFDocument docx, XWPFParagraph paragraphe) {
         String identifiant = paragraphe.getStyleID();
         if (identifiant == null) {

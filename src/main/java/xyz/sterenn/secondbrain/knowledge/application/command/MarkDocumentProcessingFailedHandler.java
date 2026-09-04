@@ -6,28 +6,22 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundExcept
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
 
-/**
- * Pose {@code FAILED} et son motif. Rien d'autre : pas d'événement, pas de nettoyage.
- *
- * <p>Le texte partiel n'a pas à être effacé — l'extraction est tout ou rien, et sa
- * transaction annulée n'a rien laissé derrière elle.
- */
 @Component
-public class MarkDocumentExtractionFailedHandler implements CommandHandler<MarkDocumentExtractionFailed> {
+public class MarkDocumentProcessingFailedHandler implements CommandHandler<MarkDocumentProcessingFailed> {
 
     private final DocumentRepository documentRepository;
 
-    public MarkDocumentExtractionFailedHandler(DocumentRepository documentRepository) {
+    public MarkDocumentProcessingFailedHandler(DocumentRepository documentRepository) {
         this.documentRepository = documentRepository;
     }
 
     @Override
-    public void handle(MarkDocumentExtractionFailed command) {
+    public void handle(MarkDocumentProcessingFailed command) {
         Document document = documentRepository
                 .findByIdAndOwnerId(command.documentId(), command.ownerId())
                 .orElseThrow(DocumentNotFoundException::new);
 
-        document.markExtractionFailed(command.reason());
+        document.markProcessingFailed(command.reason());
         documentRepository.save(document);
     }
 }

@@ -17,13 +17,6 @@ import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * {@code @Transactional} fait rouler chaque test en arrière : la PostgreSQL
- * Testcontainers est partagée par toute la suite.
- *
- * <p>Le test injecte le <em>port</em> {@link UserRepository}, pas l'adapter : c'est le
- * contrat du domaine qui est vérifié.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -66,9 +59,8 @@ class JpaUserRepositoryAdapterTest {
 
     @Test
     void projette_l_email_sur_une_colonne_texte() {
-        // Seule preuve observable qu'EmailAttributeConverter est bien auto-appliqué : il
-        // n'est nommé nulle part dans le code, et un test unitaire du converter passerait
-        // au vert même si Hibernate ne l'appliquait jamais.
+        // Seule preuve observable qu'EmailAttributeConverter est auto-appliqué : un test
+        // unitaire du converter passerait au vert même si Hibernate ne l'appliquait jamais.
         userRepository.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
 
         assertThat(jdbcTemplate.queryForObject(
@@ -89,11 +81,9 @@ class JpaUserRepositoryAdapterTest {
         userRepository.save(User.register(new Email("gina@example.com"), "empreinte"));
         User autre = userRepository.save(User.register(new Email("henri@example.com"), "empreinte"));
 
-        // Le domaine n'expose aucun mutateur d'email — VerifyAccountHandler ne fait que
-        // basculer `verified`, jamais l'email. On force ici le champ de l'entité déjà
-        // persistée pour isoler la seule chose sous test : une fois `autre` pourvu d'un
-        // identifiant (mise à jour, pas insertion), une violation d'intégrité ne doit plus
-        // être traduite en EmailAlreadyUsedException.
+        // Le domaine n'expose aucun mutateur d'email : le forcer par réflexion est le seul
+        // moyen de provoquer une violation d'intégrité sur une mise à jour plutôt que sur
+        // une insertion.
         Field email = User.class.getDeclaredField("email");
         email.setAccessible(true);
         email.set(autre, new Email("gina@example.com"));

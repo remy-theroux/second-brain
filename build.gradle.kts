@@ -61,6 +61,9 @@ dependencies {
     // Spring Boot 4 : le starter Flyway apporte l'auto-config (module spring-boot-flyway).
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation(libs.flyway.postgresql)
+    // Le type `vector` côté Hibernate. Arrivé avec la table des extraits et pas avant :
+    // une dépendance sans appelant est du poids mort.
+    implementation(libs.hibernate.vector)
     runtimeOnly(libs.postgresql)
 
     // Sécurité
@@ -69,6 +72,12 @@ dependencies {
     // spring-security-oauth2-resource-server. Nom Spring Boot 4 : l'ancien
     // spring-boot-starter-oauth2-resource-server existe toujours mais est déprécié.
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+
+    // Vectorisation : OllamaEmbeddingAdapter parle HTTP via RestClient. Sous Boot 4, ce
+    // starter n'est plus tiré par spring-boot-starter-web : RestClientAutoConfiguration a
+    // été extraite dans son propre module (spring-boot-restclient), et sans ce starter le
+    // bean RestClient.Builder n'existe pas — le contexte refuse de démarrer.
+    implementation("org.springframework.boot:spring-boot-starter-restclient")
 
     // Observabilité
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -82,6 +91,10 @@ dependencies {
     implementation(libs.commonmark)
     implementation(libs.poi.ooxml)
     implementation(libs.pdfbox)
+
+    // Comptage de tokens pour le découpage. Derrière le port TokenCounter : le domaine
+    // compte, il ne sait pas avec quelle toise.
+    implementation(libs.jtokkit)
 
     // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
     // module spring-boot-docker-compose qui gérerait Compose depuis l'app).

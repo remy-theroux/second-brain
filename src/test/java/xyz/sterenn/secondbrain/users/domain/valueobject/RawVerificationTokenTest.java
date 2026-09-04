@@ -7,9 +7,6 @@ import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/**
- * Value object sans dépendance : test unitaire pur, sans Spring.
- */
 class RawVerificationTokenTest {
 
     @Test
@@ -19,7 +16,6 @@ class RawVerificationTokenTest {
 
     @Test
     void genere_un_jeton_utilisable_tel_quel_dans_une_url() {
-        // base64url sans padding : lettres, chiffres, tiret et souligné uniquement.
         assertThat(RawVerificationToken.generate().value()).matches("^[A-Za-z0-9_-]+$");
     }
 

@@ -27,14 +27,6 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/**
- * {@code @Transactional} : la base est annulée après chaque test. Le disque, lui, ne l'est
- * pas — d'où le nettoyage explicite en {@code @AfterEach}.
- *
- * <p>Le dépôt passe par le bus, comme en production : c'est lui qui écrit l'original, sans
- * quoi l'extraction n'aurait rien à lire. Le compte est créé par le port plutôt que par
- * l'inscription complète : ni le dépôt ni l'extraction ne regardent s'il est vérifié.
- */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -114,12 +106,6 @@ class ExtractDocumentTextTest {
                         () -> commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId())));
     }
 
-    /**
-     * Dépose un document par le bus. Le <strong>premier</strong> argument est le nom sous
-     * lequel il est déposé — c'est lui qui décide du format, par son extension —, le
-     * <strong>second</strong> le nom d'une fixture, dont le contenu est lu. Les deux sont
-     * distincts à dessein : un PDF numérisé se dépose sous n'importe quel nom en {@code .pdf}.
-     */
     private Document unDocumentDepose(String filename, String fixture) {
         UUID proprietaire = userRepository
                 .save(User.register(new Email(UUID.randomUUID() + "@exemple.fr"), "empreinte"))

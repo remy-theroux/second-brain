@@ -30,8 +30,6 @@ class ChecksumTest {
 
     @Test
     void accepte_un_contenu_vide() {
-        // Le vide a une empreinte comme un autre contenu ; c'est au document de refuser
-        // un fichier vide, pas à l'empreinte.
         assertThat(Checksum.of(new byte[0]).value()).hasSize(Checksum.LENGTH);
     }
 

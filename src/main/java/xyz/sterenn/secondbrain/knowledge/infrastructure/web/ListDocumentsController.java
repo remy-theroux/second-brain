@@ -13,14 +13,6 @@ import xyz.sterenn.secondbrain.knowledge.application.query.DocumentView;
 import xyz.sterenn.secondbrain.knowledge.application.query.ListDocuments;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 
-/**
- * Adapter entrant de la liste des documents. Elle ne rend que ceux du porteur du jeton :
- * la base de connaissance appartient à un compte, et le filtrage est porté par la query,
- * pas ajouté ici après coup.
- *
- * <p>Une base vide rend {@code 200} et une liste vide, jamais {@code 404} : c'est l'état
- * de tout compte qui n'a encore rien déposé.
- */
 @RestController
 public class ListDocumentsController {
 

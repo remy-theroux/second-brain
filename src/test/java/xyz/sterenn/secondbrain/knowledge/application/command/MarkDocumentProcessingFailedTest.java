@@ -24,11 +24,10 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-/** La commande que le consommateur d'événements dispatche depuis son {@code catch} (ADR-0028). */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
-class MarkDocumentExtractionFailedTest {
+class MarkDocumentProcessingFailedTest {
 
     private static final String MOTIF = "Ce document ne contient pas de texte exploitable.";
 
@@ -53,7 +52,7 @@ class MarkDocumentExtractionFailedTest {
     void marque_le_document_en_echec_avec_son_motif() {
         Document document = unDocumentDepose();
 
-        commandBus.dispatch(new MarkDocumentExtractionFailed(document.getId(), document.getOwnerId(), MOTIF));
+        commandBus.dispatch(new MarkDocumentProcessingFailed(document.getId(), document.getOwnerId(), MOTIF));
 
         assertThat(documentRepository
                         .findByIdAndOwnerId(document.getId(), document.getOwnerId())
@@ -69,7 +68,7 @@ class MarkDocumentExtractionFailedTest {
         // Dernier appel du test : le refus marque la transaction englobante rollback-only.
         assertThatExceptionOfType(DocumentNotFoundException.class)
                 .isThrownBy(() -> commandBus.dispatch(
-                        new MarkDocumentExtractionFailed(UUID.randomUUID(), UUID.randomUUID(), MOTIF)));
+                        new MarkDocumentProcessingFailed(UUID.randomUUID(), UUID.randomUUID(), MOTIF)));
     }
 
     private Document unDocumentDepose() {
