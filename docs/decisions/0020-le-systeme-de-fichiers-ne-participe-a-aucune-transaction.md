@@ -59,5 +59,5 @@ La parade retenue ce jour-là sera le journal plus balayage, pas le stockage en 
 ## Pour aller plus loin
 
 - `knowledge/application/command/UploadDocumentHandler.java`,
-  `knowledge/infrastructure/storage/FilesystemDocumentStorage.java`
+  `knowledge/infrastructure/storage/S3DocumentStorage.java`
 - `.claude/rules/backend.md`, section « Tests » — la conséquence sur le nettoyage

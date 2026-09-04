@@ -16,6 +16,9 @@ pdfbox = "3.0.7"
 # Comptage de tokens : jtokkit est la seule implémentation Java des BPE d'OpenAI, et
 # `cl100k_base` la toise que le ticket impose. Aucun BOM ne la porte.
 jtokkit = "1.1.0"
+# Stockage objet : aucun BOM Spring ne porte AWS, contrairement à Flyway ou PostgreSQL
+# ci-dessus — il faut donc l'épingler nous-mêmes.
+awsSdk = "2.54.11"
 
 [libraries]
 # Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
@@ -42,6 +45,55 @@ pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 # BPE sont dans le jar. Ce n'est PAS le tokenizer de bge-m3 (voir TokenCounter) ; c'est un
 # proxy conservateur, et c'est la raison d'être du port.
 jtokkit = { module = "com.knuddels:jtokkit", version.ref = "jtokkit" }
+# Stockage objet : le BOM AWS tient les versions de ses propres modules, comme le BOM
+# Spring Boot tient flyway-postgresql et postgresql ci-dessus — s3 et
+# url-connection-client n'ont donc pas de version.ref.
+awssdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "awsSdk" }
+awssdk-s3 = { module = "software.amazon.awssdk:s3" }
+# Ce bloc est le SEUL endroit où vit le raisonnement sur les clients HTTP du SDK :
+# build.gradle.kts pose les deux exclusions et renvoie ici. Il en existait deux copies, qui
+# affirmaient le même faux à quinze lignes d'intervalle — une erreur payée deux fois.
+#
+# D'OÙ VIENNENT LES DEUX EXCLUS. Pas du pom de software.amazon.awssdk:s3 : celui-ci ne
+# mentionne apache5-client ni netty-nio-client nulle part. Les clients HTTP qu'il déclare —
+# url-connection-client, aws-crt-client, apache-client — le sont tous en <scope>test</scope>,
+# donc sans effet sur nous. C'est son pom PARENT, software.amazon.awssdk:services, qui déclare
+# apache5-client et netty-nio-client dans sa propre section <dependencies> (pas
+# <dependencyManagement>) avec <scope>runtime</scope> : un héritage Maven invisible depuis le
+# pom de s3 seul, mais qui les fait bel et bien atterrir sur runtimeClasspath — ce que
+# `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client` confirme, en
+# remontant la requête jusqu'à s3.
+#
+# APACHE5-CLIENT : exclusion obligatoire, elle règle un conflit actif. Il réclame httpclient5
+# 5.6.4, que le plugin io.spring.dependency-management rétrograde à 5.5.2 — une propriété que
+# le BOM Spring Boot gère pour lui-même, indépendamment de tout starter présent ici (aucun
+# n'en dépend sur cette branche), et que le plugin impose quand même à ce qui traverse le
+# graphe. Une bibliothèque compilée contre une version et chargée contre une autre, pour un
+# client qu'on n'appelle jamais. Il s'enregistre au passage sous le même fichier de service
+# que url-connection-client (META-INF/services/software.amazon.awssdk.http.SdkHttpService) :
+# deux clients SYNCHRONES sur le classpath, là où l'adapter n'en veut qu'un.
+#
+# NETTY-NIO-CLIENT : exclusion d'hygiène, et il faut le dire tel quel. Elle n'économise PAS
+# Netty, qui est déjà sur le runtimeClasspath par com.rabbitmq:amqp-client (netty-codec,
+# netty-handler, netty-transport — voir le même dependencyInsight, sur io.netty). Et elle ne
+# règle aucune ambiguïté de découverte : ce client s'enregistre sous
+# META-INF/services/software.amazon.awssdk.http.async.SdkAsyncHttpService, la chaîne
+# ASYNCHRONE, que le S3Client synchrone ne consulte jamais. Ce qu'elle achète est plus modeste
+# et suffit : le classpath reste à exactement un client HTTP du SDK, celui que l'adapter
+# nomme, plutôt qu'à un second que rien ici ne construit et qu'un futur S3AsyncClient
+# choisirait sans que personne ne l'ait décidé.
+#
+# url-connection-client, lui, n'est déclaré ni par le pom de s3 en scope compile ni par le pom
+# parent services : rien à en exclure, tout à en déclarer. C'est le seul artefact HTTP du
+# classpath une fois les deux exclusions posées, et il est obligatoire, pas une optimisation —
+# sans lui, le premier appel échoue sur « Unable to load an HTTP implementation from any
+# provider in the chain », au premier dépôt de document et non au démarrage. Préféré à
+# apache5-client : son pom ne déclare hors scope test que utils, annotations et
+# http-client-spi, donc rien qui sorte du SDK. Il s'appuie sur HttpURLConnection : pas
+# d'HTTP/2, pas d'Expect: 100-continue, et le corps est tamponné en mémoire. Aucun des
+# trois ne nous concerne — un objet est un byte[] déjà en mémoire, plafonné à 20 Mo par
+# spring.servlet.multipart.max-file-size.
+awssdk-url-connection-client = { module = "software.amazon.awssdk:url-connection-client" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

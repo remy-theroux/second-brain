@@ -130,6 +130,15 @@ qui partagent un cache Gradle se bloquent sur ses verrous, c'est le même « Tim
 to lock » qu'entre `gtest` et la pile. Le prix est un second téléchargement des dépendances
 au premier démarrage.
 
+Un service `garage` sert le stockage objet des fichiers d'origine (voir la section
+« Persistance »). Il ne publie aucun port : seuls `app` et `worker` lui parlent, par le
+réseau de la pile. Il s'amorce seul — sa commande porte `--single-node
+--default-access-key --default-bucket`, qui lui fait créer sa clé d'accès et son bucket dès
+le premier démarrage, donc sans conteneur d'amorçage. Pour l'interroger à la main,
+`docker compose exec garage /garage bucket info second-brain-originals`. Ses deux volumes
+nommés (`garage-meta`, `garage-data`) sont propres au projet Compose, comme `db-data` :
+**chaque worktree a donc son propre Garage**, tout comme il a sa propre base.
+
 Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions), tiré au premier
 démarrage par le conteneur one-shot `ollama-pull`. Il ne publie aucun port : seul le worker
 lui parle, par le réseau de la pile. Pour l'interroger à la main,
@@ -217,9 +226,9 @@ xyz.sterenn.secondbrain
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
-│   │   │                    EmbeddingUnavailableException, DocumentProcessingException
-│   │   │                    (mère de tous les refus de traitement, c'est elle que le worker
-│   │   │                    interroge)
+│   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
+│   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
+│   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
@@ -228,7 +237,7 @@ xyz.sterenn.secondbrain
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
-│       ├── storage/         ADAPTER du port DocumentStorage (système de fichiers)
+│       ├── storage/         ADAPTER S3 du port DocumentStorage + S3ClientConfiguration (le client)
 │       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
 │       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
 │       │                    et JtokkitTokenCounter
@@ -420,10 +429,11 @@ route concernée. Avec lui, le multipart est résolu au moment où le contrôleu
 argument, et l'`@ExceptionHandler` d'`UploadDocumentController` la voit.
 
 L'ordre des quatre étapes est un choix : contrôle du doublon, écriture en base
-(`saveAndFlush`), fichier, puis publication de `DocumentUploaded`. Le fichier avant la
-publication parce qu'**un système de fichiers ne participe à aucune transaction** — écrit
+(`saveAndFlush`), original, puis publication de `DocumentUploaded`. L'original avant la
+publication parce que **sa conservation ne participe à aucune transaction** — vrai du
+système de fichiers d'hier comme du stockage objet qui l'a remplacé (ADR-0020) : écrit
 après le commit, il manquerait au consommateur qui relit ; écrit avant la ligne, il
-survivrait à un rollback en désignant une ligne qui n'existe pas (ADR-0020). La
+survivrait à un rollback en désignant une ligne qui n'existe pas. La
 publication, elle, est en dernier pour se lire comme ce qu'elle est, une annonce : sa place
 dans la séquence n'a aucune portée transactionnelle, puisqu'elle ne prend effet qu'**au
 commit** — un rollback n'annonce rien, et le broker injoignable à cet instant perd
@@ -638,11 +648,12 @@ requête. La dimension est figée dans le type de la colonne, et doit rester ég
 `EmbeddingPolicy.DIMENSIONS`. Elle cascade elle aussi à la suppression du document : c'est la
 deuxième fois qu'un ticket ajoute des tables sans toucher à `DeleteDocumentHandler`.
 
-**Tout n'est pas en base.** Les fichiers d'origine des documents vivent sur disque, un par
-document, nommés par son identifiant, sous `secondbrain.storage.originals-path`
-(`/data/originals`, un volume nommé en développement). Ce répertoire est un état à part
-entière : il ne se restaure pas avec un dump PostgreSQL, et rien ne l'annule avec une
-transaction (ADR-0020).
+**Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
+objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket
+`second-brain-originals` (servi par Garage en développement, voir la section « Commandes »
+ci-dessus). Ce stockage est un état à part entière : il ne se restaure pas avec un dump
+PostgreSQL, et rien ne l'annule avec une transaction (ADR-0020) — le support a changé,
+pas cette promesse-là.
 
 ### Décisions d'architecture (documentées, ne pas « corriger » spontanément)
 
@@ -693,8 +704,8 @@ remplace — voir `.claude/rules/decisions.md`.
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 + pgvector · Spring AMQP · RabbitMQ 4 ·
 springdoc-openapi · commonmark-java · Apache POI · PDFBox · jtokkit (comptage de tokens) ·
-hibernate-vector · JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec version
-catalog (`gradle/libs.versions.toml`).
+hibernate-vector · AWS SDK for Java v2 (stockage objet des originaux) · JUnit 5 + AssertJ +
+Testcontainers · Gradle Kotlin DSL avec version catalog (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
 Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
@@ -703,8 +714,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
 `RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
-conteneur `worker` de la même image que `app`, et un service `ollama` qui sert le modèle
-d'embedding.
+conteneur `worker` de la même image que `app`, un service `ollama` qui sert le modèle
+d'embedding, et un service `garage` (image `dxflrs/garage:v2.3.0`) qui sert le stockage
+objet des originaux.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit

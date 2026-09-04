@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
@@ -44,12 +45,15 @@ class ExtractDocumentTextTest {
     @Autowired
     private UserRepository userRepository;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     @AfterEach
     void nettoieLesOriginaux() {
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     @Test

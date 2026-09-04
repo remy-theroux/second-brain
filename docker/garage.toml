@@ -1,0 +1,39 @@
+# Configuration Garage partagée par deux usages : le service `garage` de compose.yaml
+# la monte sur /etc/garage.toml, et TestcontainersConfiguration la copie sur ce même chemin
+# dans le conteneur Garage des tests. Une seule source, donc la
+# pile de développement et celle des tests ne peuvent pas diverger — possible seulement
+# parce que rien ici ne dépend de l'environnement qui l'exécute (voir rpc_public_addr).
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+# Un seul nœud : `--single-node` refuse de créer un layout dont le facteur de réplication
+# réclame plus de nœuds qu'il n'en existe.
+replication_factor = 1
+
+# Durabilité échangée contre la vitesse : cette instance sert une base de développement et
+# de test, dont le contenu se refabrique en redéposant un document.
+metadata_fsync = false
+data_fsync = false
+
+rpc_bind_addr = "[::]:3901"
+# Un nœud seul ne parle qu'à lui-même, et 127.0.0.1 reste vrai que le conteneur s'appelle
+# `garage` (Compose) ou porte un nom tiré au sort (Testcontainers) : c'est ce qui permet à
+# ce fichier d'être partagé sans réécriture entre les deux usages.
+rpc_public_addr = "127.0.0.1:3901"
+# Secret de développement versionné, du même rang que POSTGRES_PASSWORD dans compose.yaml,
+# à ne jamais réutiliser ailleurs. Garage l'exige même à un seul nœud.
+rpc_secret = "55e93261d70590473b8ec6a6bea5b3125c2950c321270acb31b9802ce4339533"
+
+[s3_api]
+# Doit rester égal au défaut de secondbrain.storage.s3.region, dans application.yml :
+# SigV4 signe la région dans la requête, et Garage rejette une signature calculée pour
+# une autre région que la sienne.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+# Secret de développement versionné, même rang que rpc_secret ci-dessus.
+admin_token = "second-brain-admin-de-developpement"

@@ -26,6 +26,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.context.WebApplicationContext;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
@@ -86,18 +87,21 @@ class KnowledgeEventListenerTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     private final List<String> comptesCrees = new ArrayList<>();
 
     @AfterEach
     void efface_ce_qui_a_ete_commite() {
-        // La clé étrangère en cascade emporte les documents, leurs textes et leurs extraits
-        // avec le compte ; le disque, lui, ne participe à aucune transaction (ADR-0020).
+        // La clé étrangère en cascade emporte les documents et leurs textes avec le compte ;
+        // le stockage objet, lui, ne participe à aucune transaction (ADR-0020).
         comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
         comptesCrees.clear();
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
         embeddingPort.clear();
     }
 

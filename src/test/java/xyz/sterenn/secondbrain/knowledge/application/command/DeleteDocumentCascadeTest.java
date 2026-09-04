@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
@@ -55,8 +56,11 @@ class DeleteDocumentCascadeTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Value("${secondbrain.storage.originals-path}")
-    private String cheminDesOriginaux;
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${secondbrain.storage.s3.bucket}")
+    private String bucketDesOriginaux;
 
     private final List<String> comptesCrees = new ArrayList<>();
 
@@ -64,7 +68,7 @@ class DeleteDocumentCascadeTest {
     void efface_ce_qui_a_ete_commite() {
         comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
         comptesCrees.clear();
-        KnowledgeFixture.videLesOriginaux(cheminDesOriginaux);
+        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
     }
 
     @Test

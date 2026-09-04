@@ -13,6 +13,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 | Migrations | Flyway (SQL versionné) |
 | Sécurité | Spring Security (jeton d'accès JWT HS256, resource server) |
 | Événements | RabbitMQ 4 (Spring AMQP) |
+| Stockage des originaux | S3 (Garage en développement), AWS SDK for Java v2 |
 | Doc API | springdoc-openapi / Swagger UI |
 | Tests | JUnit 5 + Testcontainers |
 | Formatage | Spotless + palantir-java-format (back), Prettier (front) |
@@ -27,7 +28,7 @@ API Java / Spring Boot. Environnement de développement 100 % conteneurisé — 
 
 ```bash
 cp .env.example .env          # ajuster si besoin
-docker compose up --build     # démarre PostgreSQL, Mailpit, RabbitMQ, Ollama, l'app, le worker et le front
+docker compose up --build     # démarre PostgreSQL, Mailpit, RabbitMQ, Garage, Ollama, l'app, le worker et le front
 ```
 
 Au premier lancement, le wrapper Gradle télécharge Gradle puis le JDK 25 (toolchain) — c'est un peu long, ensuite c'est mis en cache.
@@ -125,6 +126,8 @@ docker run --rm -p 8080:8080 \
   -e SECONDBRAIN_BASE_URL=https://<domaine-public> \
   -e SECONDBRAIN_NOTIFICATION_FROM=no-reply@<domaine-public> \
   -e SECONDBRAIN_JWT_SECRET=... \
+  -e SECONDBRAIN_S3_ENDPOINT=... -e SECONDBRAIN_S3_BUCKET=... \
+  -e SECONDBRAIN_S3_ACCESS_KEY=... -e SECONDBRAIN_S3_SECRET_KEY=... \
   second-brain:latest
 ```
 
@@ -138,6 +141,11 @@ développement, voir `compose.yaml`) :
 | `SECONDBRAIN_BASE_URL` | URL publique écrite dans les liens des mails envoyés | `http://localhost:8080` — **à définir en production**, sinon les liens de vérification pointent vers localhost |
 | `SECONDBRAIN_NOTIFICATION_FROM` | Adresse d'expéditeur des mails de vérification | `no-reply@second-brain.localhost` |
 | `SECONDBRAIN_JWT_SECRET` | Secret de signature des jetons d'accès (HS256, 32 octets minimum) — **doit être généré aléatoirement**, jamais une phrase lisible : HS256 est symétrique, deviner ce secret permet de forger un jeton valide pour n'importe quel compte, silencieusement et durablement | **aucun** — l'application refuse de démarrer sans lui |
+| `SECONDBRAIN_S3_ENDPOINT` | Point d'entrée du stockage objet des fichiers d'origine (Garage en développement) | **aucun** — l'application refuse de démarrer sans lui |
+| `SECONDBRAIN_S3_BUCKET` | Bucket où sont conservés les fichiers d'origine | **aucun** — l'application refuse de démarrer sans lui |
+| `SECONDBRAIN_S3_ACCESS_KEY` / `SECONDBRAIN_S3_SECRET_KEY` | Identifiants du stockage objet | **aucun** — l'application refuse de démarrer sans eux |
+| `SECONDBRAIN_S3_REGION` | Région signée dans les requêtes SigV4. Elle ne désigne aucun emplacement : le protocole l'exige dans la signature, et le serveur rejette une signature calculée pour une autre région que la sienne | `garage` — la valeur du `s3_region` de `docker/garage.toml`, donc **fausse pour tout stockage qui n'est pas ce Garage-là** : viser AWS S3 ou un autre fournisseur impose de poser sa région (`eu-west-3`, …) |
+| `SECONDBRAIN_S3_PATH_STYLE` | Adressage `hôte/bucket/clé` plutôt que `bucket.hôte/clé` | `true` — ce qu'exige Garage, qui n'a pas de DNS générique `*.bucket.hôte`. AWS S3 accepte encore les deux, mais un fournisseur qui n'accepte que l'adressage par sous-domaine demande `false` |
 | `SPRING_RABBITMQ_HOST` | Broker des événements métier | `localhost` |
 | `SPRING_RABBITMQ_PORT` | Broker des événements métier | `5672` |
 | `SPRING_RABBITMQ_USERNAME` | Broker des événements métier — un utilisateur **dédié**, pas l'administrateur : l'application déclare son exchange, sa queue et son binding, puis publie et consomme, donc les permissions `configure` / `write` / `read` sur le vhost suffisent | `guest` — le compte par défaut de l'image, qui n'existe plus dès que le broker est créé avec ses propres identifiants |

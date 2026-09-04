@@ -199,10 +199,14 @@ Avant d'écrire une classe, décider de sa couche :
   `UnexpectedRollbackException` sans rien apprendre sur la route. Ce qu'il reste à vérifier
   après un refus se lit **par le port**, dans la transaction du test, pas par une seconde
   requête.
-- **`@Transactional` annule la base, jamais le disque.** Un test qui écrit un fichier le
-  nettoie explicitement en `@AfterEach`, sans quoi il laisse derrière lui un état qu'aucune
-  ligne ne désigne — et que le refus d'écrasement de l'adapter de stockage transformera en
-  échec lors d'une exécution ultérieure.
+- **`@Transactional` annule la base, jamais le stockage objet.** Un test qui écrit un
+  original dans Garage le nettoie explicitement en `@AfterEach` (voir
+  `S3DocumentStorageTest.videLesOriginaux`), sans quoi il laisse derrière lui un objet
+  qu'aucune ligne ne désigne — et que le refus d'écrasement de l'adapter transformera en
+  échec pour un test ultérieur. Ce qui a changé depuis le disque : le conteneur Garage est
+  jeté à la fin de l'exécution, donc la fuite ne traverse plus qu'**une seule** exécution —
+  mais elle y traverse bien plusieurs classes de test, qui partagent le même contexte
+  Spring et donc le même conteneur.
 - **MockMvc ne traverse aucun analyseur multipart** : un `MockMultipartFile` est déjà
   découpé, et `MaxUploadSizeExceededException` n'y sera jamais levée. Ce qui dépend de
   l'analyse réelle du corps se teste sur un vrai serveur (`webEnvironment = RANDOM_PORT` et

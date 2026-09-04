@@ -131,10 +131,32 @@ springdoc:
 secondbrain:
   base-url: ${SECONDBRAIN_BASE_URL:http://localhost:8080}
   storage:
-    # Où sont conservés les fichiers d'origine, un par document, nommés par son
-    # identifiant. Comme `base-url`, le défaut sert le développement : hors conteneur,
-    # `/data` n'est pas écrivable, et c'est SECONDBRAIN_ORIGINALS_PATH qui fait foi.
-    originals-path: ${SECONDBRAIN_ORIGINALS_PATH:/data/originals}
+    # Où sont conservés les fichiers d'origine, un objet par document, la clé étant son
+    # identifiant. Les quatre premières propriétés n'ont VOLONTAIREMENT aucun défaut, même
+    # statut que `jwt.secret` juste en dessous et à l'inverse de `base-url` ci-dessus, dont
+    # le défaut ment en production (ADR-0009) : ici un défaut ne mentirait pas, il perdrait
+    # les documents en silence — le premier dépôt écrirait dans un bucket qui n'est pas le
+    # bon, et personne ne s'en apercevrait avant la première relecture d'un original.
+    # compose.yaml fournit les valeurs de développement ; tout déploiement hors Compose doit
+    # les poser, sans quoi l'application refuse de démarrer.
+    #
+    # Limite assumée : `endpoint` étant obligatoire, on ne peut pas viser AWS S3 natif, qui
+    # se passe d'endpointOverride. C'est cohérent avec le fait que la production n'est pas
+    # traitée par ce ticket ; le rendre facultatif sera une ligne, le jour où ça se pose.
+    s3:
+      endpoint: ${SECONDBRAIN_S3_ENDPOINT}
+      bucket: ${SECONDBRAIN_S3_BUCKET}
+      access-key: ${SECONDBRAIN_S3_ACCESS_KEY}
+      secret-key: ${SECONDBRAIN_S3_SECRET_KEY}
+      # Un défaut, parce que cette valeur ne désigne rien : SigV4 exige le nom d'une région
+      # dans la signature même quand le service n'en a qu'une. Elle doit rester égale au
+      # `s3_region` de docker/garage.toml — Garage rejette une signature calculée pour une
+      # autre région que la sienne.
+      region: ${SECONDBRAIN_S3_REGION:garage}
+      # L'adressage par chemin (`hôte/bucket/clé`) est le seul qui fonctionne sans un DNS
+      # générique `*.bucket.hôte`, qu'aucun poste de développement n'a. S3 lui-même l'accepte
+      # encore, donc ce défaut ne ferme rien.
+      path-style: ${SECONDBRAIN_S3_PATH_STYLE:true}
   embedding:
     # Où joindre le service de vectorisation. Comme la datasource, le défaut sert le
     # développement hors conteneur — 11434 est le port d'Ollama. En production, la variable
