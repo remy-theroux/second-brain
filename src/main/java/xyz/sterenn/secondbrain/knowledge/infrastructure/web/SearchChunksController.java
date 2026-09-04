@@ -26,8 +26,6 @@ public class SearchChunksController {
         this.queryBus = queryBus;
     }
 
-    // defaultValue = "" : un paramètre absent suit le chemin d'un paramètre vide, donc un seul
-    // refus à écrire.
     @GetMapping("/api/search")
     @SecurityRequirement(name = "bearer")
     public ResponseEntity<Object> search(

@@ -10,9 +10,4 @@ public record Question(String value) {
         }
         value = value.strip();
     }
-
-    @Override
-    public String toString() {
-        return value;
-    }
 }

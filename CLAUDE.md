@@ -238,7 +238,7 @@ xyz.sterenn.secondbrain
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
 │   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
-│   │                       + TextExtractionView, SearchChunks + ChunkMatchView
+│   │                        + TextExtractionView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -386,15 +386,14 @@ et `exp` — **pas d'email, pas d'`iss`**. La durée de vie (1 h) est une règle
 (`AccessTokenPolicy.LIFETIME`), pas une propriété de configuration : un exploitant ne doit
 pas pouvoir la porter à trente jours par un fichier.
 
-`GET /api/profile` est la seule route authentifiée. Le filtre resource server valide le
+`GET /api/profile` est une route authentifiée. Le filtre resource server valide le
 jeton en amont ; le contrôleur ne lit que `sub` et interroge `FindUserById`. Un jeton bien
 signé dont le compte a disparu répond `401` et non `404` : il n'identifie plus personne, et
 le front n'a ainsi qu'un seul cas d'échec à traiter.
 
-`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique,
-et `GET /api/profile` reste aujourd'hui la seule route authentifiée. Une nouvelle route
-publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ; sans quoi elle
-répond `401`.
+`SecurityConfig` refuse par défaut sous `/api/**` : seule `/api/token` s'y déclare publique.
+Une nouvelle route publique sous `/api` doit se déclarer explicitement dans `SecurityConfig` ;
+sans quoi elle répond `401`.
 
 Le secret de signature (`secondbrain.jwt.secret`, 32 octets minimum) **n'a aucune valeur
 par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
