@@ -163,3 +163,27 @@ describe('design system page', () => {
     expect(router.currentRoute.value.name).toBe('design-system')
   })
 })
+
+describe('conversation page', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('sends back to the login when no token is held', async () => {
+    const router = createTestRouter()
+
+    await router.push('/chat')
+
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it('lets the conversation be reached with a valid token', async () => {
+    authenticate()
+    const router = createTestRouter()
+
+    await router.push('/chat')
+
+    expect(router.currentRoute.value.name).toBe('chat')
+  })
+})
