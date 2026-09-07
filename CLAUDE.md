@@ -10,9 +10,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Langue
 
-Le projet est intégralement en français : commentaires, Javadoc, messages
-d'exception, libellés d'interface, noms de méthodes de test, messages de commit.
-Les noms de classes, de méthodes de production et de packages restent en anglais.
+**Le code s'écrit en anglais, la prose du projet reste en français.** La frontière n'est
+pas la nature du fichier, c'est le lecteur : ce qu'un développeur lit est en anglais, ce
+qu'un utilisateur lit est en français.
+
+**En anglais** — tout le code, commentaires compris :
+
+- noms de classes, de méthodes, de packages, de champs et de variables ;
+- commentaires et Javadoc, y compris ceux des migrations SQL et des fichiers du front ;
+- **noms de méthodes de test** (`rejects_an_already_used_email`), et les libellés des
+  `describe`/`it` côté Vitest.
+
+**En français** — ce que lit un utilisateur, et rien d'autre :
+
+- les libellés, textes et messages de l'interface ;
+- les **messages d'exception métier**, qui sont affichables tels quels (voir les règles
+  backend) ;
+- le prompt de l'agent documentaire (`src/main/resources/agents/document-agent.md`), qui
+  gouverne la langue de ses réponses ;
+- les messages de commit.
+
+**En français, sans exception : les documents de travail.** Les ADR de `docs/decisions/`,
+les specs de `docs/superpowers/specs/` et les plans de `docs/superpowers/plans/` ne se
+traduisent jamais, même partiellement. Ce sont des documents de réflexion, pas du code, et
+un ADR accepté ne se réécrit de toute façon pas (voir `.claude/rules/decisions.md`).
 
 ## Commandes
 
