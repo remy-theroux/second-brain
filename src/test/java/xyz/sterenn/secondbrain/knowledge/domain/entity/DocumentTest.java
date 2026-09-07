@@ -96,7 +96,7 @@ class DocumentTest {
 
         assertThatThrownBy(() -> document.markProcessingFailed("   "))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("motif");
+                .hasMessageContaining("reason");
     }
 
     @Test

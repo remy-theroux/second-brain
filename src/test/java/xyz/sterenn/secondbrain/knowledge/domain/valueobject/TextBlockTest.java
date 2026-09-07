@@ -33,14 +33,14 @@ class TextBlockTest {
     void rejects_a_level_outside_one_to_six_for_a_filled_heading() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> TextBlock.of("Titre", 7, "Du texte."))
-                .withMessageContaining("1 à 6");
+                .withMessageContaining("1 to 6");
     }
 
     @Test
     void rejects_a_block_whose_text_is_empty_once_normalised() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> TextBlock.untitled("  \n\n \t "))
-                .withMessageContaining("sans texte");
+                .withMessageContaining("without text");
     }
 
     @Test

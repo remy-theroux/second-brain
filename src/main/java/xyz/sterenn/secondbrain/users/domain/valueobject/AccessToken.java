@@ -7,10 +7,10 @@ public record AccessToken(String value, Instant expiresAt) {
 
     public AccessToken {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Le jeton d'accès est obligatoire");
+            throw new IllegalArgumentException("The access token is required");
         }
         if (expiresAt == null) {
-            throw new IllegalArgumentException("L'expiration du jeton d'accès est obligatoire");
+            throw new IllegalArgumentException("The access token expiry is required");
         }
     }
 

@@ -15,25 +15,25 @@ public record Checksum(String value) {
 
     public Checksum {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("L'empreinte du contenu est obligatoire");
+            throw new IllegalArgumentException("A content checksum is required");
         }
         value = value.trim().toLowerCase(Locale.ROOT);
         if (!FORMAT.matcher(value).matches()) {
-            throw new IllegalArgumentException("Une empreinte SHA-256 s'écrit en " + LENGTH
-                    + " caractères hexadécimaux, reçu : " + value.length());
+            throw new IllegalArgumentException(
+                    "A SHA-256 checksum is written with " + LENGTH + " hexadecimal characters, got: " + value.length());
         }
     }
 
     public static Checksum of(byte[] content) {
         if (content == null) {
-            throw new IllegalArgumentException("Le contenu est obligatoire");
+            throw new IllegalArgumentException("Content is required");
         }
         try {
             return new Checksum(HexFormat.of()
                     .formatHex(MessageDigest.getInstance(ALGORITHM).digest(content)));
         } catch (NoSuchAlgorithmException e) {
             // SHA-256 is required of every Java platform implementation: out of reach.
-            throw new IllegalStateException("Algorithme " + ALGORITHM + " indisponible", e);
+            throw new IllegalStateException("Algorithm " + ALGORITHM + " unavailable", e);
         }
     }
 

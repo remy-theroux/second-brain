@@ -71,12 +71,12 @@ public class AskAgentController {
         emitter.onTimeout(() -> {
             timedOut.set(true);
             LOG.warn(
-                    "Le flux SSE a expiré après {} ms sans que la conversation ne se termine (ownerId={}).",
+                    "The SSE stream timed out after {} ms without the conversation finishing (ownerId={}).",
                     TIMEOUT_MILLIS,
                     ownerId);
         });
-        emitter.onError(error -> LOG.warn("Le flux SSE s'est terminé en erreur (ownerId={}).", ownerId, error));
-        emitter.onCompletion(() -> LOG.debug("Le flux SSE est terminé (ownerId={}).", ownerId));
+        emitter.onError(error -> LOG.warn("The SSE stream ended in error (ownerId={}).", ownerId, error));
+        emitter.onCompletion(() -> LOG.debug("The SSE stream is complete (ownerId={}).", ownerId));
     }
 
     private void converse(SseEmitter emitter, Question question, UUID ownerId, AtomicBoolean timedOut) {
@@ -93,14 +93,14 @@ public class AskAgentController {
         } catch (ClientGoneException clientGone) {
             // A timeout already marks the emitter complete: completing it again has no purpose.
             if (timedOut.get()) {
-                LOG.info("La génération a été interrompue par l'expiration du flux (ownerId={}).", ownerId);
+                LOG.info("Generation was interrupted by the stream timing out (ownerId={}).", ownerId);
             } else {
-                LOG.info("Le client a fermé sa connexion : la génération est interrompue (ownerId={}).", ownerId);
+                LOG.info("The client closed its connection: generation is interrupted (ownerId={}).", ownerId);
                 emitter.complete();
             }
         } catch (LlmUnavailableException | EmbeddingUnavailableException unreachableService) {
             LOG.error(
-                    "La conversation a échoué : un service d'IA n'a pas répondu (ownerId={}).",
+                    "The conversation failed: an AI service did not respond (ownerId={}).",
                     ownerId,
                     unreachableService);
             fail(
@@ -109,7 +109,7 @@ public class AskAgentController {
                     "La conversation est momentanément indisponible : un service d'IA n'a pas "
                             + "répondu. Réessayez dans quelques instants.");
         } catch (RuntimeException failure) {
-            LOG.error("La conversation a échoué (ownerId={}).", ownerId, failure);
+            LOG.error("The conversation failed (ownerId={}).", ownerId, failure);
             fail(emitter, ownerId, "La conversation a échoué. Réessayez dans quelques instants.");
         }
     }
@@ -129,7 +129,7 @@ public class AskAgentController {
                     outcome.searches(),
                     outcome.answer().sources()));
         } catch (RuntimeException lostTrace) {
-            LOG.error("La trace de cette conversation n'a pas pu être écrite (ownerId={}).", ownerId, lostTrace);
+            LOG.error("The trace of this conversation could not be written (ownerId={}).", ownerId, lostTrace);
         }
     }
 
@@ -137,7 +137,7 @@ public class AskAgentController {
         try {
             emitter.send(SseEmitter.event().name("error").data(new ErrorResponse(message)));
         } catch (IOException | IllegalStateException clientAlreadyGone) {
-            LOG.info("Le client était déjà parti quand l'erreur a été émise (ownerId={}).", ownerId);
+            LOG.info("The client had already left when the error was emitted (ownerId={}).", ownerId);
         }
         emitter.complete();
     }

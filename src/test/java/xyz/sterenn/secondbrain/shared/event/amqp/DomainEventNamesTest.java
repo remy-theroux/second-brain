@@ -28,7 +28,7 @@ class DomainEventNamesTest {
     void rejects_a_name_without_an_object() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(TestEvents.Uploaded.class))
-                .withMessageContaining("objet");
+                .withMessageContaining("object");
     }
 
     @Test
@@ -50,10 +50,10 @@ class DomainEventNamesTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(lambda.getClass()))
-                .withMessageContaining("anonyme");
+                .withMessageContaining("anonymous");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(anonymous.getClass()))
-                .withMessageContaining("anonyme");
+                .withMessageContaining("anonymous");
     }
 
     @Test

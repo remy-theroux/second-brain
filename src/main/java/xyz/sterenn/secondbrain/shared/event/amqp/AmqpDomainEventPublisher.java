@@ -44,7 +44,7 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
                     send(name, event);
                 } catch (RuntimeException e) {
                     log.error(
-                            "Événement {} perdu : le broker n'a pas pu être joint après le commit ({})",
+                            "Event {} lost: the broker could not be reached after the commit ({})",
                             name,
                             e.getMessage(),
                             e);
@@ -55,6 +55,6 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
 
     private void send(String name, DomainEvent event) {
         rabbitTemplate.convertAndSend(AmqpConfiguration.EVENTS_EXCHANGE, name, event);
-        log.debug("Événement {} publié", name);
+        log.debug("Event {} published", name);
     }
 }

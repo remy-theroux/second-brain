@@ -13,10 +13,10 @@ public final class Embedding {
     }
 
     public static Embedding of(float[] values) {
-        Objects.requireNonNull(values, "Le vecteur est obligatoire");
+        Objects.requireNonNull(values, "A vector is required");
         if (values.length != EmbeddingPolicy.DIMENSIONS) {
             throw new IllegalArgumentException(
-                    "Un vecteur porte " + EmbeddingPolicy.DIMENSIONS + " dimensions, reçu : " + values.length);
+                    "A vector carries " + EmbeddingPolicy.DIMENSIONS + " dimensions, got: " + values.length);
         }
         return new Embedding(values.clone());
     }

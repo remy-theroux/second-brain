@@ -9,7 +9,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.UnextractableDocumentE
 public record ExtractedText(List<TextBlock> blocks) {
 
     public ExtractedText {
-        Objects.requireNonNull(blocks, "Les blocs de texte sont obligatoires");
+        Objects.requireNonNull(blocks, "Text blocks are required");
         blocks = List.copyOf(blocks);
         if (!ExtractionPolicy.isExploitable(characterCount(blocks))) {
             throw new UnextractableDocumentException();

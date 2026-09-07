@@ -20,11 +20,11 @@ public final class RecursiveChunker {
     private final TokenCounter tokenCounter;
 
     public RecursiveChunker(TokenCounter tokenCounter) {
-        this.tokenCounter = Objects.requireNonNull(tokenCounter, "Le compteur de tokens est obligatoire");
+        this.tokenCounter = Objects.requireNonNull(tokenCounter, "A token counter is required");
     }
 
     public List<Chunk> chunk(ExtractedText text) {
-        Objects.requireNonNull(text, "Le texte extrait est obligatoire");
+        Objects.requireNonNull(text, "The extracted text is required");
         List<Chunk> chunks = new ArrayList<>();
         for (TextBlock block : text.blocks()) {
             chunks.addAll(chunkSection(block.getHeading(), block.getText()));

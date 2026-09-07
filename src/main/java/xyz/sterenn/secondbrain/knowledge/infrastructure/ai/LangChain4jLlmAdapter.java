@@ -86,8 +86,7 @@ class LangChain4jLlmAdapter implements LlmPort {
             if (cause instanceof ConsumerFailure abort) {
                 throw (RuntimeException) abort.getCause();
             }
-            throw new LlmUnavailableException(
-                    "Le service de génération n'a pas répondu : " + cause.getMessage(), cause);
+            throw new LlmUnavailableException("The generation service did not respond: " + cause.getMessage(), cause);
         }
     }
 
@@ -123,7 +122,7 @@ class LangChain4jLlmAdapter implements LlmPort {
         } catch (RuntimeException unreadableJson) {
             // A small model produces unreadable arguments: the loop turns that into a tool error
             // handed back to the model, not an outage — but the operator must be able to see it.
-            LOG.warn("Arguments illisibles pour l'outil « {} » : {}", toolName, unreadableJson.getMessage());
+            LOG.warn("Unreadable arguments for tool '{}': {}", toolName, unreadableJson.getMessage());
             return Map.of();
         }
         return arguments;

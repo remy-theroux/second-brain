@@ -11,7 +11,7 @@ public record RawVerificationToken(String value) {
 
     public RawVerificationToken {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Le jeton de vérification est obligatoire");
+            throw new IllegalArgumentException("The verification token is required");
         }
     }
 

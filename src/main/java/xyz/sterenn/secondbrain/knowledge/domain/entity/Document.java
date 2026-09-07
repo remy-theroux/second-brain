@@ -70,13 +70,13 @@ public class Document {
     public static Document upload(
             UUID ownerId, String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
         if (ownerId == null) {
-            throw new IllegalArgumentException("Le propriétaire du document est obligatoire");
+            throw new IllegalArgumentException("The document owner is required");
         }
         if (filename == null || filename.isBlank()) {
-            throw new IllegalArgumentException("Le nom du fichier est obligatoire");
+            throw new IllegalArgumentException("A filename is required");
         }
         if (sizeBytes <= 0) {
-            throw new IllegalArgumentException("Un document vide n'a rien à apporter à la base de connaissance");
+            throw new IllegalArgumentException("An empty document has nothing to bring to the knowledge base");
         }
         String boundedFilename = filename.trim();
         if (boundedFilename.length() > MAX_FILENAME_LENGTH) {
@@ -97,7 +97,7 @@ public class Document {
 
     public void markProcessingFailed(String reason) {
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("Un échec sans motif n'apprend rien : le motif est obligatoire");
+            throw new IllegalArgumentException("A failure without a reason teaches nothing: the reason is required");
         }
         String strippedReason = reason.strip();
         this.status = DocumentStatus.FAILED;

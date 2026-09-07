@@ -54,9 +54,9 @@ public class TextExtraction {
     }
 
     public static TextExtraction of(UUID documentId, ExtractedText text, Instant extractedAt) {
-        Objects.requireNonNull(documentId, "Le document dont ce texte est extrait est obligatoire");
-        Objects.requireNonNull(text, "Le texte extrait est obligatoire");
-        Objects.requireNonNull(extractedAt, "L'instant de l'extraction est obligatoire");
+        Objects.requireNonNull(documentId, "The document this text is extracted from is required");
+        Objects.requireNonNull(text, "The extracted text is required");
+        Objects.requireNonNull(extractedAt, "The extraction instant is required");
         return new TextExtraction(documentId, new ArrayList<>(text.blocks()), extractedAt);
     }
 

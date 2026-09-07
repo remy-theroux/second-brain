@@ -24,8 +24,8 @@ public class JwtConfiguration {
     public JwtConfiguration(@Value("${secondbrain.jwt.secret}") String secret) {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < MIN_SECRET_LENGTH) {
-            throw new IllegalStateException("secondbrain.jwt.secret doit faire au moins " + MIN_SECRET_LENGTH
-                    + " octets pour signer en HS256 ; " + bytes.length + " reçus");
+            throw new IllegalStateException("secondbrain.jwt.secret must be at least " + MIN_SECRET_LENGTH
+                    + " bytes to sign in HS256; " + bytes.length + " received");
         }
         this.secretKey = new SecretKeySpec(bytes, "HmacSHA256");
     }

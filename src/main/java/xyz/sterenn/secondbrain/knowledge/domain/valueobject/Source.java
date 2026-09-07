@@ -6,7 +6,7 @@ public record Source(int number, UUID documentId, String filename, int position,
 
     public Source {
         if (number < 1) {
-            throw new IllegalArgumentException("Une source se numérote à partir de 1, pas " + number);
+            throw new IllegalArgumentException("A source is numbered from 1, not " + number);
         }
     }
 

@@ -6,8 +6,8 @@ import java.util.Objects;
 public record ToolCall(String id, String name, Map<String, String> arguments) {
 
     public ToolCall {
-        Objects.requireNonNull(id, "L'identifiant de l'appel d'outil est obligatoire");
-        Objects.requireNonNull(name, "Le nom de l'outil appelé est obligatoire");
+        Objects.requireNonNull(id, "A tool call id is required");
+        Objects.requireNonNull(name, "The name of the called tool is required");
         arguments = Map.copyOf(arguments);
     }
 

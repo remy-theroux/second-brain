@@ -25,20 +25,20 @@ class DocumentUploadedTest {
     void rejects_a_missing_document() {
         assertThatNullPointerException()
                 .isThrownBy(() -> new DocumentUploaded(null, ACCOUNT, INSTANT))
-                .withMessage("L'identifiant du document est obligatoire");
+                .withMessage("The document id is required");
     }
 
     @Test
     void rejects_a_missing_owner() {
         assertThatNullPointerException()
                 .isThrownBy(() -> new DocumentUploaded(DOCUMENT, null, INSTANT))
-                .withMessage("Le propriétaire du document est obligatoire");
+                .withMessage("The document owner is required");
     }
 
     @Test
     void rejects_a_missing_instant() {
         assertThatNullPointerException()
                 .isThrownBy(() -> new DocumentUploaded(DOCUMENT, ACCOUNT, null))
-                .withMessage("L'instant de l'événement est obligatoire");
+                .withMessage("The event instant is required");
     }
 }

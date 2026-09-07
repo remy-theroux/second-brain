@@ -6,8 +6,8 @@ import java.util.Objects;
 public record ToolSpecification(String name, String description, List<ToolParameter> parameters) {
 
     public ToolSpecification {
-        Objects.requireNonNull(name, "Le nom de l'outil est obligatoire");
-        Objects.requireNonNull(description, "La description de l'outil est obligatoire");
+        Objects.requireNonNull(name, "A tool name is required");
+        Objects.requireNonNull(description, "A tool description is required");
         parameters = List.copyOf(parameters);
     }
 }

@@ -4,10 +4,10 @@ public record AgentRefusals(String notFound, String outOfScope) {
 
     public AgentRefusals {
         if (notFound == null || notFound.isBlank()) {
-            throw new IllegalArgumentException("L'aveu d'ignorance est obligatoire : c'est lui qu'on rend");
+            throw new IllegalArgumentException("The admission of ignorance is required: it is what gets returned");
         }
         if (outOfScope == null || outOfScope.isBlank()) {
-            throw new IllegalArgumentException("Le refus hors périmètre est obligatoire");
+            throw new IllegalArgumentException("The out-of-scope refusal is required");
         }
         notFound = notFound.strip();
         outOfScope = outOfScope.strip();

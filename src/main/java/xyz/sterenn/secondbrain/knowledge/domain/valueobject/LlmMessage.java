@@ -13,7 +13,7 @@ public record LlmMessage(LlmMessage.Role role, String content, List<ToolCall> to
     }
 
     public LlmMessage {
-        Objects.requireNonNull(role, "Le rôle du message est obligatoire");
+        Objects.requireNonNull(role, "A message role is required");
         toolCalls = toolCalls == null ? List.of() : List.copyOf(toolCalls);
     }
 

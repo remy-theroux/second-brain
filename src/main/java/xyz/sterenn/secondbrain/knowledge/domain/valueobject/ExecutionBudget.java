@@ -6,12 +6,12 @@ import java.util.Objects;
 public record ExecutionBudget(int maxTurns, Duration limit) {
 
     public ExecutionBudget {
-        Objects.requireNonNull(limit, "Le budget de temps est obligatoire");
+        Objects.requireNonNull(limit, "A time budget is required");
         if (maxTurns < 1) {
-            throw new IllegalArgumentException("Un agent qui ne peut pas jouer un tour ne peut rien répondre");
+            throw new IllegalArgumentException("An agent that cannot play a single turn cannot answer anything");
         }
         if (limit.isZero() || limit.isNegative()) {
-            throw new IllegalArgumentException("Le budget de temps doit être strictement positif");
+            throw new IllegalArgumentException("The time budget must be strictly positive");
         }
     }
 }

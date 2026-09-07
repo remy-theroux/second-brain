@@ -36,11 +36,11 @@ public class TextBlock {
         String normalisedHeading = normaliseHeading(heading);
         String body = normalise(text);
         if (body.isEmpty()) {
-            throw new IllegalArgumentException("Un bloc sans texte n'en est pas un : il ne se construit pas");
+            throw new IllegalArgumentException("A block without text is not a block: it cannot be built");
         }
         if (!normalisedHeading.isEmpty() && (headingLevel < 1 || headingLevel > MAX_HEADING_LEVEL)) {
             throw new IllegalArgumentException(
-                    "Le niveau d'un titre va de 1 à " + MAX_HEADING_LEVEL + ", reçu : " + headingLevel);
+                    "A heading level ranges from 1 to " + MAX_HEADING_LEVEL + ", got: " + headingLevel);
         }
         return new TextBlock(normalisedHeading, normalisedHeading.isEmpty() ? 0 : headingLevel, body);
     }
@@ -99,6 +99,6 @@ public class TextBlock {
 
     @Override
     public String toString() {
-        return "TextBlock[heading=" + heading + ", level=" + headingLevel + ", " + text.length() + " caractères]";
+        return "TextBlock[heading=" + heading + ", level=" + headingLevel + ", " + text.length() + " characters]";
     }
 }

@@ -108,7 +108,7 @@ class LangChain4jLlmAdapterTest {
         assertThatExceptionOfType(LlmUnavailableException.class)
                 .isThrownBy(() -> adapter.stream(
                         new LlmRequest(List.of(LlmMessage.user("Bonjour")), List.of(), 0.2), fragment -> {}))
-                .withMessageContaining("génération");
+                .withMessageContaining("generation service");
     }
 
     @Test

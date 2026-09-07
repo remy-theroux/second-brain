@@ -82,7 +82,7 @@ public class ConversationAgent {
 
             if (!turn.requestsATool()) {
                 if (buffer.text().isBlank()) {
-                    LOG.warn("Le modèle a rendu un tour vide (tour {}) ; tour consommé sans relance.", turns);
+                    LOG.warn("The model returned an empty turn (turn {}); turn consumed without a retry.", turns);
                     continue;
                 }
                 Answer answer = GroundingPolicy.verdict(agent, buffer.text(), catalogue, searchPerformed);

@@ -13,15 +13,15 @@ public record Agent(
         double temperature) {
 
     public Agent {
-        Objects.requireNonNull(name, "Le nom de l'agent est obligatoire");
+        Objects.requireNonNull(name, "An agent name is required");
         Objects.requireNonNull(
                 version,
-                "La version de l'agent est obligatoire : sans elle, deux résultats"
-                        + " produits par deux consignes différentes se comparent sans qu'on le sache");
-        Objects.requireNonNull(refusals, "Les messages de refus sont obligatoires");
-        Objects.requireNonNull(budget, "Le budget d'exécution est obligatoire");
+                "An agent version is required: without it, two results"
+                        + " produced by two different sets of instructions are compared without anyone knowing");
+        Objects.requireNonNull(refusals, "Refusal messages are required");
+        Objects.requireNonNull(budget, "An execution budget is required");
         if (systemPrompt == null || systemPrompt.isBlank()) {
-            throw new IllegalArgumentException("Un agent sans consignes n'en est pas un");
+            throw new IllegalArgumentException("An agent without instructions is not an agent");
         }
         tools = List.copyOf(tools);
     }

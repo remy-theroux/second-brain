@@ -44,7 +44,7 @@ class OllamaEmbeddingAdapter implements EmbeddingPort {
 
     @Override
     public List<Embedding> embed(List<String> texts) {
-        Objects.requireNonNull(texts, "La liste des textes à vectoriser est obligatoire");
+        Objects.requireNonNull(texts, "The list of texts to embed is required");
         List<Embedding> embeddings = new ArrayList<>(texts.size());
         for (int start = 0; start < texts.size(); start += BATCH_SIZE) {
             embeddings.addAll(embedBatch(texts.subList(start, Math.min(start + BATCH_SIZE, texts.size()))));

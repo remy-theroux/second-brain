@@ -39,7 +39,7 @@ public class KnowledgeEventListener {
         try {
             commandBus.dispatch(new ExtractDocumentText(event.documentId(), event.ownerId()));
         } catch (RuntimeException failure) {
-            log.error("Extraction du document {} en échec", event.documentId(), failure);
+            log.error("Extraction of document {} failed", event.documentId(), failure);
             commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
         }
     }
@@ -50,7 +50,7 @@ public class KnowledgeEventListener {
         try {
             commandBus.dispatch(new IndexDocumentText(event.documentId(), event.ownerId()));
         } catch (RuntimeException failure) {
-            log.error("Indexation du document {} en échec", event.documentId(), failure);
+            log.error("Indexing of document {} failed", event.documentId(), failure);
             commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
         }
     }
@@ -62,7 +62,7 @@ public class KnowledgeEventListener {
     @RabbitHandler
     public void on(DocumentTextIndexed event) {
         log.info(
-                "Événement knowledge.document-text.indexed reçu pour le document {} : {} extraits",
+                "Event knowledge.document-text.indexed received for document {}: {} chunks",
                 event.documentId(),
                 event.chunkCount());
     }

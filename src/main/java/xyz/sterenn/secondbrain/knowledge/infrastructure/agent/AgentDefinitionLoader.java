@@ -24,31 +24,30 @@ final class AgentDefinitionLoader {
     static Agent fromClasspath(String path) {
         try (InputStream stream = AgentDefinitionLoader.class.getClassLoader().getResourceAsStream(path)) {
             if (stream == null) {
-                throw new IllegalStateException(
-                        "La définition d'agent " + path + " est introuvable dans le classpath.");
+                throw new IllegalStateException("Agent definition " + path + " was not found on the classpath.");
             }
             return parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException unreadable) {
-            throw new IllegalStateException("La définition d'agent " + path + " est illisible.", unreadable);
+            throw new IllegalStateException("Agent definition " + path + " is unreadable.", unreadable);
         }
     }
 
     static Agent parse(String content) {
         Matcher header = FRONT_MATTER.matcher(content);
         if (!header.find()) {
-            throw new IllegalStateException("La définition d'agent n'a pas de front matter délimité par ---.");
+            throw new IllegalStateException("The agent definition has no front matter delimited by ---.");
         }
         Map<String, String> keys = keys(header.group(1));
         for (String required : REQUIRED_KEYS) {
             if (!keys.containsKey(required)) {
                 throw new IllegalStateException(
-                        "La définition d'agent n'a pas de clé « " + required + " » dans son front matter.");
+                        "The agent definition has no '" + required + "' key in its front matter.");
             }
         }
         String prose = substitute(content.substring(header.end()).strip(), keys);
         if (prose.isEmpty()) {
             throw new IllegalStateException(
-                    "La définition d'agent n'a pas de prose : un agent sans consignes" + " répondrait n'importe quoi.");
+                    "The agent definition has no prose: an agent without instructions would answer anything.");
         }
         return new Agent(
                 keys.get("name"),
@@ -81,7 +80,7 @@ final class AgentDefinitionLoader {
             String value = keys.get(key);
             if (value == null) {
                 throw new IllegalStateException(
-                        "La définition d'agent appelle « " + key + " », que son front matter ne déclare pas.");
+                        "The agent definition calls '" + key + "', which its front matter does not declare.");
             }
             matcher.appendReplacement(resolved, Matcher.quoteReplacement(value));
         }

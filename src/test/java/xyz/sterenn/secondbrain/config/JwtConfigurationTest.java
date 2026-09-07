@@ -63,6 +63,6 @@ class JwtConfigurationTest {
     void rejects_a_too_short_secret_at_startup() {
         assertThatThrownBy(() -> new JwtConfiguration("trop-court"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("32 octets");
+                .hasMessageContaining("32 bytes");
     }
 }

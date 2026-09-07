@@ -51,21 +51,20 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
         for (DocumentTextExtractor extractor : documentTextExtractors) {
             if (extractor.format().type() != DocumentType.TEXTUAL) {
                 throw new IllegalStateException(
-                        "L'extracteur " + extractor.getClass().getName()
-                                + " revendique le format " + extractor.format()
-                                + ", qui n'est pas de typologie textuelle");
+                        "Extractor " + extractor.getClass().getName() + " claims format " + extractor.format()
+                                + ", which is not of the textual type");
             }
             DocumentTextExtractor previous = byFormat.put(extractor.format(), extractor);
             if (previous != null) {
-                throw new IllegalStateException("Deux extracteurs revendiquent le format " + extractor.format() + " : "
-                        + previous.getClass().getName() + " et "
+                throw new IllegalStateException("Two extractors claim format " + extractor.format() + ": "
+                        + previous.getClass().getName() + " and "
                         + extractor.getClass().getName());
             }
         }
         for (DocumentFormat format : DocumentFormat.of(DocumentType.TEXTUAL)) {
             if (!byFormat.containsKey(format)) {
                 throw new IllegalStateException(
-                        "Aucun extracteur ne sait lire " + format + " : un format accepté au dépôt doit être lisible");
+                        "No extractor can read " + format + ": a format accepted at upload must be readable");
             }
         }
         return Map.copyOf(byFormat);

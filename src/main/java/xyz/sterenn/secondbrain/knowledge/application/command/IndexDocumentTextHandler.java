@@ -58,7 +58,7 @@ public class IndexDocumentTextHandler implements CommandHandler<IndexDocumentTex
         TextExtraction extraction = textExtractionRepository
                 .findByDocumentId(document.getId())
                 .orElseThrow(() -> new IllegalStateException(
-                        "Le document " + document.getId() + " est annoncé extrait mais ne porte aucun texte"));
+                        "Document " + document.getId() + " is announced as extracted but carries no text"));
 
         List<Chunk> chunks = chunker.chunk(extraction.text());
         // The port returns as many vectors as texts and in the same order: that is what

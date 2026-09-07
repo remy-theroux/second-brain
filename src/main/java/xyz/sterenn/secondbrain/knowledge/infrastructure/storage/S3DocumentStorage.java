@@ -34,12 +34,12 @@ class S3DocumentStorage implements DocumentStorage {
         String key = key(documentId);
         try {
             if (alreadyStored(key)) {
-                throw new IllegalStateException("Un original est déjà conservé pour le document " + documentId);
+                throw new IllegalStateException("An original is already stored for document " + documentId);
             }
             s3Client.putObject(
                     PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
         } catch (SdkException e) {
-            throw unavailable("conservé", e);
+            throw unavailable("stored", e);
         }
     }
 
@@ -52,7 +52,7 @@ class S3DocumentStorage implements DocumentStorage {
                     .key(key(documentId))
                     .build());
         } catch (SdkException e) {
-            throw unavailable("effacé", e);
+            throw unavailable("deleted", e);
         }
     }
 
@@ -70,7 +70,7 @@ class S3DocumentStorage implements DocumentStorage {
         } catch (NoSuchKeyException e) {
             return Optional.empty();
         } catch (SdkException e) {
-            throw unavailable("relu", e);
+            throw unavailable("read", e);
         }
     }
 
@@ -92,8 +92,8 @@ class S3DocumentStorage implements DocumentStorage {
 
     private DocumentStorageUnavailableException unavailable(String pastParticiple, SdkException cause) {
         return new DocumentStorageUnavailableException(
-                "Le stockage des originaux n'a pas répondu : l'original de ce document n'a pas pu être "
-                        + pastParticiple + ".",
+                "The original storage did not respond: the original of this document could not be " + pastParticiple
+                        + ".",
                 cause);
     }
 }
