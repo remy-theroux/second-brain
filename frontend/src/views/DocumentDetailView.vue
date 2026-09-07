@@ -6,6 +6,7 @@ import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
+import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import { fetchDocument, UnauthorizedError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
@@ -19,18 +20,22 @@ const errorMessage = ref('')
 
 // The server prevails: a 401 signs out, whatever the browser thinks. Any other failure is
 // displayed — including the 404, whose message comes from the server.
+async function handle(error) {
+  if (error instanceof UnauthorizedError) {
+    auth.logout()
+    await router.push({ name: 'login' })
+    return
+  }
+  errorMessage.value = error.message
+}
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
     document.value = await fetchDocument(auth.token, route.params.id)
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      auth.logout()
-      await router.push({ name: 'login' })
-      return
-    }
-    errorMessage.value = error.message
+    await handle(error)
   } finally {
     loading.value = false
   }
@@ -62,13 +67,19 @@ onMounted(load)
 
 <template>
   <section class="document-detail">
-    <div>
+    <div class="toolbar">
       <Button
         type="button"
         icon="pi pi-arrow-left"
         label="Documents"
         text
         @click="router.push({ name: 'documents' })"
+      />
+      <DownloadDocumentButton
+        v-if="document"
+        :document-id="document.id"
+        :filename="document.filename"
+        @error="handle"
       />
     </div>
 
@@ -136,6 +147,12 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: var(--sb-space-md);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .meta {

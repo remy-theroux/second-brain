@@ -272,6 +272,7 @@ xyz.sterenn.secondbrain
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
 │   │   │                    InvalidQuestionException, LlmUnavailableException,
+│   │   │                    MissingDocumentContentException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
@@ -285,7 +286,8 @@ xyz.sterenn.secondbrain
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
 │   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
 │   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
-│   │                        + TextExtractionView, SearchChunks + ChunkMatchView
+│   │                        + TextExtractionView, SearchChunks + ChunkMatchView,
+│   │                        FindDocumentContent + DocumentContentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -331,7 +333,8 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
 ├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
-│                            DocumentStatusTag (libellé et sévérité d'un statut)
+│                            DocumentStatusTag (libellé et sévérité d'un statut),
+│                            DownloadDocumentButton (le geste de retélécharger un original)
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
                              DocumentsView, DocumentDetailView,
                              DesignSystemView — catalogue, développement
@@ -507,6 +510,23 @@ d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le
 d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
 rendant un `Optional` — une query ne lève pas.
 
+`GET /api/documents/{id}/content` rend le fichier **tel qu'il a été déposé**, sous son nom
+d'origine — `Content-Disposition: attachment`, nom encodé en RFC 5987 parce qu'un accent
+dans un en-tête HTTP sans encodage est un octet non spécifié. Le `Content-Type` vient de
+`DocumentFormat.mediaType()` : le type MIME est une propriété du format, au même titre que
+son extension, et non le `Content-Type` du multipart, qui n'a jamais été stocké. La route ne
+regarde **jamais le statut** : un document dont l'extraction a échoué n'a plus que son
+original, c'est précisément ce qu'on vient y chercher.
+
+Deux absences, deux messages, un seul code. Le document inconnu rend le `404` habituel ; un
+document bien présent dont l'objet a disparu du stockage rend `404 {"message": "L'original
+de ce document n'est plus disponible."}` — dire « document introuvable » mentirait, l'écran
+le montre. Et cette seconde absence est la seule query du contexte qui **lève là où un
+`Optional` vide serait attendu** : une ligne
+`knowledge_documents` sans son objet n'est pas un résultat vide, c'est une rupture
+d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement, décision 6).
+Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
+
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
 les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
 `custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`, jamais par
@@ -527,6 +547,14 @@ survit à un F5, ce qu'une modale sur la liste n'aurait pas offert. C'est `docum
 typologie, qui décide du rendu : une typologie sans affichage le dit plutôt que de rendre une
 page vide. `DocumentStatusTag` porte le libellé et la sévérité d'un statut pour les deux
 écrans — le motif était copié, il est devenu un composant.
+
+Les deux écrans portent le même bouton de téléchargement, `DownloadDocumentButton` : le jeton
+voyageant en en-tête, un `<a href>` ne rapporterait qu'un `401`, et le fichier est donc lu par
+`fetchDocumentContent` puis remis au navigateur par une ancre `download` fabriquée, cliquée et
+révoquée. Le composant porte l'appel et son état occupé mais **pas la déconnexion** : il émet
+son erreur, et chaque vue la passe à son propre `handle`. Le nom du fichier lui est passé en
+prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent de la réponse que
+l'écran affiche déjà.
 
 ### Le flux de l'extraction du texte
 
