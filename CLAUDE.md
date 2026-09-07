@@ -327,13 +327,16 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 ├── Dockerfile               build npm puis nginx qui sert dist
 ├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
 ├── src/assets/main.css      reset, police, tokens du projet (--sb-*), classes partagées
-├── src/api/                 seul module qui parle HTTP
+├── src/api/                 seul module qui parle HTTP, sauf sse.js qui ne connaît que
+│                            le format de trame des Server-Sent Events
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
 ├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
-│                            DocumentStatusTag (libellé et sévérité d'un statut)
+│                            DocumentStatusTag (libellé et sévérité d'un statut),
+│                            AnswerText et AnswerSources (une réponse et ses sources),
+│                            answerSegments (le découpage d'un texte sur ses citations)
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
-                             DocumentsView, DocumentDetailView,
+                             DocumentsView, DocumentDetailView, ChatView,
                              DesignSystemView — catalogue, développement
                              seulement)
 ```
@@ -718,6 +721,40 @@ totale :**
 Conséquence pour le premier client de la route : **`POST` + SSE ne se consomme pas avec
 `EventSource`** côté navigateur, qui ne fait que du `GET` — il faut un `fetch` et la lecture
 manuelle de son `ReadableStream`.
+
+Ce client est `ChatView` (`/chat`, entrée « Conversation » de la barre latérale, sous le
+layout connecté). Les échanges vivent dans l'état de la page et **rien n'est persisté** : un
+F5 vide le fil, et les traces de `knowledge_agent_runs` ne sont lisibles par aucune route.
+À ne pas confondre avec un oubli d'affichage : **chaque question part seule**, l'agent n'a
+aucune mémoire du tour précédent. Le fil à l'écran est un empilement d'échanges
+indépendants, pas une conversation qui se souvient.
+
+Quatre couches, et la frontière est motivée. `src/api/sse.js` ne connaît que le format de
+trame — ni route, ni en-tête, ni nom d'événement. `askAgent`, dans `src/api/client.js`,
+connaît la route, ses refus et ses noms d'événements. `AnswerText` et `AnswerSources` rendent
+une réponse et ses sources, un `[n]` du texte dépliant la source correspondante. `ChatView`
+empile les échanges. **Les deux morceaux qui peuvent casser en silence — la lecture des
+trames et le découpage sur les `[n]` — vivent hors des `.vue` précisément pour être testés
+unitairement** : c'est la réponse de ce projet à ADR-0016, qui renonce aux tests de rendu.
+
+**`sse.js` existe pour deux pièges du fil**, tous deux du ressort de
+`SseEmitter.SseEventBuilderImpl`. Un fragment qui porte un saut de ligne est découpé en
+plusieurs lignes `data:` — `writeStringData` appelle `appendEscaped(content, "\ndata:")` —
+et le lecteur les recolle avec un `\n`, sans quoi une réponse multi-ligne arriverait en
+morceaux. Et Spring écrit `data:` **sans espace à lui** : le client ne retire donc pas
+l'espace de tête que la spécification SSE dit de retirer, ce qui souderait le dernier mot
+d'un fragment sur le premier du suivant.
+
+L'indicateur d'attente n'est pas décoratif : le flux reste muet jusqu'à la première citation
+valide, et une réponse conversationnelle arrive d'un bloc à la fin, donc c'est le seul retour
+visible pendant plusieurs dizaines de secondes. Quitter l'écran annule la requête, et c'est
+cette annulation qui arrête la génération côté serveur — avec la réserve déjà écrite plus
+haut : l'abandon n'atteint le serveur qu'à son **envoi suivant**, donc il peut mettre autant
+de temps à mordre tant que le tampon de citation est fermé.
+
+Enfin, « base interrogeable » se juge sur les documents `READY`, pas sur leur nombre : un
+document extrait mais pas encore indexé n'est pas cherchable, et c'est ce qui empêche
+l'invitation à déposer de mentir sur une base pleine de fichiers en attente.
 
 ### Les deux bus (`shared/bus`)
 
