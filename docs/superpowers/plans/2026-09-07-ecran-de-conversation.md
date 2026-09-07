@@ -997,31 +997,35 @@ async function ask() {
     failure: '',
   }
   exchanges.value.push(exchange)
+  // `push` stores the raw object: Vue only wraps an element in a proxy when the array is
+  // read. Mutating the reference we just pushed would never reach the screen, so the
+  // streaming writes below go through the proxy the array hands back.
+  const streamed = exchanges.value[exchanges.value.length - 1]
   await scrollToTheEnd()
 
   controller = new AbortController()
   try {
     await askAgent(auth.token, asked, {
       onToken: (fragment) => {
-        exchange.text += fragment
+        streamed.text += fragment
       },
       onSources: (sources) => {
-        exchange.sources = sources
+        streamed.sources = sources
       },
       signal: controller.signal,
     })
-    exchange.state = 'complete'
+    streamed.state = 'complete'
   } catch (error) {
-    exchange.state = 'failed'
+    streamed.state = 'failed'
     if (error.name === 'AbortError') {
-      exchange.failure = 'Réponse interrompue.'
+      streamed.failure = 'Réponse interrompue.'
     } else if (await handle(error)) {
       return
     } else if (error instanceof ValidationError) {
-      exchange.failure = error.errors.question ?? error.message
+      streamed.failure = error.errors.question ?? error.message
     } else {
       // The message comes from the server and is displayable as is.
-      exchange.failure = error.message
+      streamed.failure = error.message
     }
   } finally {
     controller = null
