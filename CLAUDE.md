@@ -272,6 +272,7 @@ xyz.sterenn.secondbrain
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
 │   │   │                    InvalidQuestionException, LlmUnavailableException,
+│   │   │                    MissingDocumentContentException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
@@ -285,7 +286,8 @@ xyz.sterenn.secondbrain
 │   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
 │   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
 │   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
-│   │                        + TextExtractionView, SearchChunks + ChunkMatchView
+│   │                        + TextExtractionView, SearchChunks + ChunkMatchView,
+│   │                        FindDocumentContent + DocumentContentView
 │   └── infrastructure/
 │       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
 │       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
@@ -506,6 +508,22 @@ route `/extraction` à part : celle-là aurait rendu `404` sur un document simpl
 d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le document
 d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
 rendant un `Optional` — une query ne lève pas.
+
+`GET /api/documents/{id}/content` rend le fichier **tel qu'il a été déposé**, sous son nom
+d'origine — `Content-Disposition: attachment`, nom encodé en RFC 5987 parce qu'un accent
+dans un en-tête HTTP sans encodage est un octet non spécifié. Le `Content-Type` vient de
+`DocumentFormat.mediaType()` : le type MIME est une propriété du format, au même titre que
+son extension, et non le `Content-Type` du multipart, qui n'a jamais été stocké. La route ne
+regarde **jamais le statut** : un document dont l'extraction a échoué n'a plus que son
+original, c'est précisément ce qu'on vient y chercher.
+
+Deux absences, deux messages, un seul code. Le document inconnu rend le `404` habituel ; un
+document bien présent dont l'objet a disparu du stockage rend `404 {"message": "L'original
+de ce document n'est plus disponible."}` — dire « document introuvable » mentirait, l'écran
+le montre. Et cette seconde absence est la seule query du contexte qui **lève** : une ligne
+`knowledge_documents` sans son objet n'est pas un résultat vide, c'est une rupture
+d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement, décision 6).
+Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
 
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
 les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
