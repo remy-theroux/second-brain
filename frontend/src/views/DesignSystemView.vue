@@ -14,6 +14,8 @@ import { useConfirm } from 'primevue/useconfirm'
 import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
+import AnswerText from '@/components/AnswerText.vue'
+import AnswerSources from '@/components/AnswerSources.vue'
 
 // Static catalogue: everything that is shared — tokens, project components, PrimeVue
 // components as we use them — in each of its states. No store, no network call: the page
@@ -76,6 +78,27 @@ const DOCUMENTS = [
     createdAt: '23 août 2026, 11:05',
   },
 ]
+
+const ANSWER_SOURCES = [
+  {
+    number: 1,
+    documentId: 'doc-1',
+    filename: 'rapport.pdf',
+    position: 3,
+    heading: 'Rétractation',
+    text: 'Le délai de rétractation est de quatorze jours à compter de la réception.',
+  },
+  {
+    number: 2,
+    documentId: 'doc-2',
+    filename: 'conditions-generales.md',
+    position: 0,
+    heading: 'Remboursement',
+    text: 'Le remboursement intervient au plus tard trente jours après le retour.',
+  },
+]
+
+const openedSources = ref([1])
 
 const confirm = useConfirm()
 
@@ -364,6 +387,35 @@ onMounted(() => {
         <Column header="Statut" />
         <Column header="Déposé le" />
       </DataTable>
+    </section>
+
+    <section>
+      <h2>Réponse de l'agent — AnswerText</h2>
+      <p class="muted">
+        Les <code>[n]</code> dont la source est connue deviennent cliquables ; les autres restent du
+        texte. Pendant que la réponse s'écrit, aucune source n'est encore arrivée : c'est la
+        deuxième forme qu'on voit.
+      </p>
+      <div class="stack">
+        <AnswerText
+          text="Le délai de rétractation est de quatorze jours [1], et le remboursement intervient sous trente jours [2]. La note [7] du document n'est pas une source."
+          :sources="ANSWER_SOURCES"
+        />
+        <AnswerText text="Le délai de rétractation est de quatorze jours [1]." :sources="[]" />
+      </div>
+    </section>
+
+    <section>
+      <h2>Sources d'une réponse — AnswerSources</h2>
+      <p class="muted">
+        Une entrée par source citée, dépliable. Suivre un <code>[n]</code> dans le texte ouvre
+        l'entrée correspondante : l'état est tenu par l'écran, pas par le composant.
+      </p>
+      <AnswerSources
+        :sources="ANSWER_SOURCES"
+        :opened="openedSources"
+        @update:opened="openedSources = $event"
+      />
     </section>
   </main>
 </template>
