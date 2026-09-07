@@ -21,8 +21,8 @@ function toggle(number) {
 </script>
 
 <template>
-  <section v-if="sources.length" class="answer-sources">
-    <h2 class="answer-sources-title">Sources</h2>
+  <section v-if="sources.length" class="answer-sources" aria-label="Sources">
+    <p class="answer-sources-title">Sources</p>
 
     <article v-for="source in sources" :key="source.number" class="answer-source">
       <button

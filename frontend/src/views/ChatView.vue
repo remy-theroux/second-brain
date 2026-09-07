@@ -71,7 +71,7 @@ async function ask() {
   // `push` stores the raw object: Vue only wraps an element in a proxy when the array is
   // read. Mutating the reference we just pushed would never reach the screen, so the
   // streaming writes below go through the proxy the array hands back.
-  const streamed = exchanges.value[exchanges.value.length - 1]
+  const streamed = exchanges.value.at(-1)
   await scrollToTheEnd()
 
   controller = new AbortController()
@@ -206,6 +206,8 @@ onMounted(checkTheBase)
 
 .thread {
   flex: 1;
+  /* Without it a flex item never shrinks below its content, so the overflow never engages. */
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

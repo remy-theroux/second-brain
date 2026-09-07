@@ -2,9 +2,9 @@
 // chat route is a POST, and EventSource only ever does GET.
 
 /**
- * Yields one `{ event, data }` per frame, in order. `data` is the payload verbatim: several
- * `data:` lines are rejoined with a newline, which is how the server sends a multi-line
- * answer.
+ * Yields one `{ event, data }` per frame, in order. `data` is the payload verbatim: Spring's
+ * `SseEmitter.SseEventBuilderImpl` splits a multi-line fragment across several `data:` lines,
+ * which are rejoined here with a newline.
  */
 export async function* readServerSentEvents(body) {
   const reader = body.getReader()
@@ -45,9 +45,9 @@ function parse(frame) {
     if (line.startsWith('event:')) {
       event = line.slice('event:'.length)
     } else if (line.startsWith('data:')) {
-      // No leading space is stripped, contrary to the specification: the server writes
-      // `data:` without one, so a space seen here opens the fragment. Removing it would
-      // weld the last word of a fragment onto the first of the next.
+      // `SseEmitter.SseEventBuilderImpl` writes `data:` without a trailing space, so the one
+      // the specification says to strip belongs to the fragment: removing it would weld the
+      // last word of a fragment onto the first of the next.
       data.push(line.slice('data:'.length))
     }
   }

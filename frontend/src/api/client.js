@@ -231,7 +231,8 @@ export async function askAgent(token, question, { onToken, onSources, signal }) 
     }
   }
 
-  if (verdict === null) {
+  // Loose on purpose: a `done` payload carrying no `verdict` field leaves it undefined.
+  if (verdict == null) {
     throw new Error("La conversation s'est interrompue avant la fin de la réponse.")
   }
   return verdict
