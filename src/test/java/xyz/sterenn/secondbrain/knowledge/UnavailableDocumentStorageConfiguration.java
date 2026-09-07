@@ -9,10 +9,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentStorageUnavail
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 
 /**
- * A double that never succeeds: every call throws {@link DocumentStorageUnavailableException}, as
- * if the object storage never answered. It always fails, so unlike {@link
- * RecordingEmbeddingPortConfiguration} it needs no toggle, no recording and no cleanup — which is
- * exactly why it lives in a class of its own rather than the shared fixtures.
+ * Every call throws {@link DocumentStorageUnavailableException}: never import this in a test
+ * that needs storage to work.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class UnavailableDocumentStorageConfiguration {

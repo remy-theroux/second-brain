@@ -158,7 +158,8 @@ class FindDocumentContentControllerTest {
 
         mockMvc.perform(get("/api/documents/" + bobsDocument.getId() + "/content")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Ce document est introuvable dans votre base de connaissance."));
     }
 
     @Test

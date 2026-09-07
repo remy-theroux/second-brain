@@ -17,8 +17,9 @@ import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 
 // Static catalogue: everything that is shared — tokens, project components, PrimeVue
-// components as we use them — in each of its states. No store, no network call: the page
-// is looked at, it does nothing. A component that does not appear here is not shared.
+// components as we use them — in each of its states. Mostly no store, no network call —
+// the download button below is the one exception, and it really fetches. A component that
+// does not appear here is not shared.
 
 const PROJECT_TOKENS = [
   '--sb-space-xs',

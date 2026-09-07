@@ -521,7 +521,8 @@ original, c'est précisément ce qu'on vient y chercher.
 Deux absences, deux messages, un seul code. Le document inconnu rend le `404` habituel ; un
 document bien présent dont l'objet a disparu du stockage rend `404 {"message": "L'original
 de ce document n'est plus disponible."}` — dire « document introuvable » mentirait, l'écran
-le montre. Et cette seconde absence est la seule query du contexte qui **lève** : une ligne
+le montre. Et cette seconde absence est la seule query du contexte qui **lève là où un
+`Optional` vide serait attendu** : une ligne
 `knowledge_documents` sans son objet n'est pas un résultat vide, c'est une rupture
 d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement, décision 6).
 Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
@@ -552,8 +553,8 @@ voyageant en en-tête, un `<a href>` ne rapporterait qu'un `401`, et le fichier 
 `fetchDocumentContent` puis remis au navigateur par une ancre `download` fabriquée, cliquée et
 révoquée. Le composant porte l'appel et son état occupé mais **pas la déconnexion** : il émet
 son erreur, et chaque vue la passe à son propre `handle`. Le nom du fichier lui est passé en
-prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent du même
-`GET /api/documents`, dans la même page.
+prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent de la réponse que
+l'écran affiche déjà.
 
 ### Le flux de l'extraction du texte
 
