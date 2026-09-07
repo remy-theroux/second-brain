@@ -333,7 +333,8 @@ frontend/                    application Vue 3, hors build Gradle, construite et
 ├── src/stores/              état partagé (pinia) : jeton, expiration, profil
 ├── src/router/              routes et garde d'authentification
 ├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
-│                            DocumentStatusTag (libellé et sévérité d'un statut)
+│                            DocumentStatusTag (libellé et sévérité d'un statut),
+│                            DownloadDocumentButton (le geste de retélécharger un original)
 └── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
                              DocumentsView, DocumentDetailView,
                              DesignSystemView — catalogue, développement
@@ -545,6 +546,14 @@ survit à un F5, ce qu'une modale sur la liste n'aurait pas offert. C'est `docum
 typologie, qui décide du rendu : une typologie sans affichage le dit plutôt que de rendre une
 page vide. `DocumentStatusTag` porte le libellé et la sévérité d'un statut pour les deux
 écrans — le motif était copié, il est devenu un composant.
+
+Les deux écrans portent le même bouton de téléchargement, `DownloadDocumentButton` : le jeton
+voyageant en en-tête, un `<a href>` ne rapporterait qu'un `401`, et le fichier est donc lu par
+`fetchDocumentContent` puis remis au navigateur par une ancre `download` fabriquée, cliquée et
+révoquée. Le composant porte l'appel et son état occupé mais **pas la déconnexion** : il émet
+son erreur, et chaque vue la passe à son propre `handle`. Le nom du fichier lui est passé en
+prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent du même
+`GET /api/documents`, dans la même page.
 
 ### Le flux de l'extraction du texte
 
