@@ -17,7 +17,7 @@ public final class AccountFixture {
             String email,
             String rawPassword) {
         commandBus.dispatch(new RegisterUser(email, rawPassword));
-        return recordingNotificationSender.derniere().accountId();
+        return recordingNotificationSender.last().accountId();
     }
 
     public static UUID registerVerified(
@@ -26,7 +26,7 @@ public final class AccountFixture {
             String email,
             String rawPassword) {
         commandBus.dispatch(new RegisterUser(email, rawPassword));
-        VerificationNotification notification = recordingNotificationSender.derniere();
+        VerificationNotification notification = recordingNotificationSender.last();
         commandBus.dispatch(new VerifyAccount(
                 notification.accountId().toString(), notification.rawToken().value()));
         return notification.accountId();

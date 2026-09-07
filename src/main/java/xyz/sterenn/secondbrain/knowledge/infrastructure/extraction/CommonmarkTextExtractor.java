@@ -18,8 +18,8 @@ public class CommonmarkTextExtractor implements DocumentTextExtractor {
 
     private final Parser parser = Parser.builder().build();
 
-    // SEPARATE_BLOCKS conserve la double ligne entre deux blocs, que le découpage cherche ;
-    // le rendu texte, lui, laisse tomber le balisage.
+    // SEPARATE_BLOCKS keeps the blank line between two blocks, which the chunker looks for;
+    // the text rendering itself drops the markup.
     private final TextContentRenderer renderer = TextContentRenderer.builder()
             .lineBreakRendering(LineBreakRendering.SEPARATE_BLOCKS)
             .build();
@@ -31,25 +31,25 @@ public class CommonmarkTextExtractor implements DocumentTextExtractor {
 
     @Override
     public ExtractedText extract(byte[] content) {
-        // Aucun try : le parseur CommonMark n'échoue jamais, tout entrant est du Markdown.
+        // No try: the CommonMark parser never fails, any input is Markdown.
         Node document = parser.parse(TextDecoding.decode(content));
 
         List<Section> sections = new ArrayList<>();
-        String titre = "";
-        int niveau = 0;
-        StringBuilder corps = new StringBuilder();
+        String heading = "";
+        int level = 0;
+        StringBuilder body = new StringBuilder();
 
-        for (Node noeud = document.getFirstChild(); noeud != null; noeud = noeud.getNext()) {
-            if (noeud instanceof Heading titreMarkdown) {
-                sections.add(new Section(titre, niveau, corps.toString()));
-                titre = renderer.render(titreMarkdown);
-                niveau = Math.min(titreMarkdown.getLevel(), TextBlock.MAX_HEADING_LEVEL);
-                corps.setLength(0);
+        for (Node node = document.getFirstChild(); node != null; node = node.getNext()) {
+            if (node instanceof Heading markdownHeading) {
+                sections.add(new Section(heading, level, body.toString()));
+                heading = renderer.render(markdownHeading);
+                level = Math.min(markdownHeading.getLevel(), TextBlock.MAX_HEADING_LEVEL);
+                body.setLength(0);
             } else {
-                corps.append(renderer.render(noeud)).append("\n\n");
+                body.append(renderer.render(node)).append("\n\n");
             }
         }
-        sections.add(new Section(titre, niveau, corps.toString()));
+        sections.add(new Section(heading, level, body.toString()));
         return Section.assemble(sections);
     }
 }

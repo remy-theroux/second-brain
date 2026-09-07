@@ -11,31 +11,31 @@ class BCryptTokenHasherTest {
     private final TokenHasher hasher = new BCryptTokenHasher();
 
     @Test
-    void ne_rend_jamais_le_jeton_en_clair() {
-        String jeton = RawVerificationToken.generate().value();
+    void never_returns_the_token_in_clear_text() {
+        String token = RawVerificationToken.generate().value();
 
-        assertThat(hasher.hash(jeton)).doesNotContain(jeton);
+        assertThat(hasher.hash(token)).doesNotContain(token);
     }
 
     @Test
-    void reconnait_le_jeton_d_origine() {
-        String jeton = RawVerificationToken.generate().value();
+    void recognises_the_original_token() {
+        String token = RawVerificationToken.generate().value();
 
-        assertThat(hasher.matches(jeton, hasher.hash(jeton))).isTrue();
+        assertThat(hasher.matches(token, hasher.hash(token))).isTrue();
     }
 
     @Test
-    void refuse_un_autre_jeton() {
-        String empreinte = hasher.hash(RawVerificationToken.generate().value());
+    void rejects_another_token() {
+        String hash = hasher.hash(RawVerificationToken.generate().value());
 
-        assertThat(hasher.matches(RawVerificationToken.generate().value(), empreinte))
+        assertThat(hasher.matches(RawVerificationToken.generate().value(), hash))
                 .isFalse();
     }
 
     @Test
-    void produit_une_empreinte_differente_a_chaque_appel_pour_un_meme_jeton() {
-        String jeton = RawVerificationToken.generate().value();
+    void produces_a_different_hash_on_each_call_for_the_same_token() {
+        String token = RawVerificationToken.generate().value();
 
-        assertThat(hasher.hash(jeton)).isNotEqualTo(hasher.hash(jeton));
+        assertThat(hasher.hash(token)).isNotEqualTo(hasher.hash(token));
     }
 }

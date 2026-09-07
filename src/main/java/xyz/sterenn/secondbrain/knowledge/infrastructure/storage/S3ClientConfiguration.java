@@ -26,19 +26,19 @@ class S3ClientConfiguration {
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .forcePathStyle(pathStyle)
-                // Nommé plutôt que découvert par ServiceLoader : c'est le seul client HTTP du
-                // classpath, et l'écrire ici fait échouer la compilation plutôt que le premier
-                // dépôt le jour où build.gradle.kts cesserait de le déclarer.
+                // Named rather than discovered by ServiceLoader: it is the only HTTP client on
+                // the classpath, and writing it here breaks the compilation rather than the first
+                // upload the day build.gradle.kts stops declaring it.
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
-                // Bornent un stockage qui accepte le TCP puis ne répond plus : sans elles, les
-                // reprises du SDK tiennent près de deux minutes, et donc deux minutes de
-                // connexion PostgreSQL, `store` étant appelé après le saveAndFlush.
+                // These bound a storage that accepts TCP then stops answering: without them the
+                // SDK retries last nearly two minutes, hence two minutes of PostgreSQL
+                // connection, `store` being called after the saveAndFlush.
                 .overrideConfiguration(configuration -> configuration
                         .apiCallAttemptTimeout(Duration.ofSeconds(30))
                         .apiCallTimeout(Duration.ofSeconds(90)))
-                // Garage v2.3.0 refuse le CRC32 en remorque que le SDK envoie depuis la 2.30, par
-                // un « Bad request: Invalid payload signature » qui ne nomme ni l'un ni l'autre.
-                // Sans encodage par blocs le checksum repart en en-tête simple, donc conservé.
+                // Garage v2.3.0 rejects the trailing CRC32 the SDK sends since 2.30, with a
+                // "Bad request: Invalid payload signature" that names neither of them. Without
+                // chunked encoding the checksum goes back as a plain header, so it is kept.
                 .serviceConfiguration(configuration -> configuration.chunkedEncodingEnabled(false))
                 .build();
     }

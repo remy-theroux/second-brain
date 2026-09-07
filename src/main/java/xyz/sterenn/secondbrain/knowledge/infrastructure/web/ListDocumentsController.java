@@ -29,7 +29,7 @@ public class ListDocumentsController {
     }
 
     @ExceptionHandler(JwtSubject.UnreadableSubjectException.class)
-    public ResponseEntity<Object> sujetIllisible() {
+    public ResponseEntity<Object> unreadableSubject() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 }

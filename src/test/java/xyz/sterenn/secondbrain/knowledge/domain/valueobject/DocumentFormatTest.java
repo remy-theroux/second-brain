@@ -17,22 +17,22 @@ class DocumentFormatTest {
         "brouillon.txt, TEXT",
         "contrat.docx, DOCX",
     })
-    void reconnait_les_formats_acceptes(String nomDeFichier, DocumentFormat attendu) {
-        assertThat(DocumentFormat.fromFilename(nomDeFichier)).isEqualTo(attendu);
+    void recognises_the_accepted_formats(String filename, DocumentFormat expected) {
+        assertThat(DocumentFormat.fromFilename(filename)).isEqualTo(expected);
     }
 
     @Test
-    void ignore_la_casse_de_l_extension() {
+    void ignores_the_case_of_the_extension() {
         assertThat(DocumentFormat.fromFilename("RAPPORT.PDF")).isEqualTo(DocumentFormat.PDF);
     }
 
     @Test
-    void reconnait_un_nom_comportant_plusieurs_points() {
+    void recognises_a_name_carrying_several_dots() {
         assertThat(DocumentFormat.fromFilename("compte-rendu.v2.final.docx")).isEqualTo(DocumentFormat.DOCX);
     }
 
     @Test
-    void refuse_un_executable_en_enoncant_les_formats_acceptes() {
+    void rejects_an_executable_while_listing_the_accepted_formats() {
         assertThatThrownBy(() -> DocumentFormat.fromFilename("virus.exe"))
                 .isInstanceOf(UnsupportedDocumentFormatException.class)
                 .hasMessageContaining(".pdf")
@@ -42,31 +42,31 @@ class DocumentFormatTest {
     }
 
     @Test
-    void refuse_un_nom_sans_extension() {
+    void rejects_a_name_without_an_extension() {
         assertThatThrownBy(() -> DocumentFormat.fromFilename("LISEZMOI"))
                 .isInstanceOf(UnsupportedDocumentFormatException.class);
     }
 
     @Test
-    void refuse_un_nom_absent() {
+    void rejects_a_missing_name() {
         assertThatThrownBy(() -> DocumentFormat.fromFilename(null))
                 .isInstanceOf(UnsupportedDocumentFormatException.class);
     }
 
     @Test
-    void refuse_une_extension_qui_n_en_est_qu_un_fragment() {
+    void rejects_an_extension_that_is_only_a_fragment_of_one() {
         assertThatThrownBy(() -> DocumentFormat.fromFilename("rapport.pdfx"))
                 .isInstanceOf(UnsupportedDocumentFormatException.class);
     }
 
     @Test
-    void chaque_format_annonce_sa_typologie() {
+    void every_format_announces_its_type() {
         assertThat(DocumentFormat.values())
                 .allSatisfy(format -> assertThat(format.type()).isNotNull());
     }
 
     @Test
-    void les_quatre_formats_acceptes_se_decoupent_tous_en_texte() {
+    void the_four_accepted_formats_all_split_as_text() {
         assertThat(DocumentFormat.of(DocumentType.TEXTUAL))
                 .containsExactly(DocumentFormat.PDF, DocumentFormat.MARKDOWN, DocumentFormat.TEXT, DocumentFormat.DOCX);
     }

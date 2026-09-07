@@ -49,30 +49,30 @@ class ExtractDocumentTextTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     @AfterEach
-    void nettoieLesOriginaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void cleansTheOriginals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void range_le_texte_extrait_et_marque_le_document_extrait() {
-        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
+    void stores_the_extracted_text_and_marks_the_document_extracted() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
-                .satisfies(texte -> assertThat(texte.getBlocks())
+                .satisfies(text -> assertThat(text.getBlocks())
                         .extracting(TextBlock::getHeading)
                         .contains("Journal de bord"));
-        assertThat(relis(document).getStatus()).isEqualTo(DocumentStatus.EXTRACTED);
+        assertThat(reload(document).getStatus()).isEqualTo(DocumentStatus.EXTRACTED);
     }
 
     @Test
-    void une_seconde_extraction_remplace_la_premiere_sans_la_doubler() {
-        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
+    void a_second_extraction_replaces_the_first_without_duplicating_it() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
@@ -81,47 +81,47 @@ class ExtractDocumentTextTest {
     }
 
     @Test
-    void choisit_l_extracteur_du_format_du_document() {
-        Document document = unDocumentDepose("notes.txt", Fixtures.BRUT_TXT);
+    void picks_the_extractor_for_the_document_format() {
+        Document document = anUploadedDocument("notes.txt", Fixtures.RAW_TXT);
 
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
-                .satisfies(texte -> assertThat(texte.getBlocks()).hasSize(1));
+                .satisfies(text -> assertThat(text.getBlocks()).hasSize(1));
     }
 
     @Test
-    void refuse_un_document_qui_n_appartient_pas_au_demandeur() {
-        Document document = unDocumentDepose("notes.txt", Fixtures.BRUT_TXT);
+    void rejects_a_document_that_does_not_belong_to_the_requester() {
+        Document document = anUploadedDocument("notes.txt", Fixtures.RAW_TXT);
 
-        // Dernier appel du test : le refus marque la transaction englobante rollback-only.
+        // Last call of the test: the refusal marks the enclosing transaction rollback-only.
         assertThatExceptionOfType(DocumentNotFoundException.class)
                 .isThrownBy(() -> commandBus.dispatch(new ExtractDocumentText(document.getId(), UUID.randomUUID())));
     }
 
     @Test
-    void laisse_remonter_le_refus_d_un_document_inexploitable() {
-        Document document = unDocumentDepose("scan.pdf", Fixtures.NUMERISE_PDF);
+    void lets_the_refusal_of_an_unusable_document_propagate() {
+        Document document = anUploadedDocument("scan.pdf", Fixtures.SCANNED_PDF);
 
-        // Dernier appel du test, même raison.
+        // Last call of the test, same reason.
         assertThatExceptionOfType(UnextractableDocumentException.class)
                 .isThrownBy(
                         () -> commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId())));
     }
 
-    private Document unDocumentDepose(String filename, String fixture) {
-        UUID proprietaire = userRepository
+    private Document anUploadedDocument(String filename, String fixture) {
+        UUID owner = userRepository
                 .save(User.register(new Email(UUID.randomUUID() + "@exemple.fr"), "empreinte"))
                 .getId();
-        byte[] contenu = Fixtures.lire(fixture);
-        commandBus.dispatch(new UploadDocument(proprietaire, filename, contenu));
+        byte[] content = Fixtures.read(fixture);
+        commandBus.dispatch(new UploadDocument(owner, filename, content));
         return documentRepository
-                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .findByOwnerIdAndChecksum(owner, Checksum.of(content))
                 .orElseThrow();
     }
 
-    private Document relis(Document document) {
+    private Document reload(Document document) {
         return documentRepository
                 .findByIdAndOwnerId(document.getId(), document.getOwnerId())
                 .orElseThrow();

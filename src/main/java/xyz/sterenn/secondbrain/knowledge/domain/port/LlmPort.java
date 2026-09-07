@@ -5,14 +5,14 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmRequest;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn;
 
 /**
- * Port sortant vers le service de génération : un tour, pas une conversation. L'appel bloque
- * jusqu'à la fin du tour ; les fragments de texte sont remis à {@code onToken} au fil de leur
- * production. Une exception levée par {@code onToken} interrompt le tour — c'est ainsi que la
- * déconnexion d'un client arrête la génération.
+ * Outbound port to the generation service: one turn, not a conversation. The call blocks until
+ * the end of the turn; text fragments are handed to {@code onToken} as they are produced. An
+ * exception thrown by {@code onToken} interrupts the turn — this is how a client disconnect
+ * stops generation.
  *
- * <p>Tout le texte d'assistant du tour doit passer par {@code onToken} ; {@link
- * xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn#text()} n'en est qu'une
- * récapitulation, jamais l'unique porteur.
+ * <p>All of the turn's assistant text must go through {@code onToken}; {@link
+ * xyz.sterenn.secondbrain.knowledge.domain.valueobject.LlmTurn#text()} is only a recap, never
+ * the sole carrier.
  */
 public interface LlmPort {
 

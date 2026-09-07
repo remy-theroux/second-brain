@@ -7,8 +7,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 
 /**
- * Port sortant vers le stockage des documents : toute lecture porte le propriétaire, et la
- * liste vient du plus récent au plus ancien.
+ * Outbound port to document storage: every read carries the owner, and the list comes newest
+ * first.
  */
 public interface DocumentRepository {
 

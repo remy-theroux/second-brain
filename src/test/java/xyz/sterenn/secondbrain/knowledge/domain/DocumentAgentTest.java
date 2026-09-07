@@ -12,41 +12,41 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 class DocumentAgentTest {
 
     @Test
-    void declare_un_outil_de_recherche_a_un_seul_parametre() {
-        assertThat(DocumentAgent.OUTILS).hasSize(1);
-        ToolSpecification recherche = DocumentAgent.OUTILS.getFirst();
+    void declares_a_search_tool_with_a_single_parameter() {
+        assertThat(DocumentAgent.TOOLS).hasSize(1);
+        ToolSpecification search = DocumentAgent.TOOLS.getFirst();
 
-        assertThat(recherche.name()).isEqualTo(DocumentAgent.OUTIL_RECHERCHE);
-        assertThat(recherche.parameters()).hasSize(1);
-        assertThat(recherche.parameters().getFirst().name()).isEqualTo(DocumentAgent.PARAMETRE_QUESTION);
-        assertThat(recherche.parameters().getFirst().required()).isTrue();
+        assertThat(search.name()).isEqualTo(DocumentAgent.SEARCH_TOOL);
+        assertThat(search.parameters()).hasSize(1);
+        assertThat(search.parameters().getFirst().name()).isEqualTo(DocumentAgent.QUESTION_PARAMETER);
+        assertThat(search.parameters().getFirst().required()).isTrue();
     }
 
     @Test
-    void borne_la_boucle_par_quatre_tours_et_deux_minutes() {
+    void bounds_the_loop_by_four_turns_and_two_minutes() {
         assertThat(DocumentAgent.BUDGET.maxTurns()).isEqualTo(4);
         assertThat(DocumentAgent.BUDGET.limit()).isEqualTo(Duration.ofSeconds(120));
     }
 
     @Test
-    void garde_une_temperature_basse_contre_l_invention() {
+    void keeps_a_low_temperature_against_invention() {
         assertThat(DocumentAgent.TEMPERATURE).isLessThanOrEqualTo(0.3);
     }
 
     @Test
-    void refuse_un_budget_sans_aucun_tour() {
+    void rejects_a_budget_without_any_turn() {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> new ExecutionBudget(0, Duration.ofSeconds(1)));
     }
 
     @Test
-    void refuse_un_budget_de_temps_nul_ou_negatif() {
+    void rejects_a_zero_or_negative_time_budget() {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> new ExecutionBudget(4, Duration.ZERO));
     }
 
     @Test
-    void refuse_un_message_de_refus_vide() {
+    void rejects_a_blank_refusal_message() {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> new AgentRefusals("  ", "hors périmètre"));
     }

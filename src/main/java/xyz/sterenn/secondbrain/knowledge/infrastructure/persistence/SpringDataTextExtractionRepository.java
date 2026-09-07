@@ -10,9 +10,9 @@ interface SpringDataTextExtractionRepository extends JpaRepository<TextExtractio
     Optional<TextExtraction> findByDocumentId(UUID documentId);
 
     /**
-     * Suppression dérivée, et non un {@code @Modifying @Query} : elle charge l'entité avant
-     * de la retirer, ce qui laisse Hibernate effacer aussi les blocs de la collection. Une
-     * suppression en masse les laisserait orphelins, et la clé étrangère lèverait.
+     * A derived delete, not a {@code @Modifying @Query}: it loads the entity before removing it,
+     * which lets Hibernate also delete the blocks of the collection. A bulk delete would leave
+     * them orphaned, and the foreign key would raise.
      */
     void deleteByDocumentId(UUID documentId);
 }

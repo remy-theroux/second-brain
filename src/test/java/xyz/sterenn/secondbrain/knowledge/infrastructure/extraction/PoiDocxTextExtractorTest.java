@@ -21,82 +21,82 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 class PoiDocxTextExtractorTest {
 
-    private static final String CORPS =
+    private static final String BODY =
             "Un corps de section assez long pour franchir le plancher de cinquante caractères.";
 
-    private final PoiDocxTextExtractor extracteur = new PoiDocxTextExtractor();
+    private final PoiDocxTextExtractor extractor = new PoiDocxTextExtractor();
 
     @Test
-    void sait_lire_le_format_docx() {
-        assertThat(extracteur.format()).isEqualTo(DocumentFormat.DOCX);
+    void knows_how_to_read_the_docx_format() {
+        assertThat(extractor.format()).isEqualTo(DocumentFormat.DOCX);
     }
 
     @Test
-    void rattache_chaque_bloc_au_titre_de_sa_section() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("titres.docx"));
+    void attaches_each_block_to_the_heading_of_its_section() {
+        ExtractedText text = extractor.extract(Fixtures.read("titres.docx"));
 
-        assertThat(texte.blocks())
+        assertThat(text.blocks())
                 .extracting(TextBlock::getHeading)
                 .containsExactly(
                         "Rapport annuel", "Première partie", "Un détail de la première partie", "Seconde partie");
-        assertThat(texte.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2, 3, 2);
+        assertThat(text.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2, 3, 2);
     }
 
     @Test
-    void conserve_la_frontiere_entre_deux_paragraphes_d_une_meme_section() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("titres.docx"));
+    void preserves_the_boundary_between_two_paragraphs_of_the_same_section() {
+        ExtractedText text = extractor.extract(Fixtures.read("titres.docx"));
 
-        assertThat(texte.blocks().get(1).getText()).contains("\n\n");
+        assertThat(text.blocks().get(1).getText()).contains("\n\n");
     }
 
     @Test
-    void reconnait_un_style_de_titre_nomme_en_francais() throws IOException {
-        // Un Word français donne parfois un identifiant de style opaque et ne nomme le style
-        // que dans <w:name> : c'est le repli que ce test exerce.
-        byte[] docx = unDocxAuStylePersonnalise("Style42", "Titre 1", "Chapitre premier", CORPS);
+    void recognises_a_heading_style_named_in_french() throws IOException {
+        // A French Word sometimes gives an opaque style id and only names the style in
+        // <w:name>: that is the fallback this test exercises.
+        byte[] docx = aDocxWithACustomStyle("Style42", "Titre 1", "Chapitre premier", BODY);
 
-        assertThat(extracteur.extract(docx).blocks()).singleElement().satisfies(bloc -> {
-            assertThat(bloc.getHeading()).isEqualTo("Chapitre premier");
-            assertThat(bloc.getHeadingLevel()).isEqualTo(1);
+        assertThat(extractor.extract(docx).blocks()).singleElement().satisfies(block -> {
+            assertThat(block.getHeading()).isEqualTo("Chapitre premier");
+            assertThat(block.getHeadingLevel()).isEqualTo(1);
         });
     }
 
     @Test
-    void refuse_un_fichier_qui_n_est_pas_un_docx() {
+    void rejects_a_file_that_is_not_a_docx() {
         assertThatExceptionOfType(UnreadableDocumentException.class)
-                .isThrownBy(() -> extracteur.extract("Ceci n'est pas un document Word.".getBytes(UTF_8)))
+                .isThrownBy(() -> extractor.extract("Ceci n'est pas un document Word.".getBytes(UTF_8)))
                 .withMessageContaining("n'a pas pu être lu");
     }
 
     @Test
-    void refuse_un_docx_qui_ne_dit_rien() throws IOException {
-        try (XWPFDocument vide = new XWPFDocument();
-                ByteArrayOutputStream sortie = new ByteArrayOutputStream()) {
-            vide.createParagraph().createRun().setText("   ");
-            vide.write(sortie);
+    void rejects_a_docx_that_says_nothing() throws IOException {
+        try (XWPFDocument empty = new XWPFDocument();
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            empty.createParagraph().createRun().setText("   ");
+            empty.write(output);
 
             assertThatExceptionOfType(UnextractableDocumentException.class)
-                    .isThrownBy(() -> extracteur.extract(sortie.toByteArray()));
+                    .isThrownBy(() -> extractor.extract(output.toByteArray()));
         }
     }
 
-    private static byte[] unDocxAuStylePersonnalise(String identifiant, String nomDuStyle, String titre, String corps)
+    private static byte[] aDocxWithACustomStyle(String styleId, String styleName, String heading, String body)
             throws IOException {
         try (XWPFDocument docx = new XWPFDocument();
-                ByteArrayOutputStream sortie = new ByteArrayOutputStream()) {
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             XWPFStyles styles = docx.createStyles();
             CTStyle definition = CTStyle.Factory.newInstance();
-            definition.setStyleId(identifiant);
-            definition.addNewName().setVal(nomDuStyle);
+            definition.setStyleId(styleId);
+            definition.addNewName().setVal(styleName);
             styles.addStyle(new XWPFStyle(definition));
 
-            XWPFParagraph paragrapheDeTitre = docx.createParagraph();
-            paragrapheDeTitre.setStyle(identifiant);
-            paragrapheDeTitre.createRun().setText(titre);
-            docx.createParagraph().createRun().setText(corps);
+            XWPFParagraph headingParagraph = docx.createParagraph();
+            headingParagraph.setStyle(styleId);
+            headingParagraph.createRun().setText(heading);
+            docx.createParagraph().createRun().setText(body);
 
-            docx.write(sortie);
-            return sortie.toByteArray();
+            docx.write(output);
+            return output.toByteArray();
         }
     }
 }

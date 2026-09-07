@@ -14,13 +14,13 @@ import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 /**
- * {@code org.testcontainers.rabbitmq.RabbitMQContainer} et non
- * {@code org.testcontainers.containers.RabbitMQContainer} : Testcontainers 2 a déplacé la classe,
- * et Spring Boot 4 ne reconnaît l'ancienne que par une fabrique dépréciée.
+ * {@code org.testcontainers.rabbitmq.RabbitMQContainer} and not
+ * {@code org.testcontainers.containers.RabbitMQContainer}: Testcontainers 2 moved the class, and
+ * Spring Boot 4 only recognises the old one through a deprecated factory.
  *
- * <p>Garage n'a pas de {@code @ServiceConnection} — Spring Boot n'en fournit aucun pour S3 —
- * et n'est donc pas optionnel pour autant : le registrar ci-dessous pose les quatre propriétés
- * sans défaut que lisent {@code S3ClientConfiguration} et {@code S3DocumentStorage}.
+ * <p>Garage has no {@code @ServiceConnection} — Spring Boot ships none for S3 — and is not
+ * optional for all that: the registrar below sets the four defaultless properties that
+ * {@code S3ClientConfiguration} and {@code S3DocumentStorage} read.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -34,11 +34,11 @@ public class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     PostgreSQLContainer<?> postgresContainer() {
-        // pgvector/pgvector et non postgres : l'extension `vector` doit être fournie par
-        // l'image pour que la migration puisse l'activer. Version épinglée, comme compose.yaml.
+        // pgvector/pgvector and not postgres: the `vector` extension must be shipped by the
+        // image for the migration to enable it. Version pinned, like compose.yaml.
         return new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:0.8.6-pg17")
-                // L'image dérive de `postgres` mais ne porte pas son nom : sans cette ligne,
-                // Testcontainers refuse de la traiter comme une PostgreSQL.
+                // The image derives from `postgres` but does not bear its name: without this
+                // line, Testcontainers refuses to treat it as a PostgreSQL.
                 .asCompatibleSubstituteFor("postgres"));
     }
 
@@ -50,8 +50,8 @@ public class TestcontainersConfiguration {
 
     @Bean
     GenericContainer<?> garageContainer() {
-        // Le même docker/garage.toml que monte compose.yaml : la pile de développement et
-        // celle des tests ne peuvent pas dériver.
+        // The same docker/garage.toml that compose.yaml mounts: the development stack and the
+        // test one cannot drift apart.
         Path garageConfig = Path.of("docker", "garage.toml").toAbsolutePath();
         if (!Files.exists(garageConfig)) {
             throw new IllegalStateException("docker/garage.toml introuvable au chemin " + garageConfig
@@ -63,26 +63,26 @@ public class TestcontainersConfiguration {
                 .withEnv("GARAGE_DEFAULT_ACCESS_KEY", S3_ACCESS_KEY)
                 .withEnv("GARAGE_DEFAULT_SECRET_KEY", S3_SECRET_KEY)
                 .withEnv("GARAGE_DEFAULT_BUCKET", S3_BUCKET)
-                // Le binaire d'abord : l'image dxflrs/garage n'a pas d'ENTRYPOINT.
+                // The binary first: the dxflrs/garage image has no ENTRYPOINT.
                 .withCommand("/garage", "server", "--single-node", "--default-access-key", "--default-bucket")
-                // withCopyFileToContainer et jamais un bind mount : make check-back pilote le démon
-                // Docker de l'hôte depuis un conteneur, qui n'a pas le chemin à monter.
+                // withCopyFileToContainer and never a bind mount: make check-back drives the host
+                // Docker daemon from a container, which does not have the path to mount.
                 //
-                // /health rend 200 quand le layout de --single-node est appliqué, donc quand la clé
-                // et le bucket existent — pas de course avec le premier PutObject d'un test.
+                // /health returns 200 once the --single-node layout is applied, hence once the key
+                // and the bucket exist — no race with the first PutObject of a test.
                 .waitingFor(Wait.forHttp("/health").forPort(GARAGE_ADMIN_PORT).forStatusCode(200));
     }
 
     @Bean
     DynamicPropertyRegistrar garageProperties(GenericContainer<?> garageContainer) {
-        // En @Bean et c'est la seule voie : sous Spring Boot 4, injecter un
-        // DynamicPropertyRegistry dans une méthode @Bean lève, et @DynamicPropertySource est
-        // statique par classe de test, donc sans effet sur TestSecondBrainApplication.
+        // As a @Bean, and it is the only way: under Spring Boot 4, injecting a
+        // DynamicPropertyRegistry into a @Bean method throws, and @DynamicPropertySource is
+        // static per test class, hence has no effect on TestSecondBrainApplication.
         //
-        // region et path-style ne sont pas posées ici : elles ne dépendent pas du conteneur, et
-        // leurs défauts d'application.yml sont ce que le démarrage du contexte vérifie.
+        // region and path-style are not set here: they do not depend on the container, and their
+        // application.yml defaults are what the context startup checks.
         return registry -> {
-            // Un supplier : le port mappé n'existe qu'une fois le conteneur démarré.
+            // A supplier: the mapped port only exists once the container has started.
             registry.add(
                     "secondbrain.storage.s3.endpoint",
                     () -> "http://" + garageContainer.getHost() + ":" + garageContainer.getMappedPort(GARAGE_S3_PORT));

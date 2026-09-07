@@ -11,7 +11,7 @@ description = "Second Brain"
 
 java {
     toolchain {
-        // Gradle télécharge le JDK 25 automatiquement s'il est absent (auto-provisioning).
+        // Gradle downloads JDK 25 automatically when it is missing (auto-provisioning).
         languageVersion = JavaLanguageVersion.of(25)
     }
 }
@@ -20,7 +20,7 @@ configurations {
     compileOnly {
         extendsFrom(configurations.annotationProcessor.get())
     }
-    // Isole DevTools : présent au runtime en dev, jamais dans le jar de prod.
+    // Isolates DevTools: present at runtime in dev, never in the production jar.
     developmentOnly
 }
 
@@ -30,97 +30,97 @@ repositories {
 
 spotless {
     java {
-        // Palantir et non google-java-format : ce dernier, même en style AOSP, casse les
-        // chaînes fluent en cascades de 8 espaces (`SecurityConfig` en est l'exemple) et
-        // repousse si loin à droite que les commentaires en fin de ligne se retrouvent
-        // découpés en milieu de phrase. Palantir est né de ce reproche : 4 espaces de
-        // continuation, 120 colonnes, et un traitement des builders qui reste lisible.
+        // Palantir and not google-java-format: the latter, even in AOSP style, breaks
+        // fluent chains into cascades of 8 spaces (`SecurityConfig` is the example) and
+        // pushes so far to the right that end-of-line comments end up
+        // cut in mid-sentence. Palantir was born of that complaint: 4 spaces of
+        // continuation, 120 columns, and a treatment of builders that stays readable.
         //
-        // Rien d'autre dans ce bloc : le formateur trie déjà les imports et supprime les
-        // inutilisés, `removeUnusedImports()` ou `trimTrailingWhitespace()` feraient double
-        // emploi.
+        // Nothing else in this block: the formatter already sorts imports and removes the
+        // unused ones, `removeUnusedImports()` or `trimTrailingWhitespace()` would be
+        // redundant.
         palantirJavaFormat(libs.versions.palantirJavaFormat.get())
     }
 }
 
 dependencies {
-    // Web / REST — aucune vue rendue côté serveur : le front Vue est un projet séparé,
-    // et la seule route non-API (GET /verification) répond par une redirection.
+    // Web / REST — no view rendered server-side: the Vue front end is a separate project,
+    // and the only non-API route (GET /verification) answers with a redirection.
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
     // Notifications
     implementation("org.springframework.boot:spring-boot-starter-mail")
 
-    // Événements métier : publication et consommation sur RabbitMQ. Le transport est un
-    // choix de la spec 2026-08-25 (décisions 2 à 5) ; le domaine ne le connaît pas.
+    // Domain events: publication and consumption over RabbitMQ. The transport is a
+    // choice of the 2026-08-25 spec (decisions 2 to 5); the domain does not know about it.
     implementation("org.springframework.boot:spring-boot-starter-amqp")
 
-    // Persistance
+    // Persistence
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    // Spring Boot 4 : le starter Flyway apporte l'auto-config (module spring-boot-flyway).
+    // Spring Boot 4: the Flyway starter brings the auto-config (spring-boot-flyway module).
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation(libs.flyway.postgresql)
-    // Le type `vector` côté Hibernate. Arrivé avec la table des extraits et pas avant :
-    // une dépendance sans appelant est du poids mort.
+    // The `vector` type on the Hibernate side. Arrived with the chunk table and not before:
+    // a dependency without a caller is dead weight.
     implementation(libs.hibernate.vector)
     runtimeOnly(libs.postgresql)
 
-    // Sécurité
+    // Security
     implementation("org.springframework.boot:spring-boot-starter-security")
-    // Apporte spring-security-oauth2-jose (NimbusJwtEncoder ET NimbusJwtDecoder) et
-    // spring-security-oauth2-resource-server. Nom Spring Boot 4 : l'ancien
-    // spring-boot-starter-oauth2-resource-server existe toujours mais est déprécié.
+    // Brings spring-security-oauth2-jose (NimbusJwtEncoder AND NimbusJwtDecoder) and
+    // spring-security-oauth2-resource-server. Spring Boot 4 name: the old
+    // spring-boot-starter-oauth2-resource-server still exists but is deprecated.
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 
-    // Vectorisation : OllamaEmbeddingAdapter parle HTTP via RestClient. Sous Boot 4, ce
-    // starter n'est plus tiré par spring-boot-starter-web : RestClientAutoConfiguration a
-    // été extraite dans son propre module (spring-boot-restclient), et sans ce starter le
-    // bean RestClient.Builder n'existe pas — le contexte refuse de démarrer.
+    // Vectorisation: OllamaEmbeddingAdapter speaks HTTP through RestClient. Under Boot 4, this
+    // starter is no longer pulled in by spring-boot-starter-web: RestClientAutoConfiguration has
+    // been extracted into its own module (spring-boot-restclient), and without this starter the
+    // RestClient.Builder bean does not exist — the context refuses to start.
     implementation("org.springframework.boot:spring-boot-starter-restclient")
 
-    // Observabilité
+    // Observability
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-    // Documentation API
+    // API documentation
     implementation(libs.springdoc.openapi)
 
-    // Extraction du texte des documents. Un extracteur par format plutôt qu'Apache Tika,
-    // dont l'XHTML unifié aplatit précisément la sémantique qu'on cherche à garder
-    // (ADR-0026). Aucune de ces versions n'est couverte par le BOM Spring Boot.
+    // Text extraction from documents. One extractor per format rather than Apache Tika,
+    // whose unified XHTML flattens precisely the semantics we are trying to keep
+    // (ADR-0026). None of these versions is covered by the Spring Boot BOM.
     implementation(libs.commonmark)
     implementation(libs.poi.ooxml)
     implementation(libs.pdfbox)
 
-    // Comptage de tokens pour le découpage. Derrière le port TokenCounter : le domaine
-    // compte, il ne sait pas avec quelle toise.
+    // Token counting for the chunking. Behind the TokenCounter port: the domain
+    // counts, it does not know with which yardstick.
     implementation(libs.jtokkit)
-    // Génération : derrière le port LlmPort. Ses imports ne sortent jamais de
-    // knowledge/infrastructure/ai — même verrou que pour tout fournisseur.
+    // Generation: behind the LlmPort port. Its imports never leave
+    // knowledge/infrastructure/ai — the same lock as for any provider.
     implementation(libs.langchain4j)
     implementation(libs.langchain4j.ollama)
-    // Stockage objet des originaux (Garage, compatible S3 — voir compose.yaml). Un
-    // platform(...) Gradle et non le plugin io.spring.dependency-management : ce dernier
-    // tient déjà le BOM Spring Boot, et rien du BOM AWS ne le recoupe — le SDK S3 ne
-    // dépend ni de Jackson (le protocole S3 est en XML, avec un parseur maison, donc zéro
-    // conflit avec Jackson 3 / Spring Boot 4) ni, une fois les deux exclusions ci-dessous
-    // posées, d'Apache HttpClient. Une contrainte Gradle suffit ici, et elle ne porte que
-    // sur les modules software.amazon.awssdk:*.
+    // Object storage of the originals (Garage, S3-compatible — see compose.yaml). A
+    // Gradle platform(...) and not the io.spring.dependency-management plugin: the latter
+    // already holds the Spring Boot BOM, and nothing in the AWS BOM overlaps with it — the S3 SDK
+    // depends neither on Jackson (the S3 protocol is XML, with a homemade parser, so zero
+    // conflict with Jackson 3 / Spring Boot 4) nor, once the two exclusions below are
+    // in place, on Apache HttpClient. A Gradle constraint is enough here, and it only bears
+    // on the software.amazon.awssdk:* modules.
     implementation(platform(libs.awssdk.bom))
-    // Deux clients HTTP du SDK arrivent ici sans qu'on les demande, hérités du pom parent
-    // software.amazon.awssdk:services. Pourquoi on les exclut — et pourquoi les deux raisons
-    // ne se valent pas — est écrit une seule fois, sur awssdk-s3 dans
+    // Two HTTP clients of the SDK arrive here unasked, inherited from the parent pom
+    // software.amazon.awssdk:services. Why they are excluded — and why the two reasons
+    // are not equivalent — is written once only, on awssdk-s3 in
     // gradle/libs.versions.toml.
     implementation(libs.awssdk.s3) {
         exclude(group = "software.amazon.awssdk", module = "apache5-client")
         exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
     }
-    // Le seul client HTTP qu'on veut voir sur le classpath, et le seul qu'il faille déclarer :
-    // même bloc du version catalog pour le détail.
+    // The only HTTP client we want to see on the classpath, and the only one to declare:
+    // same block of the version catalog for the detail.
     implementation(libs.awssdk.url.connection.client)
 
-    // Dev : hot reload (l'app tourne dans un conteneur Compose, donc pas de
-    // module spring-boot-docker-compose qui gérerait Compose depuis l'app).
+    // Dev: hot reload (the app runs in a Compose container, hence no
+    // spring-boot-docker-compose module that would drive Compose from the app).
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     // Tests
@@ -136,18 +136,18 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    // Le secret de signature n'a aucune valeur par défaut (voir application.yml) : sans
-    // lui, plus aucun @SpringBootTest ne démarre. Une variable d'environnement est le
-    // seul moyen *certain* de le fournir : elle prime sur tous les fichiers de
-    // configuration, sans dépendre de la précédence entre application.properties et
+    // The signing secret has no default value (see application.yml): without
+    // it, no @SpringBootTest starts any more. An environment variable is the
+    // only *certain* way to supply it: it takes precedence over every configuration
+    // file, without depending on the precedence between application.properties and
     // application.yml.
     environment("SECONDBRAIN_JWT_SECRET", "secret-de-test-second-brain-32-octets-minimum")
 }
 
-// Fabrique les fixtures binaires d'extraction (docx, pdf) dans src/test/resources/fixtures/.
-// Lancée À LA MAIN, une fois — `gtest generateFixtures` — et son produit est versionné.
-// Ni test, ni étape de build : un binaire refabriqué à chaque exécution ferait un diff à
-// chaque exécution, et la suite ne testerait plus que sa propre sortie du jour.
+// Builds the binary extraction fixtures (docx, pdf) into src/test/resources/fixtures/.
+// Run BY HAND, once — `gtest generateFixtures` — and its output is versioned.
+// Neither a test nor a build step: a binary rebuilt on every run would make a diff on
+// every run, and the suite would only test its own output of the day.
 tasks.register<JavaExec>("generateFixtures") {
     group = "build"
     description = "Écrit les documents d'essai binaires ; à lancer à la main, puis committer"

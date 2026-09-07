@@ -11,11 +11,11 @@ import org.springframework.context.annotation.Configuration;
 class OllamaChatConfiguration {
 
     /**
-     * Généreux et choisi pour détecter un service figé, non pour borner un traitement normal :
-     * un tour de qwen3:4b sur CPU, après ingestion de huit extraits, se compte en dizaines de
-     * secondes. Même statut que le {@code read-timeout} du RestClient dans application.yml.
+     * Generous, and chosen to detect a stuck service rather than to bound normal work: one
+     * qwen3:4b turn on CPU, after ingesting eight chunks, takes tens of seconds. Same standing
+     * as the RestClient {@code read-timeout} in application.yml.
      */
-    private static final Duration DELAI_DE_LECTURE = Duration.ofSeconds(180);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(180);
 
     @Bean
     LangChain4jLlmAdapter langChain4jLlmAdapter(
@@ -23,9 +23,9 @@ class OllamaChatConfiguration {
         StreamingChatModel chatModel = OllamaStreamingChatModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(model)
-                .timeout(DELAI_DE_LECTURE)
-                // Explicite : un `false` ferait fuir le raisonnement, balises <think> comprises,
-                // dans le texte de réponse — vérifié, sans gagner ni tokens ni latence.
+                .timeout(READ_TIMEOUT)
+                // Explicit: a `false` would leak the reasoning, <think> tags included, into the
+                // answer text — checked, and it saves neither tokens nor latency.
                 .think(true)
                 .build();
         return new LangChain4jLlmAdapter(chatModel);

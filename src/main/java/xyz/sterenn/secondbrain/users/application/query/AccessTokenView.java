@@ -2,7 +2,7 @@ package xyz.sterenn.secondbrain.users.application.query;
 
 public record AccessTokenView(String value, long expiresIn) {
 
-    /** Masque le jeton : quiconque le détient est cet utilisateur. */
+    /** Masks the token: whoever holds it is that user. */
     @Override
     public String toString() {
         return "AccessTokenView[value=***, expiresIn=" + expiresIn + "]";

@@ -10,9 +10,9 @@ final class TextDecoding {
     private TextDecoding() {}
 
     /**
-     * UTF-8, ISO-8859-1 en repli. Le décodeur UTF-8 est monté en {@code REPORT} : par défaut
-     * il remplacerait les octets invalides par un {@code U+FFFD} silencieux, et le repli ne
-     * se déclencherait jamais.
+     * UTF-8, with ISO-8859-1 as fallback. The UTF-8 decoder is set to {@code REPORT}: by default
+     * it would replace invalid bytes with a silent {@code U+FFFD}, and the fallback would never
+     * fire.
      */
     static String decode(byte[] content) {
         try {
@@ -22,7 +22,7 @@ final class TextDecoding {
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(content))
                     .toString();
-        } catch (CharacterCodingException pasDeLUtf8) {
+        } catch (CharacterCodingException notUtf8) {
             return new String(content, StandardCharsets.ISO_8859_1);
         }
     }

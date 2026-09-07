@@ -5,9 +5,9 @@ import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentStorageUnavailableException;
 
 /**
- * Port sortant vers la conservation du fichier d'origine, rangé sous l'identifiant de son
- * document : l'écriture n'écrase jamais, l'effacement est silencieux, et un stockage qui ne
- * répond pas lève {@link DocumentStorageUnavailableException}.
+ * Outbound port to the keeping of the original file, stored under its document identifier: a
+ * write never overwrites, a delete is silent, and a storage that does not answer throws {@link
+ * DocumentStorageUnavailableException}.
  */
 public interface DocumentStorage {
 

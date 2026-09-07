@@ -11,18 +11,18 @@ public final class GroundingPolicy {
 
     private GroundingPolicy() {}
 
-    public static Answer verdict(Agent agent, String texte, SourceCatalogue catalogue, boolean rechercheEffectuee) {
-        if (!rechercheEffectuee) {
-            return new Answer(texte, List.of(), AnswerVerdict.CONVERSATIONNELLE);
+    public static Answer verdict(Agent agent, String text, SourceCatalogue catalogue, boolean searchPerformed) {
+        if (!searchPerformed) {
+            return new Answer(text, List.of(), AnswerVerdict.CONVERSATIONAL);
         }
-        List<Source> citees = catalogue.cited(CitationPolicy.citations(texte));
-        if (citees.isEmpty()) {
-            return new Answer(agent.refusals().introuvable(), List.of(), AnswerVerdict.SANS_SOURCE);
+        List<Source> cited = catalogue.cited(CitationPolicy.citations(text));
+        if (cited.isEmpty()) {
+            return new Answer(agent.refusals().notFound(), List.of(), AnswerVerdict.UNGROUNDED);
         }
-        return new Answer(texte, citees, AnswerVerdict.SOURCEE);
+        return new Answer(text, cited, AnswerVerdict.GROUNDED);
     }
 
     public static Answer budgetExceeded(Agent agent) {
-        return new Answer(agent.refusals().introuvable(), List.of(), AnswerVerdict.BUDGET_DEPASSE);
+        return new Answer(agent.refusals().notFound(), List.of(), AnswerVerdict.BUDGET_EXCEEDED);
     }
 }

@@ -13,8 +13,8 @@ interface SpringDataTextChunkRepository extends JpaRepository<TextChunk, UUID> {
 
     void deleteByDocumentId(UUID documentId);
 
-    // `position` et `text` heurtent la grammaire de PostgreSQL comme alias, et pgvector
-    // n'accepte aucune conversion implicite : d'où les alias préfixés et le CAST explicite.
+    // `position` and `text` clash with PostgreSQL grammar as aliases, and pgvector accepts no
+    // implicit conversion: hence the prefixed aliases and the explicit CAST.
     @Query(value = """
                     SELECT d.id             AS document_id,
                            d.filename       AS filename,

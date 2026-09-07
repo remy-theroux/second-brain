@@ -1,4 +1,4 @@
-# Profil de développement (activé via SPRING_PROFILES_ACTIVE=dev).
+# Development profile (enabled through SPRING_PROFILES_ACTIVE=dev).
 spring:
   jpa:
     show-sql: true

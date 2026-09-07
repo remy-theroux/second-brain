@@ -7,12 +7,12 @@ public final class PasswordPolicy {
 
     public static final int MIN_LENGTH = 12;
 
-    // BCrypt ne lit que les 72 premiers octets : au-delà, deux mots de passe partageant
-    // ce préfixe ouvrent le même compte — voir ADR-0005.
+    // BCrypt only reads the first 72 bytes: beyond that, two passwords sharing this
+    // prefix open the same account — see ADR-0005.
     public static final int MAX_LENGTH = 128;
 
-    // N'y mettre que des entrées d'au moins MIN_LENGTH caractères : en deçà, le contrôle
-    // de longueur les rejette déjà.
+    // Only put entries of at least MIN_LENGTH characters here: below that, the length
+    // check already rejects them.
     private static final Set<String> BLOCKLIST = Set.of(
             "password1234",
             "passwordpassword",

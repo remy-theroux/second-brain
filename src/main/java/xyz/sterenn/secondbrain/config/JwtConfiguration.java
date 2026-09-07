@@ -12,22 +12,22 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-/** Le secret n'a aucune valeur par défaut : sans lui, l'application ne démarre pas. */
+/** The secret has no default value: without it, the application does not start. */
 @Configuration
 public class JwtConfiguration {
 
-    /** HS256 exige une clé de 256 bits. */
+    /** HS256 requires a 256-bit key. */
     public static final int MIN_SECRET_LENGTH = 32;
 
     private final SecretKey secretKey;
 
     public JwtConfiguration(@Value("${secondbrain.jwt.secret}") String secret) {
-        byte[] octets = secret.getBytes(StandardCharsets.UTF_8);
-        if (octets.length < MIN_SECRET_LENGTH) {
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < MIN_SECRET_LENGTH) {
             throw new IllegalStateException("secondbrain.jwt.secret doit faire au moins " + MIN_SECRET_LENGTH
-                    + " octets pour signer en HS256 ; " + octets.length + " reçus");
+                    + " octets pour signer en HS256 ; " + bytes.length + " reçus");
         }
-        this.secretKey = new SecretKeySpec(octets, "HmacSHA256");
+        this.secretKey = new SecretKeySpec(bytes, "HmacSHA256");
     }
 
     @Bean

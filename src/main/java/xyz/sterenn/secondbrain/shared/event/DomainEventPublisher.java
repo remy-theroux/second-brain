@@ -1,7 +1,7 @@
 package xyz.sterenn.secondbrain.shared.event;
 
 /**
- * Depuis une transaction, l'annonce ne part qu'au commit ; hors transaction, immédiatement.
+ * Within a transaction, the announcement only goes out on commit; outside one, immediately.
  */
 public interface DomainEventPublisher {
 

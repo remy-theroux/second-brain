@@ -8,73 +8,73 @@ import org.junit.jupiter.api.Test;
 
 class SourceCatalogueTest {
 
-    private static final UUID RAPPORT = UUID.randomUUID();
+    private static final UUID REPORT = UUID.randomUUID();
     private static final UUID NOTES = UUID.randomUUID();
 
-    private static SourceCandidate extrait(UUID document, int position) {
+    private static SourceCandidate chunk(UUID document, int position) {
         return new SourceCandidate(document, "rapport.pdf", position, "Introduction", "texte " + position);
     }
 
     @Test
-    void part_vide() {
+    void starts_empty() {
         assertThat(SourceCatalogue.empty().sources()).isEmpty();
         assertThat(SourceCatalogue.empty().contains(1)).isFalse();
     }
 
     @Test
-    void numerote_les_extraits_a_partir_de_un_dans_l_ordre_recu() {
-        Absorption absorption = SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)));
+    void numbers_the_chunks_from_one_in_the_order_received() {
+        Absorption absorption = SourceCatalogue.empty().absorb(List.of(chunk(REPORT, 0), chunk(REPORT, 1)));
 
-        assertThat(absorption.nouveaux()).extracting(Source::number).containsExactly(1, 2);
-        assertThat(absorption.dejaVus()).isZero();
+        assertThat(absorption.newSources()).extracting(Source::number).containsExactly(1, 2);
+        assertThat(absorption.alreadySeen()).isZero();
         assertThat(absorption.catalogue().sources()).hasSize(2);
     }
 
     @Test
-    void rend_son_numero_d_origine_a_un_extrait_deja_vu() {
-        SourceCatalogue premier = SourceCatalogue.empty()
-                .absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1)))
+    void gives_back_its_original_number_to_an_already_seen_chunk() {
+        SourceCatalogue first = SourceCatalogue.empty()
+                .absorb(List.of(chunk(REPORT, 0), chunk(REPORT, 1)))
                 .catalogue();
 
-        Absorption seconde = premier.absorb(List.of(extrait(RAPPORT, 1), extrait(NOTES, 0)));
+        Absorption second = first.absorb(List.of(chunk(REPORT, 1), chunk(NOTES, 0)));
 
-        assertThat(seconde.nouveaux()).extracting(Source::number).containsExactly(3);
-        assertThat(seconde.dejaVus()).isEqualTo(1);
-        assertThat(seconde.catalogue().sources()).extracting(Source::number).containsExactly(1, 2, 3);
+        assertThat(second.newSources()).extracting(Source::number).containsExactly(3);
+        assertThat(second.alreadySeen()).isEqualTo(1);
+        assertThat(second.catalogue().sources()).extracting(Source::number).containsExactly(1, 2, 3);
     }
 
     @Test
-    void distingue_deux_extraits_par_leur_document_autant_que_par_leur_position() {
-        Absorption absorption = SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0), extrait(NOTES, 0)));
+    void distinguishes_two_chunks_by_their_document_as_much_as_by_their_position() {
+        Absorption absorption = SourceCatalogue.empty().absorb(List.of(chunk(REPORT, 0), chunk(NOTES, 0)));
 
-        assertThat(absorption.nouveaux()).hasSize(2);
+        assertThat(absorption.newSources()).hasSize(2);
     }
 
     @Test
-    void n_apprend_rien_d_une_recherche_qui_ne_ramene_que_du_deja_vu() {
-        SourceCatalogue premier =
-                SourceCatalogue.empty().absorb(List.of(extrait(RAPPORT, 0))).catalogue();
+    void learns_nothing_from_a_search_that_brings_back_only_already_seen_chunks() {
+        SourceCatalogue first =
+                SourceCatalogue.empty().absorb(List.of(chunk(REPORT, 0))).catalogue();
 
-        Absorption seconde = premier.absorb(List.of(extrait(RAPPORT, 0)));
+        Absorption second = first.absorb(List.of(chunk(REPORT, 0)));
 
-        assertThat(seconde.nouveaux()).isEmpty();
-        assertThat(seconde.dejaVus()).isEqualTo(1);
-        assertThat(seconde.catalogue().sources()).hasSize(1);
+        assertThat(second.newSources()).isEmpty();
+        assertThat(second.alreadySeen()).isEqualTo(1);
+        assertThat(second.catalogue().sources()).hasSize(1);
     }
 
     @Test
-    void ne_modifie_pas_le_catalogue_qu_il_absorbe() {
-        SourceCatalogue depart = SourceCatalogue.empty();
+    void does_not_modify_the_catalogue_it_absorbs_into() {
+        SourceCatalogue start = SourceCatalogue.empty();
 
-        depart.absorb(List.of(extrait(RAPPORT, 0)));
+        start.absorb(List.of(chunk(REPORT, 0)));
 
-        assertThat(depart.sources()).isEmpty();
+        assertThat(start.sources()).isEmpty();
     }
 
     @Test
-    void ne_rend_que_les_sources_reellement_citees_et_connues() {
+    void returns_only_the_sources_actually_cited_and_known() {
         SourceCatalogue catalogue = SourceCatalogue.empty()
-                .absorb(List.of(extrait(RAPPORT, 0), extrait(RAPPORT, 1), extrait(RAPPORT, 2)))
+                .absorb(List.of(chunk(REPORT, 0), chunk(REPORT, 1), chunk(REPORT, 2)))
                 .catalogue();
 
         assertThat(catalogue.cited(List.of(3, 9, 1))).extracting(Source::number).containsExactly(3, 1);

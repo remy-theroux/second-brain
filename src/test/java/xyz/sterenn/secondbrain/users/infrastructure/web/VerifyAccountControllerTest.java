@@ -28,7 +28,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification
 @Transactional
 class VerifyAccountControllerTest {
 
-    private static final String MOT_DE_PASSE_VALIDE = "chevalpile42";
+    private static final String VALID_PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -40,22 +40,22 @@ class VerifyAccountControllerTest {
     private UserRepository userRepository;
 
     @BeforeEach
-    void vide_les_notifications() {
+    void clears_the_notifications() {
         notifications.clear();
     }
 
-    private VerificationNotification inscrit(String email) throws Exception {
+    private VerificationNotification register(String email) throws Exception {
         mockMvc.perform(post("/api/registrations")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                 {"email": "%s", "password": "%s"}
-                """.formatted(email, MOT_DE_PASSE_VALIDE)));
-        return notifications.derniere();
+                """.formatted(email, VALID_PASSWORD)));
+        return notifications.last();
     }
 
     @Test
-    void verifie_le_compte_et_redirige_vers_la_connexion_quand_je_suis_le_lien_recu() throws Exception {
-        VerificationNotification notification = inscrit("alice@example.com");
+    void verifies_the_account_and_redirects_to_the_login_when_the_received_link_is_followed() throws Exception {
+        VerificationNotification notification = register("alice@example.com");
 
         mockMvc.perform(get("/verification")
                         .param("compte", notification.accountId().toString())
@@ -71,8 +71,8 @@ class VerifyAccountControllerTest {
     }
 
     @Test
-    void refuse_un_lien_falsifie() throws Exception {
-        VerificationNotification notification = inscrit("bob@example.com");
+    void rejects_a_forged_link() throws Exception {
+        VerificationNotification notification = register("bob@example.com");
 
         mockMvc.perform(get("/verification")
                         .param("compte", notification.accountId().toString())
@@ -88,8 +88,8 @@ class VerifyAccountControllerTest {
     }
 
     @Test
-    void refuse_un_lien_dont_le_compte_est_inconnu_avec_le_meme_code_qu_un_lien_falsifie() throws Exception {
-        VerificationNotification notification = inscrit("carol@example.com");
+    void rejects_a_link_whose_account_is_unknown_with_the_same_code_as_a_forged_link() throws Exception {
+        VerificationNotification notification = register("carol@example.com");
 
         mockMvc.perform(get("/verification")
                         .param("compte", UUID.randomUUID().toString())
@@ -99,8 +99,8 @@ class VerifyAccountControllerTest {
     }
 
     @Test
-    void refuse_un_lien_deja_utilise_et_le_dit() throws Exception {
-        VerificationNotification notification = inscrit("dave@example.com");
+    void rejects_an_already_used_link_and_says_so() throws Exception {
+        VerificationNotification notification = register("dave@example.com");
         mockMvc.perform(get("/verification")
                 .param("compte", notification.accountId().toString())
                 .param("jeton", notification.rawToken().value()));
@@ -113,7 +113,7 @@ class VerifyAccountControllerTest {
     }
 
     @Test
-    void refuse_un_lien_sans_parametre() throws Exception {
+    void rejects_a_link_without_parameters() throws Exception {
         mockMvc.perform(get("/verification"))
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("/login?verification=lien-invalide"));

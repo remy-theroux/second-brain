@@ -4,8 +4,8 @@ import java.util.List;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Embedding;
 
 /**
- * Port sortant vers le service qui transforme du texte en vecteurs : autant de vecteurs que de
- * textes, et dans le même ordre.
+ * Outbound port to the service that turns text into vectors: as many vectors as texts, and in
+ * the same order.
  */
 public interface EmbeddingPort {
 

@@ -28,20 +28,20 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 /**
- * MockMvc ne saurait pas vérifier ceci : un {@code MockMultipartFile} est déjà découpé, donc
- * {@code MaxUploadSizeExceededException} n'y serait jamais levée. Et
- * {@link SimpleClientHttpRequestFactory} n'est pas un détail : la fabrique par défaut émet le
- * corps en {@code Transfer-Encoding: chunked} et abandonne avant de lire le 413 déjà envoyé.
+ * MockMvc could not check this: a {@code MockMultipartFile} is already parsed, so
+ * {@code MaxUploadSizeExceededException} would never be raised there. And
+ * {@link SimpleClientHttpRequestFactory} is not a detail: the default factory sends the body in
+ * {@code Transfer-Encoding: chunked} and gives up before reading the 413 already sent.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class UploadDocumentSizeLimitTest {
 
     private static final String EMAIL = "grosfichier@exemple.fr";
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
-    /** Au-delà des 20 Mo de {@code spring.servlet.multipart.max-file-size}. */
-    private static final int TAILLE_EXCESSIVE = 21 * 1024 * 1024;
+    /** Beyond the 20 MB of {@code spring.servlet.multipart.max-file-size}. */
+    private static final int EXCESSIVE_SIZE = 21 * 1024 * 1024;
 
     @LocalServerPort
     private int port;
@@ -59,29 +59,29 @@ class UploadDocumentSizeLimitTest {
     private JdbcTemplate jdbcTemplate;
 
     private RestTestClient client;
-    private String jeton;
+    private String token;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingNotificationSender.clear();
-        UUID compte = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, MOT_DE_PASSE);
-        jeton = KnowledgeFixture.jeton(accessTokenIssuer, compte);
+        UUID account = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, PASSWORD);
+        token = KnowledgeFixture.token(accessTokenIssuer, account);
         client = RestTestClient.bindToServer(new SimpleClientHttpRequestFactory())
                 .baseUrl("http://localhost:" + port)
                 .build();
     }
 
     @AfterEach
-    void efface_le_compte() {
-        // Sans @Transactional : le serveur répond sur un autre fil, aucune transaction de test
-        // n'y a prise. La cascade emporte les documents avec le compte.
+    void erase_the_account() {
+        // Without @Transactional: the server answers on another thread, no test transaction has
+        // any hold on it. The cascade takes the documents away with the account.
         jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", EMAIL);
     }
 
     @Test
-    void refuse_un_fichier_au_dela_du_plafond_avec_un_message_affichable() {
-        MultiValueMap<String, Object> corps = new LinkedMultiValueMap<>();
-        corps.add("file", new ByteArrayResource(new byte[TAILLE_EXCESSIVE]) {
+    void refuses_a_file_beyond_the_ceiling_with_a_displayable_message() {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", new ByteArrayResource(new byte[EXCESSIVE_SIZE]) {
             @Override
             public String getFilename() {
                 return "enorme.pdf";
@@ -91,20 +91,20 @@ class UploadDocumentSizeLimitTest {
         client.post()
                 .uri("/api/documents")
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .headers(enTetes -> enTetes.setBearerAuth(jeton))
-                .body(corps)
+                .headers(headers -> headers.setBearerAuth(token))
+                .body(body)
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.CONTENT_TOO_LARGE)
                 .expectBody()
-                .consumeWith(resultat -> assertThat(new String(resultat.getResponseBody(), StandardCharsets.UTF_8))
+                .consumeWith(result -> assertThat(new String(result.getResponseBody(), StandardCharsets.UTF_8))
                         .contains("taille maximale"));
     }
 
     @Test
-    void accepte_un_fichier_sous_le_plafond() {
-        MultiValueMap<String, Object> corps = new LinkedMultiValueMap<>();
-        corps.add("file", new ByteArrayResource("un contenu bien modeste".getBytes(StandardCharsets.UTF_8)) {
+    void accepts_a_file_under_the_ceiling() {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", new ByteArrayResource("un contenu bien modeste".getBytes(StandardCharsets.UTF_8)) {
             @Override
             public String getFilename() {
                 return "modeste.pdf";
@@ -114,8 +114,8 @@ class UploadDocumentSizeLimitTest {
         client.post()
                 .uri("/api/documents")
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .headers(enTetes -> enTetes.setBearerAuth(jeton))
-                .body(corps)
+                .headers(headers -> headers.setBearerAuth(token))
+                .body(body)
                 .exchange()
                 .expectStatus()
                 .isCreated();

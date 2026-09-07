@@ -15,10 +15,9 @@ import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 
-// Catalogue statique : tout ce qui est partagé — tokens, composants du projet, composants
-// PrimeVue tels qu'on les emploie — dans chacun de ses états. Aucun store, aucun appel
-// réseau : la page se regarde, elle ne fait rien. Un composant qui n'apparaît pas ici n'est
-// pas partagé.
+// Static catalogue: everything that is shared — tokens, project components, PrimeVue
+// components as we use them — in each of its states. No store, no network call: the page
+// is looked at, it does nothing. A component that does not appear here is not shared.
 
 const PROJECT_TOKENS = [
   '--sb-space-xs',
@@ -33,8 +32,8 @@ const PROJECT_TOKENS = [
   '--sb-text-small',
 ]
 
-// Les tokens Aura que le projet consomme. La liste est tenue à la main : c'est elle qui
-// dit quels `--p-*` on s'autorise hors des composants PrimeVue.
+// The Aura tokens the project consumes. The list is maintained by hand: it is what says
+// which `--p-*` we allow ourselves outside PrimeVue components.
 const THEME_TOKENS = [
   '--p-content-background',
   '--p-content-border-color',
@@ -51,10 +50,10 @@ const menuItems = [
   { label: 'Documents', icon: 'pi pi-file' },
 ]
 
-// La liste des documents, telle que DocumentsView la rend : trois colonnes et une action.
-// La deuxième ligne porte la classe du doublon désigné par le serveur.
-// Les statuts sont donnés en CODE, comme l'API les sérialise : c'est `DocumentStatusTag`
-// qui porte le libellé, et le catalogue doit montrer l'écran tel qu'il est.
+// The document list, as DocumentsView renders it: three columns and one action.
+// The second row carries the class of the duplicate designated by the server.
+// The statuses are given as CODES, the way the API serialises them: `DocumentStatusTag`
+// is what carries the label, and the catalogue must show the screen as it is.
 const DOCUMENT_STATUSES = ['PENDING', 'EXTRACTED', 'READY', 'FAILED']
 
 const DOCUMENTS = [
@@ -90,8 +89,8 @@ function showConfirmation(event) {
   })
 }
 
-// Les valeurs sont lues sur le document une fois monté : c'est la valeur effective qui
-// est affichée, pas celle qu'on croit avoir écrite dans main.css.
+// The values are read from the document once mounted: it is the effective value that is
+// displayed, not the one we think we wrote in main.css.
 const tokenValues = ref({})
 
 onMounted(() => {

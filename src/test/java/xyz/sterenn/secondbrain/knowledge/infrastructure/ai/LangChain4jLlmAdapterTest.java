@@ -20,57 +20,56 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 
 class LangChain4jLlmAdapterTest {
 
-    private static final ToolSpecification OUTIL = new ToolSpecification(
+    private static final ToolSpecification TOOL = new ToolSpecification(
             "rechercher_dans_les_documents",
             "Recherche des extraits.",
             List.of(new ToolParameter("question", "La question à chercher.", true)));
 
-    private HttpServer serveur;
+    private HttpServer server;
     private LangChain4jLlmAdapter adapter;
 
-    private void demarrer(int statut, String corps) throws IOException {
-        serveur = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        serveur.createContext("/api/chat", echange -> {
-            echange.getRequestBody().readAllBytes();
-            byte[] octets = corps.getBytes(StandardCharsets.UTF_8);
-            echange.getResponseHeaders().add("Content-Type", "application/x-ndjson");
-            echange.sendResponseHeaders(statut, octets.length);
-            echange.getResponseBody().write(octets);
-            echange.close();
+    private void start(int status, String body) throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/chat", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/x-ndjson");
+            exchange.sendResponseHeaders(status, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
         });
-        serveur.start();
+        server.start();
         adapter = new OllamaChatConfiguration()
-                .langChain4jLlmAdapter(
-                        "http://127.0.0.1:" + serveur.getAddress().getPort(), "qwen3:4b");
+                .langChain4jLlmAdapter("http://127.0.0.1:" + server.getAddress().getPort(), "qwen3:4b");
     }
 
     @AfterEach
-    void arreter_le_serveur() {
-        if (serveur != null) {
-            serveur.stop(0);
+    void stop_the_server() {
+        if (server != null) {
+            server.stop(0);
         }
     }
 
     @Test
-    void rend_le_texte_et_le_remet_au_fil_de_l_eau() throws IOException {
-        demarrer(200, """
+    void returns_the_text_and_streams_it_as_it_comes() throws IOException {
+        start(200, """
                 {"message":{"role":"assistant","content":"Le délai "},"done":false}
                 {"message":{"role":"assistant","content":"est de quatorze jours [2]."},"done":false}
                 {"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}
                 """);
         List<String> fragments = new ArrayList<>();
 
-        LlmTurn tour = adapter.stream(
-                new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(OUTIL), 0.2), fragments::add);
+        LlmTurn turn = adapter.stream(
+                new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(TOOL), 0.2), fragments::add);
 
-        assertThat(tour.requestsATool()).isFalse();
-        assertThat(tour.text()).isEqualTo("Le délai est de quatorze jours [2].");
+        assertThat(turn.requestsATool()).isFalse();
+        assertThat(turn.text()).isEqualTo("Le délai est de quatorze jours [2].");
         assertThat(fragments).containsExactly("Le délai ", "est de quatorze jours [2].");
     }
 
     @Test
-    void n_expose_jamais_le_raisonnement_recu_sur_son_propre_canal() throws IOException {
-        demarrer(200, """
+    void never_exposes_the_reasoning_received_on_its_own_channel() throws IOException {
+        start(200, """
                 {"message":{"role":"assistant","content":"","thinking":"L'utilisateur demande "},"done":false}
                 {"message":{"role":"assistant","content":"","thinking":"le délai, je dois chercher."},"done":false}
                 {"message":{"role":"assistant","content":"Le délai "},"done":false}
@@ -79,32 +78,32 @@ class LangChain4jLlmAdapterTest {
                 """);
         List<String> fragments = new ArrayList<>();
 
-        LlmTurn tour = adapter.stream(
+        LlmTurn turn = adapter.stream(
                 new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(), 0.2), fragments::add);
 
         assertThat(fragments).containsExactly("Le délai ", "est de quatorze jours.");
-        assertThat(tour.text()).isEqualTo("Le délai est de quatorze jours.");
+        assertThat(turn.text()).isEqualTo("Le délai est de quatorze jours.");
         assertThat(fragments).noneMatch(fragment -> fragment.contains("utilisateur") || fragment.contains("chercher"));
     }
 
     @Test
-    void rend_un_appel_d_outil_avec_ses_arguments_decodes() throws IOException {
-        demarrer(200, """
+    void returns_a_tool_call_with_its_decoded_arguments() throws IOException {
+        start(200, """
                 {"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"rechercher_dans_les_documents","arguments":{"question":"délai de rétractation"}}}]},"done":true,"done_reason":"stop"}
                 """);
 
-        LlmTurn tour = adapter.stream(
-                new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(OUTIL), 0.2), fragment -> {});
+        LlmTurn turn = adapter.stream(
+                new LlmRequest(List.of(LlmMessage.user("Quel délai ?")), List.of(TOOL), 0.2), fragment -> {});
 
-        assertThat(tour.requestsATool()).isTrue();
-        assertThat(tour.toolCalls()).hasSize(1);
-        assertThat(tour.toolCalls().getFirst().name()).isEqualTo("rechercher_dans_les_documents");
-        assertThat(tour.toolCalls().getFirst().argument("question")).isEqualTo("délai de rétractation");
+        assertThat(turn.requestsATool()).isTrue();
+        assertThat(turn.toolCalls()).hasSize(1);
+        assertThat(turn.toolCalls().getFirst().name()).isEqualTo("rechercher_dans_les_documents");
+        assertThat(turn.toolCalls().getFirst().argument("question")).isEqualTo("délai de rétractation");
     }
 
     @Test
-    void traduit_une_panne_du_service_en_refus_metier() throws IOException {
-        demarrer(500, "{\"error\":\"model not found\"}");
+    void translates_a_service_failure_into_a_business_refusal() throws IOException {
+        start(500, "{\"error\":\"model not found\"}");
 
         assertThatExceptionOfType(LlmUnavailableException.class)
                 .isThrownBy(() -> adapter.stream(
@@ -113,8 +112,8 @@ class LangChain4jLlmAdapterTest {
     }
 
     @Test
-    void laisse_remonter_l_echec_du_consommateur_de_tokens() throws IOException {
-        demarrer(200, """
+    void lets_the_token_consumer_failure_bubble_up() throws IOException {
+        start(200, """
                 {"message":{"role":"assistant","content":"début"},"done":false}
                 {"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}
                 """);

@@ -32,7 +32,7 @@ public record Checksum(String value) {
             return new Checksum(HexFormat.of()
                     .formatHex(MessageDigest.getInstance(ALGORITHM).digest(content)));
         } catch (NoSuchAlgorithmException e) {
-            // SHA-256 est exigé de toute implémentation de la plateforme Java : hors d'atteinte.
+            // SHA-256 is required of every Java platform implementation: out of reach.
             throw new IllegalStateException("Algorithme " + ALGORITHM + " indisponible", e);
         }
     }

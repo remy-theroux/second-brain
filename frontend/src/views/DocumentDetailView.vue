@@ -17,8 +17,8 @@ const document = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 
-// Le serveur fait autorité : un 401 déconnecte, quoi qu'en pense le navigateur. Toute
-// autre panne s'affiche — y compris le 404, dont le message vient du serveur.
+// The server prevails: a 401 signs out, whatever the browser thinks. Any other failure is
+// displayed — including the 404, whose message comes from the server.
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -50,9 +50,9 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-// Le titre d'un bloc est décalé selon son niveau : c'est la seule chose qui rende visible
-// la hiérarchie d'une suite volontairement plate (ADR-0024). Le décalage se compte en
-// tokens du projet, jamais en `rem` nus.
+// A block's heading is indented according to its level: that is the only thing that makes
+// visible the hierarchy of a deliberately flat sequence (ADR-0024). The indent is counted in
+// project tokens, never in bare `rem`.
 function headingIndent(level) {
   return { paddingLeft: `calc(var(--sb-space-lg) * ${Math.max(level - 1, 0)})` }
 }
@@ -98,8 +98,8 @@ onMounted(load)
         </div>
       </dl>
 
-      <!-- Le motif vient du serveur et s'affiche tel quel : le front ne réécrit aucun
-           message d'erreur. -->
+      <!-- The reason comes from the server and is displayed as is: the front rewrites no
+           error message. -->
       <Message v-if="document.errorMessage" severity="warn">{{ document.errorMessage }}</Message>
 
       <template v-if="document.extraction">
@@ -118,8 +118,8 @@ onMounted(load)
         </article>
       </template>
 
-      <!-- Trois façons de n'avoir rien à montrer, trois phrases : « en attente » n'est pas
-           un échec, et « typologie non lue » n'en est pas un non plus. -->
+      <!-- Three ways of having nothing to show, three sentences: "pending" is not a
+           failure, and "typology not rendered" is not one either. -->
       <p v-else-if="document.status === 'PENDING'" class="empty">
         Le texte de ce document n'a pas encore été extrait.
       </p>
@@ -181,8 +181,8 @@ onMounted(load)
   font-size: var(--sb-section-title-size);
 }
 
-/* Le corps d'un bloc est déjà normalisé par le domaine : ses sauts de ligne sont
-   significatifs, et un `pre-wrap` est la seule façon de ne pas les perdre. */
+/* A block's body is already normalised by the domain: its line breaks are significant,
+   and a `pre-wrap` is the only way not to lose them. */
 .block-text {
   margin: 0;
   white-space: pre-wrap;

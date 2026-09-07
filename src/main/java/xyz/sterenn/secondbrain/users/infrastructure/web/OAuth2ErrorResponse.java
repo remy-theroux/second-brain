@@ -2,7 +2,7 @@ package xyz.sterenn.secondbrain.users.infrastructure.web;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-// Forme imposée par RFC 6749 §5.2, propre à /api/token : les autres routes suivent
+// Shape imposed by RFC 6749 §5.2, specific to /api/token: the other routes follow
 // ValidationErrorResponse.
 public record OAuth2ErrorResponse(
         @JsonProperty("error") String error,

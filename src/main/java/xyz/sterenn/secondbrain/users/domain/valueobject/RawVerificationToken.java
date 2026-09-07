@@ -15,14 +15,14 @@ public record RawVerificationToken(String value) {
         }
     }
 
-    /** Base64url sans remplissage : le jeton voyage dans une URL sans échappement. */
+    /** Base64url without padding: the token travels in a URL without escaping. */
     public static RawVerificationToken generate() {
-        byte[] octets = new byte[BYTE_LENGTH];
-        RANDOM.nextBytes(octets);
-        return new RawVerificationToken(Base64.getUrlEncoder().withoutPadding().encodeToString(octets));
+        byte[] bytes = new byte[BYTE_LENGTH];
+        RANDOM.nextBytes(bytes);
+        return new RawVerificationToken(Base64.getUrlEncoder().withoutPadding().encodeToString(bytes));
     }
 
-    /** Masque la valeur : seule son empreinte salée est persistée, le clair ne doit pas fuir dans un log. */
+    /** Masks the value: only its salted digest is persisted, the clear text must not leak into a log. */
     @Override
     public String toString() {
         return "RawVerificationToken[value=***]";

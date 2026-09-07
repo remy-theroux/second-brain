@@ -13,48 +13,48 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 
 class ExtractorCoverageTest {
 
-    private record ExtracteurFactice(DocumentFormat format) implements DocumentTextExtractor {
+    private record DummyExtractor(DocumentFormat format) implements DocumentTextExtractor {
         @Override
         public ExtractedText extract(byte[] content) {
             throw new UnsupportedOperationException("Cet extracteur n'est là que pour son format");
         }
     }
 
-    private static List<DocumentTextExtractor> couvreLaTypologieTextuelle() {
+    private static List<DocumentTextExtractor> coversTheTextualType() {
         return DocumentFormat.of(DocumentType.TEXTUAL).stream()
-                .map(format -> (DocumentTextExtractor) new ExtracteurFactice(format))
+                .map(format -> (DocumentTextExtractor) new DummyExtractor(format))
                 .toList();
     }
 
     @Test
-    void accepte_un_extracteur_par_format_textuel() {
-        assertThat(ExtractDocumentTextHandler.indexeParFormat(couvreLaTypologieTextuelle()))
+    void accepts_one_extractor_per_textual_format() {
+        assertThat(ExtractDocumentTextHandler.indexedByFormat(coversTheTextualType()))
                 .containsOnlyKeys(DocumentFormat.of(DocumentType.TEXTUAL).toArray(DocumentFormat[]::new));
     }
 
     @Test
-    void refuse_un_format_textuel_sans_extracteur() {
-        List<DocumentTextExtractor> incomplet = couvreLaTypologieTextuelle().stream()
-                .filter(extracteur -> extracteur.format() != DocumentFormat.DOCX)
+    void rejects_a_textual_format_without_an_extractor() {
+        List<DocumentTextExtractor> incomplete = coversTheTextualType().stream()
+                .filter(extractor -> extractor.format() != DocumentFormat.DOCX)
                 .toList();
 
         assertThatIllegalStateException()
-                .isThrownBy(() -> ExtractDocumentTextHandler.indexeParFormat(incomplet))
+                .isThrownBy(() -> ExtractDocumentTextHandler.indexedByFormat(incomplete))
                 .withMessageContaining("DOCX");
     }
 
     @Test
-    void refuse_deux_extracteurs_pour_le_meme_format() {
-        List<DocumentTextExtractor> doublon = new ArrayList<>(couvreLaTypologieTextuelle());
-        doublon.add(new ExtracteurFactice(DocumentFormat.PDF));
+    void rejects_two_extractors_for_the_same_format() {
+        List<DocumentTextExtractor> duplicate = new ArrayList<>(coversTheTextualType());
+        duplicate.add(new DummyExtractor(DocumentFormat.PDF));
 
         assertThatIllegalStateException()
-                .isThrownBy(() -> ExtractDocumentTextHandler.indexeParFormat(doublon))
+                .isThrownBy(() -> ExtractDocumentTextHandler.indexedByFormat(duplicate))
                 .withMessageContaining("PDF");
     }
 
     @Test
-    void n_exige_un_extracteur_que_des_formats_de_typologie_textuelle() {
+    void requires_an_extractor_only_from_formats_of_the_textual_type() {
         assertThat(DocumentFormat.of(DocumentType.TEXTUAL)).containsExactlyElementsOf(List.of(DocumentFormat.values()));
     }
 }

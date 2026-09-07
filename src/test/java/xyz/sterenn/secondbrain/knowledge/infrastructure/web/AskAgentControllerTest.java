@@ -49,7 +49,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AskAgentControllerTest {
 
-    private static final Duration DELAI = Duration.ofSeconds(5);
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     @LocalServerPort
     private int port;
@@ -78,26 +78,26 @@ class AskAgentControllerTest {
     @Autowired
     private AccessTokenIssuer accessTokenIssuer;
 
-    private final List<String> comptesCrees = new java.util.ArrayList<>();
+    private final List<String> createdAccounts = new java.util.ArrayList<>();
 
     private RestTestClient client;
     private UUID alice;
     private UUID document;
-    private String jetonAlice;
+    private String aliceToken;
 
     @BeforeEach
-    void prepare_un_compte_avec_un_extrait() {
+    void prepare_an_account_with_one_chunk() {
         scriptedLlmPort.clear();
         recordingEmbeddingPort.clear();
-        recordingEmbeddingPort.repondra(KnowledgeFixture.uneQuestion());
-        // SimpleClientHttpRequestFactory et pas la fabrique par défaut : un flux SSE est
-        // chunké par nature, et le client HTTP du JDK abandonne dessus (voir CLAUDE.md).
+        recordingEmbeddingPort.willAnswer(KnowledgeFixture.aQuestion());
+        // SimpleClientHttpRequestFactory and not the default factory: an SSE stream is chunked
+        // by nature, and the JDK HTTP client gives up on it (see CLAUDE.md).
         client = RestTestClient.bindToServer(new SimpleClientHttpRequestFactory())
                 .baseUrl("http://localhost:" + port)
                 .build();
 
-        alice = unCompte("alice@exemple.fr");
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, alice);
+        alice = anAccount("alice@exemple.fr");
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, alice);
         document = documentRepository
                 .save(Document.upload(
                         alice,
@@ -110,30 +110,30 @@ class AskAgentControllerTest {
                 document,
                 0,
                 new Chunk("Rétractation", "Le délai de rétractation est de quatorze jours."),
-                KnowledgeFixture.uneQuestion(),
+                KnowledgeFixture.aQuestion(),
                 Instant.now())));
     }
 
     @AfterEach
-    void efface_ce_qui_a_ete_commite() {
-        // Même motif que KnowledgeEventListenerTest : les clés étrangères en cascade emportent
-        // documents, extraits et traces avec le compte. Ce test n'est pas @Transactional — la
-        // conversation tourne sur un autre thread et ne verrait pas la transaction du test.
-        comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
-        comptesCrees.clear();
+    void erase_what_has_been_committed() {
+        // Same reason as KnowledgeEventListenerTest: the cascading foreign keys take documents,
+        // chunks and runs away with the account. This test is not @Transactional — the
+        // conversation runs on another thread and would not see the transaction of the test.
+        createdAccounts.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
+        createdAccounts.clear();
         scriptedLlmPort.clear();
         recordingEmbeddingPort.clear();
     }
 
-    private UUID unCompte(String email) {
-        comptesCrees.add(email);
+    private UUID anAccount(String email) {
+        createdAccounts.add(email);
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
     private String conversation(String question) {
         return client.post()
                 .uri("/api/chat")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"question\":\"" + question + "\"}")
                 .exchange()
@@ -145,63 +145,63 @@ class AskAgentControllerTest {
     }
 
     @Test
-    void rend_la_reponse_au_fil_de_l_eau_puis_ses_sources_puis_la_fin() {
+    void streams_the_answer_then_its_sources_then_the_end() {
         scriptedLlmPort
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, DocumentAgent.PARAMETRE_QUESTION, "délai")
-                .texte("Quatorze jours ", "[1].");
+                .callsTool(DocumentAgent.SEARCH_TOOL, DocumentAgent.QUESTION_PARAMETER, "délai")
+                .text("Quatorze jours ", "[1].");
 
-        String flux = conversation("Quel est le délai de rétractation ?");
+        String stream = conversation("Quel est le délai de rétractation ?");
 
-        assertThat(flux).contains("event:token").containsOnlyOnce("Quatorze jours [1].");
-        assertThat(flux).contains("event:sources").contains("rapport.pdf");
-        assertThat(flux).contains("event:done");
-        assertThat(flux.indexOf("event:sources")).isLessThan(flux.indexOf("event:done"));
+        assertThat(stream).contains("event:token").containsOnlyOnce("Quatorze jours [1].");
+        assertThat(stream).contains("event:sources").contains("rapport.pdf");
+        assertThat(stream).contains("event:done");
+        assertThat(stream.indexOf("event:sources")).isLessThan(stream.indexOf("event:done"));
     }
 
     @Test
-    void n_envoie_jamais_une_reponse_non_sourcee() {
+    void never_sends_an_ungrounded_answer() {
         scriptedLlmPort
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, DocumentAgent.PARAMETRE_QUESTION, "capitale")
-                .texte("Canberra est la capitale de l'Australie.");
+                .callsTool(DocumentAgent.SEARCH_TOOL, DocumentAgent.QUESTION_PARAMETER, "capitale")
+                .text("Canberra est la capitale de l'Australie.");
 
-        String flux = conversation("Quelle est la capitale de l'Australie ?");
+        String stream = conversation("Quelle est la capitale de l'Australie ?");
 
-        assertThat(flux).doesNotContain("Canberra");
-        assertThat(flux).contains("Je ne trouve pas cette information dans vos documents.");
+        assertThat(stream).doesNotContain("Canberra");
+        assertThat(stream).contains("Je ne trouve pas cette information dans vos documents.");
     }
 
     @Test
-    void ecrit_la_trace_apres_la_fermeture_du_flux() {
+    void writes_the_run_after_the_stream_is_closed() {
         scriptedLlmPort
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, DocumentAgent.PARAMETRE_QUESTION, "délai")
-                .texte("Quatorze jours [1].");
+                .callsTool(DocumentAgent.SEARCH_TOOL, DocumentAgent.QUESTION_PARAMETER, "délai")
+                .text("Quatorze jours [1].");
 
         conversation("Quel est le délai de rétractation ?");
 
-        // emitter.complete() ne bloque pas : la trace peut s'écrire après le retour de l'appel HTTP.
-        await().atMost(DELAI).untilAsserted(() -> assertThat(agentRunRepository.findByOwnerId(alice))
+        // emitter.complete() does not block: the run may be written after the HTTP call returns.
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(agentRunRepository.findByOwnerId(alice))
                 .singleElement()
-                .satisfies(trace -> {
-                    assertThat(trace.getVerdict()).isEqualTo(AnswerVerdict.SOURCEE);
-                    assertThat(trace.getSearches()).containsExactly("délai");
-                    assertThat(trace.getSources()).hasSize(1);
+                .satisfies(run -> {
+                    assertThat(run.getVerdict()).isEqualTo(AnswerVerdict.GROUNDED);
+                    assertThat(run.getSearches()).containsExactly("délai");
+                    assertThat(run.getSources()).hasSize(1);
                 }));
     }
 
     @Test
-    void annonce_une_erreur_quand_la_generation_est_indisponible() {
-        scriptedLlmPort.tombeEnPanne();
+    void announces_an_error_when_the_generation_service_is_unavailable() {
+        scriptedLlmPort.willFail();
 
-        String flux = conversation("Quel est le délai de rétractation ?");
+        String stream = conversation("Quel est le délai de rétractation ?");
 
-        assertThat(flux).contains("event:error").doesNotContain("event:done");
+        assertThat(stream).contains("event:error").doesNotContain("event:done");
     }
 
     @Test
-    void refuse_une_question_vide_sans_ouvrir_de_flux() {
+    void rejects_an_empty_question_without_opening_a_stream() {
         client.post()
                 .uri("/api/chat")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"question\":\"   \"}")
                 .exchange()
@@ -213,7 +213,7 @@ class AskAgentControllerTest {
     }
 
     @Test
-    void refuse_une_conversation_sans_jeton() {
+    void rejects_a_conversation_without_a_token() {
         client.post()
                 .uri("/api/chat")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -224,14 +224,14 @@ class AskAgentControllerTest {
     }
 
     @Test
-    void ne_voit_pas_les_documents_d_un_autre_compte() {
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, unCompte("bob@exemple.fr"));
+    void does_not_see_the_documents_of_another_account() {
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, anAccount("bob@exemple.fr"));
         scriptedLlmPort
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, DocumentAgent.PARAMETRE_QUESTION, "délai")
-                .texte("Quatorze jours [1].");
+                .callsTool(DocumentAgent.SEARCH_TOOL, DocumentAgent.QUESTION_PARAMETER, "délai")
+                .text("Quatorze jours [1].");
 
-        String flux = conversation("Quel est le délai de rétractation ?");
+        String stream = conversation("Quel est le délai de rétractation ?");
 
-        assertThat(flux).contains("Je ne trouve pas cette information dans vos documents.");
+        assertThat(stream).contains("Je ne trouve pas cette information dans vos documents.");
     }
 }

@@ -38,7 +38,7 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 @Transactional
 class FindDocumentControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -59,31 +59,30 @@ class FindDocumentControllerTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     private UUID alice;
-    private String jetonAlice;
+    private String aliceToken;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingNotificationSender.clear();
-        alice = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, alice);
+        alice = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, alice);
     }
 
     @AfterEach
-    void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erase_the_originals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void rend_le_document_et_le_texte_qui_en_a_ete_extrait() throws Exception {
-        Document document = depose(jetonAlice, alice, "structure.md", Fixtures.STRUCTURE_MD);
+    void returns_the_document_and_the_text_extracted_from_it() throws Exception {
+        Document document = upload(aliceToken, alice, "structure.md", Fixtures.STRUCTURED_MD);
         commandBus.dispatch(new ExtractDocumentText(document.getId(), alice));
 
         mockMvc.perform(get("/api/documents/" + document.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.filename").value("structure.md"))
                 .andExpect(jsonPath("$.format").value("MARKDOWN"))
@@ -96,11 +95,11 @@ class FindDocumentControllerTest {
     }
 
     @Test
-    void annonce_la_typologie_sans_extraction_tant_que_le_traitement_n_a_pas_eu_lieu() throws Exception {
-        Document document = depose(jetonAlice, alice, "notes.txt", Fixtures.BRUT_TXT);
+    void announces_the_type_without_an_extraction_as_long_as_the_processing_has_not_happened() throws Exception {
+        Document document = upload(aliceToken, alice, "notes.txt", Fixtures.RAW_TXT);
 
         mockMvc.perform(get("/api/documents/" + document.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.type").value("TEXTUAL"))
@@ -109,13 +108,13 @@ class FindDocumentControllerTest {
     }
 
     @Test
-    void rend_le_motif_d_un_document_en_echec_et_aucune_extraction() throws Exception {
-        Document document = depose(jetonAlice, alice, "scan.txt", Fixtures.BRUT_TXT);
+    void returns_the_reason_of_a_failed_document_and_no_extraction() throws Exception {
+        Document document = upload(aliceToken, alice, "scan.txt", Fixtures.RAW_TXT);
         document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
 
         mockMvc.perform(get("/api/documents/" + document.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.errorMessage").value("Ce document ne contient pas de texte exploitable."))
@@ -123,37 +122,37 @@ class FindDocumentControllerTest {
     }
 
     @Test
-    void rend_introuvable_un_identifiant_inconnu() throws Exception {
+    void makes_an_unknown_id_not_found() throws Exception {
         mockMvc.perform(get("/api/documents/" + UUID.randomUUID())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").isNotEmpty());
     }
 
     @Test
-    void rend_introuvable_le_document_d_un_autre_compte() throws Exception {
-        UUID bob = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
-        Document chezBob =
-                depose(KnowledgeFixture.jeton(accessTokenIssuer, bob), bob, "chez-bob.txt", Fixtures.BRUT_TXT);
+    void makes_the_document_of_another_account_not_found() throws Exception {
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        Document bobsDocument =
+                upload(KnowledgeFixture.token(accessTokenIssuer, bob), bob, "chez-bob.txt", Fixtures.RAW_TXT);
 
-        mockMvc.perform(get("/api/documents/" + chezBob.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents/" + bobsDocument.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void refuse_la_lecture_sans_jeton() throws Exception {
+    void refuses_the_read_without_a_token() throws Exception {
         mockMvc.perform(get("/api/documents/" + UUID.randomUUID())).andExpect(status().isUnauthorized());
     }
 
-    private Document depose(String jeton, UUID proprietaire, String nom, String fixture) throws Exception {
+    private Document upload(String token, UUID ownerId, String filename, String fixture) throws Exception {
         mockMvc.perform(multipart("/api/documents")
-                        .file(new MockMultipartFile("file", nom, "application/octet-stream", Fixtures.lire(fixture)))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(new MockMultipartFile(
+                                "file", filename, "application/octet-stream", Fixtures.read(fixture)))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isCreated());
-        return documentRepository.findAllByOwnerId(proprietaire).stream()
-                .filter(document -> document.getFilename().equals(nom))
+        return documentRepository.findAllByOwnerId(ownerId).stream()
+                .filter(document -> document.getFilename().equals(filename))
                 .findFirst()
                 .orElseThrow();
     }

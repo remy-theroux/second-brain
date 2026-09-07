@@ -25,7 +25,7 @@ public class DeleteDocumentHandler implements CommandHandler<DeleteDocument> {
                 .orElseThrow(DocumentNotFoundException::new);
 
         documentRepository.delete(document);
-        // La ligne avant le fichier : voir ADR-0020.
+        // The row before the file: see ADR-0020.
         documentStorage.delete(document.getId());
     }
 }

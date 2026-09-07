@@ -5,42 +5,42 @@ import xyz.sterenn.secondbrain.knowledge.domain.CitationPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCatalogue;
 
 /**
- * Retient les fragments tant qu'aucune citation connue n'est apparue : un affichage au fil de
- * l'eau et un garde-fou de fin de réponse s'excluent, et c'est l'ancrage qui l'emporte.
+ * Holds fragments back until a known citation shows up: streaming as it comes and a guardrail at
+ * the end of the answer are mutually exclusive, and grounding wins.
  */
 final class CitationBuffer {
 
     private final SourceCatalogue catalogue;
-    private final Consumer<String> sortie;
-    private final StringBuilder accumule = new StringBuilder();
+    private final Consumer<String> output;
+    private final StringBuilder accumulated = new StringBuilder();
 
-    private boolean ouvert;
+    private boolean open;
 
-    CitationBuffer(SourceCatalogue catalogue, Consumer<String> sortie) {
+    CitationBuffer(SourceCatalogue catalogue, Consumer<String> output) {
         this.catalogue = catalogue;
-        this.sortie = sortie;
+        this.output = output;
     }
 
-    void accepte(String fragment) {
-        accumule.append(fragment);
-        if (ouvert) {
-            sortie.accept(fragment);
+    void accept(String fragment) {
+        accumulated.append(fragment);
+        if (open) {
+            output.accept(fragment);
             return;
         }
-        // Sur le texte accumulé, jamais sur le fragment : un [3] arrive volontiers coupé
-        // en « [ » puis « 3] ».
-        if (CitationPolicy.endOfFirstValidCitation(accumule.toString(), catalogue::contains)
+        // On the accumulated text, never on the fragment: a [3] readily arrives split
+        // into "[" then "3]".
+        if (CitationPolicy.endOfFirstValidCitation(accumulated.toString(), catalogue::contains)
                 .isPresent()) {
-            ouvert = true;
-            sortie.accept(accumule.toString());
+            open = true;
+            output.accept(accumulated.toString());
         }
     }
 
-    String texte() {
-        return accumule.toString();
+    String text() {
+        return accumulated.toString();
     }
 
-    boolean aOuvert() {
-        return ouvert;
+    boolean isOpen() {
+        return open;
     }
 }

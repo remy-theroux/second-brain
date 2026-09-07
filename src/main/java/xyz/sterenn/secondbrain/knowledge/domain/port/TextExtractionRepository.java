@@ -5,8 +5,8 @@ import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 
 /**
- * Port sortant vers le stockage du texte extrait : il se lit par l'identifiant de son document,
- * le cloisonnement par propriétaire ayant déjà été fait en amont.
+ * Outbound port to the storage of extracted text: it is read by its document identifier, the
+ * partitioning by owner having already been done upstream.
  */
 public interface TextExtractionRepository {
 
@@ -15,8 +15,8 @@ public interface TextExtractionRepository {
     Optional<TextExtraction> findByDocumentId(UUID documentId);
 
     /**
-     * AMQP livre au moins une fois et {@code document_id} est {@code UNIQUE} : le handler efface
-     * avant d'écrire.
+     * AMQP delivers at least once and {@code document_id} is {@code UNIQUE}: the handler deletes
+     * before writing.
      */
     void deleteByDocumentId(UUID documentId);
 }

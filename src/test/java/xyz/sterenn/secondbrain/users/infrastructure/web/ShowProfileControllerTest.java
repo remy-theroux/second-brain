@@ -38,7 +38,7 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 @Transactional
 class ShowProfileControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -56,95 +56,94 @@ class ShowProfileControllerTest {
     private JwtEncoder jwtEncoder;
 
     @BeforeEach
-    void vide_les_notifications_enregistrees() {
+    void clears_the_recorded_notifications() {
         recordingNotificationSender.clear();
     }
 
     @Test
-    void refuse_l_acces_sans_jeton() throws Exception {
+    void rejects_access_without_a_token() throws Exception {
         mockMvc.perform(get("/api/profile")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void refuse_un_jeton_expire() throws Exception {
-        // Tolérance d'horloge du décodeur : 60 s. On date donc deux heures en arrière.
-        Instant ilYaDeuxHeures = Instant.now().minus(Duration.ofHours(2));
-        JwtClaimsSet revendications = JwtClaimsSet.builder()
+    void rejects_an_expired_token() throws Exception {
+        // Decoder clock skew tolerance: 60 s. So date it two hours back.
+        Instant twoHoursAgo = Instant.now().minus(Duration.ofHours(2));
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(UUID.randomUUID().toString())
-                .issuedAt(ilYaDeuxHeures)
-                .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
+                .issuedAt(twoHoursAgo)
+                .expiresAt(twoHoursAgo.plus(Duration.ofMinutes(1)))
                 .build();
-        String jetonExpire =
-                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String expiredToken =
+                jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonExpire))
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredToken))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void refuse_un_jeton_signe_par_une_autre_cle() throws Exception {
-        // Revendications volontairement valides en tout point : seule la signature doit
-        // expliquer le refus.
-        JwtEncoder encodeurEtranger = NimbusJwtEncoder.withSecretKey(new SecretKeySpec(
+    void rejects_a_token_signed_with_another_key() throws Exception {
+        // Claims deliberately valid in every respect: only the signature must explain the
+        // refusal.
+        JwtEncoder foreignEncoder = NimbusJwtEncoder.withSecretKey(new SecretKeySpec(
                         "une-autre-cle-de-signature-32-octets-au-moins".getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
                 .build();
-        Instant maintenant = Instant.now();
-        JwtClaimsSet revendications = JwtClaimsSet.builder()
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(UUID.randomUUID().toString())
-                .issuedAt(maintenant)
-                .expiresAt(maintenant.plus(Duration.ofHours(1)))
+                .issuedAt(now)
+                .expiresAt(now.plus(Duration.ofHours(1)))
                 .build();
-        String jetonForge = encodeurEtranger
-                .encode(JwtEncoderParameters.from(revendications))
-                .getTokenValue();
+        String forgedToken =
+                foreignEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonForge))
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + forgedToken))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void refuse_un_jeton_bien_signe_dont_le_compte_n_existe_pas() throws Exception {
-        Instant maintenant = Instant.now();
-        String jeton = accessTokenIssuer
-                .issue(UUID.randomUUID(), maintenant, maintenant.plus(Duration.ofHours(1)))
+    void rejects_a_well_signed_token_whose_account_does_not_exist() throws Exception {
+        Instant now = Instant.now();
+        String token = accessTokenIssuer
+                .issue(UUID.randomUUID(), now, now.plus(Duration.ofHours(1)))
                 .value();
 
-        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void rend_le_profil_du_porteur_du_jeton() throws Exception {
-        UUID compte = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
-        Instant maintenant = Instant.now();
-        String jeton = accessTokenIssuer
-                .issue(compte, maintenant, maintenant.plus(Duration.ofHours(1)))
+    void returns_the_profile_of_the_token_bearer() throws Exception {
+        UUID accountId =
+                AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
+        Instant now = Instant.now();
+        String token = accessTokenIssuer
+                .issue(accountId, now, now.plus(Duration.ofHours(1)))
                 .value();
 
-        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("alice@exemple.fr"))
                 .andExpect(jsonPath("$.verified").value(true))
-                .andExpect(jsonPath("$.id").value(compte.toString()));
+                .andExpect(jsonPath("$.id").value(accountId.toString()));
     }
 
     @Test
-    void bout_en_bout_de_la_connexion_au_profil() throws Exception {
-        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+    void end_to_end_from_the_login_to_the_profile() throws Exception {
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
 
-        String corps = mockMvc.perform(post("/api/token")
+        String body = mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password")
                         .param("username", "alice@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        String jeton = JsonPath.read(corps, "$.access_token");
+        String token = JsonPath.read(body, "$.access_token");
 
-        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+        mockMvc.perform(get("/api/profile").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("alice@exemple.fr"));
     }

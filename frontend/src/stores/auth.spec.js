@@ -12,8 +12,8 @@ function stubFetch(status, body) {
   return fetchStub
 }
 
-// Simule un corps d'erreur non JSON (page HTML d'un proxy en panne, par exemple) :
-// `response.json()` échoue avec une `SyntaxError`, comme le ferait le vrai `fetch`.
+// Simulates a non-JSON error body (the HTML page of a proxy that is down, for instance):
+// `response.json()` fails with a `SyntaxError`, as the real `fetch` would.
 function stubFetchWithUnparsableBody(status) {
   const fetchStub = vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
@@ -26,20 +26,20 @@ function stubFetchWithUnparsableBody(status) {
   return fetchStub
 }
 
-describe("store d'authentification", () => {
+describe('authentication store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     vi.unstubAllGlobals()
   })
 
-  // Filet de sécurité : si l'assertion du test à minuteurs simulés échoue avant d'atteindre
-  // `vi.useRealTimers()`, les minuteurs simulés ne doivent pas fuir vers les tests suivants.
+  // Safety net: if the assertion of the fake-timers test fails before reaching
+  // `vi.useRealTimers()`, the fake timers must not leak into the following tests.
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('mémorise le jeton et son expiration après une connexion réussie', async () => {
+  it('remembers the token and its expiration after a successful sign-in', async () => {
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
 
@@ -50,10 +50,10 @@ describe("store d'authentification", () => {
     expect(localStorage.getItem('second-brain.access-token')).toBe('jeton-abc')
   })
 
-  it('oublie le profil du compte précédent dès la connexion suivante', async () => {
-    // Une session expirée ne passe pas par `logout()` : le garde renvoie sur `/login` en
-    // laissant le profil en place. Sans oubli explicite, `HomeView` affiche l'adresse du
-    // compte précédent le temps du chargement — et indéfiniment si celui-ci échoue.
+  it("forgets the previous account's profile as soon as the next sign-in happens", async () => {
+    // An expired session does not go through `logout()`: the guard sends back to `/login`
+    // leaving the profile in place. Without an explicit forget, `HomeView` shows the
+    // previous account's address while the new one loads — and forever if that load fails.
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
     await auth.login('alice@exemple.fr', 'chevalpile42')
@@ -66,7 +66,7 @@ describe("store d'authentification", () => {
     expect(auth.profile).toBeNull()
   })
 
-  it("envoie l'échange au format attendu par le serveur", async () => {
+  it('sends the exchange in the format the server expects', async () => {
     const fetchStub = stubFetch(200, {
       access_token: 'jeton-abc',
       token_type: 'Bearer',
@@ -84,7 +84,7 @@ describe("store d'authentification", () => {
     expect(options.body.toString()).toContain('username=alice%40exemple.fr')
   })
 
-  it('propage le message du serveur quand la connexion échoue', async () => {
+  it("propagates the server's message when the sign-in fails", async () => {
     stubFetch(400, {
       error: 'invalid_grant',
       error_description: 'Email ou mot de passe incorrect.',
@@ -97,7 +97,7 @@ describe("store d'authentification", () => {
     expect(auth.isAuthenticated()).toBe(false)
   })
 
-  it("propage le message français par défaut quand le corps d'échec n'est pas du JSON", async () => {
+  it('propagates the default French message when the failure body is not JSON', async () => {
     stubFetchWithUnparsableBody(502)
     const auth = useAuthStore()
 
@@ -107,7 +107,7 @@ describe("store d'authentification", () => {
     expect(auth.isAuthenticated()).toBe(false)
   })
 
-  it("n'est plus authentifié quand le jeton a expiré", async () => {
+  it('is no longer authenticated when the token has expired', async () => {
     vi.useFakeTimers()
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
@@ -115,12 +115,12 @@ describe("store d'authentification", () => {
     await auth.login('alice@exemple.fr', 'chevalpile42')
     vi.advanceTimersByTime(3601 * 1000)
 
-    // isAuthenticated doit être une fonction : un `computed` renverrait la valeur mise en
-    // cache, ses dépendances réactives n'ayant pas bougé — seule l'horloge a avancé.
+    // isAuthenticated must be a function: a `computed` would return the cached value, its
+    // reactive dependencies not having moved — only the clock has advanced.
     expect(auth.isAuthenticated()).toBe(false)
   })
 
-  it('vide le stockage local à la déconnexion', async () => {
+  it('clears the local storage on sign-out', async () => {
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
     await auth.login('alice@exemple.fr', 'chevalpile42')
@@ -132,7 +132,7 @@ describe("store d'authentification", () => {
     expect(localStorage.getItem('second-brain.access-token')).toBeNull()
   })
 
-  it('relit le jeton du stockage local au démarrage', () => {
+  it('reads the token back from the local storage at startup', () => {
     localStorage.setItem('second-brain.access-token', 'jeton-abc')
     localStorage.setItem('second-brain.access-token-expiration', String(Date.now() + 3600_000))
 
@@ -141,7 +141,7 @@ describe("store d'authentification", () => {
     expect(auth.isAuthenticated()).toBe(true)
   })
 
-  it('déconnecte quand le profil répond 401', async () => {
+  it('signs out when the profile answers 401', async () => {
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
     await auth.login('alice@exemple.fr', 'chevalpile42')
@@ -151,7 +151,7 @@ describe("store d'authentification", () => {
     expect(auth.isAuthenticated()).toBe(false)
   })
 
-  it('charge le profil du compte connecté', async () => {
+  it("loads the signed-in account's profile", async () => {
     stubFetch(200, { access_token: 'jeton-abc', token_type: 'Bearer', expires_in: 3600 })
     const auth = useAuthStore()
     await auth.login('alice@exemple.fr', 'chevalpile42')

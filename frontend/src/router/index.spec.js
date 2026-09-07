@@ -4,8 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { authenticationGuard, routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 
-// Un routeur d'essai en historique mémoire : le garde est branché de la même façon que
-// dans l'application, sans dépendre de l'URL du navigateur.
+// A test router on memory history: the guard is wired the same way as in the application,
+// without depending on the browser URL.
 function createTestRouter() {
   const router = createRouter({ history: createMemoryHistory(), routes })
   router.beforeEach(authenticationGuard)
@@ -18,13 +18,13 @@ function authenticate() {
   auth.expiresAt = Date.now() + 3600_000
 }
 
-describe("garde d'authentification", () => {
+describe('authentication guard', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
   })
 
-  it("renvoie vers le login quand aucun jeton n'est détenu", async () => {
+  it('sends back to the login when no token is held', async () => {
     const router = createTestRouter()
 
     await router.push('/home')
@@ -32,7 +32,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it('renvoie vers le login quand le jeton a expiré', async () => {
+  it('sends back to the login when the token has expired', async () => {
     const auth = useAuthStore()
     auth.token = 'jeton-abc'
     auth.expiresAt = Date.now() - 1000
@@ -43,7 +43,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it("laisse atteindre l'espace connecté avec un jeton valable", async () => {
+  it('lets the signed-in space be reached with a valid token', async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -52,7 +52,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it("renvoie du login vers l'espace connecté quand on est déjà connecté", async () => {
+  it('sends back from the login to the signed-in space when already signed in', async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -61,7 +61,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it("dirige la racine vers l'espace connecté", async () => {
+  it('directs the root to the signed-in space', async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -70,7 +70,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it('dirige la racine vers le login pour un visiteur anonyme', async () => {
+  it('directs the root to the login for an anonymous visitor', async () => {
     const router = createTestRouter()
 
     await router.push('/')
@@ -78,7 +78,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it("renvoie de l'inscription vers l'espace connecté quand on est déjà connecté", async () => {
+  it('sends back from the registration to the signed-in space when already signed in', async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -87,7 +87,7 @@ describe("garde d'authentification", () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it("laisse un visiteur anonyme atteindre l'inscription", async () => {
+  it('lets an anonymous visitor reach the registration', async () => {
     const router = createTestRouter()
 
     await router.push('/register')
@@ -96,13 +96,13 @@ describe("garde d'authentification", () => {
   })
 })
 
-describe('page des documents', () => {
+describe('documents page', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
   })
 
-  it("renvoie vers le login quand aucun jeton n'est détenu", async () => {
+  it('sends back to the login when no token is held', async () => {
     const router = createTestRouter()
 
     await router.push('/documents')
@@ -110,7 +110,7 @@ describe('page des documents', () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it('laisse atteindre les documents avec un jeton valable', async () => {
+  it('lets the documents be reached with a valid token', async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -119,7 +119,7 @@ describe('page des documents', () => {
     expect(router.currentRoute.value.name).toBe('documents')
   })
 
-  it("renvoie au login le détail d'un document demandé sans jeton", async () => {
+  it('sends back to the login a document detail requested without a token', async () => {
     const router = createTestRouter()
 
     await router.push('/documents/doc-1')
@@ -127,7 +127,7 @@ describe('page des documents', () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it("ouvre le détail d'un document pour un porteur de jeton", async () => {
+  it("opens a document's detail for a token bearer", async () => {
     authenticate()
     const router = createTestRouter()
 
@@ -138,15 +138,15 @@ describe('page des documents', () => {
   })
 })
 
-describe('page de design system', () => {
+describe('design system page', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
   })
 
-  // Vitest tourne avec import.meta.env.DEV à true : c'est la présence de la route qui est
-  // vérifiée ici, pas son absence en production, que seul le build peut établir.
-  it("est atteignable par un visiteur anonyme en développement, sans passer par l'espace connecté", async () => {
+  // Vitest runs with import.meta.env.DEV at true: what is checked here is the presence of
+  // the route, not its absence in production, which only the build can establish.
+  it('is reachable by an anonymous visitor in development, without the signed-in space', async () => {
     const router = createTestRouter()
 
     await router.push('/design-system')
@@ -154,7 +154,7 @@ describe('page de design system', () => {
     expect(router.currentRoute.value.name).toBe('design-system')
   })
 
-  it('ne renvoie pas un utilisateur connecté vers son espace', async () => {
+  it('does not send a signed-in user back to their space', async () => {
     authenticate()
     const router = createTestRouter()
 

@@ -19,45 +19,45 @@ class RecursiveChunkerWithJtokkitTest {
     private final RecursiveChunker chunker = new RecursiveChunker(tokenCounter);
 
     @Test
-    void aucun_extrait_de_texte_francais_ne_depasse_le_plafond() {
-        String texte = IntStream.range(0, 400)
+    void no_chunk_of_french_text_exceeds_the_ceiling() {
+        String text = IntStream.range(0, 400)
                 .mapToObj(index ->
                         "L'élève déchiffrait péniblement les hiéroglyphes gravés sur la stèle numéro " + index + ".")
                 .collect(Collectors.joining(" "));
 
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(texte));
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(text));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits).allSatisfy(extrait -> assertThat(tokenCounter.count(extrait.text()))
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks).allSatisfy(chunk -> assertThat(tokenCounter.count(chunk.text()))
                 .isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS));
     }
 
     @Test
-    void coupe_au_caractere_un_bloc_sans_espace_ni_ponctuation() {
-        // Le compteur d'essai de RecursiveChunkerTest ne peut pas atteindre ce cas : un seul
-        // « mot » y vaut un seul token.
+    void cuts_at_the_character_a_block_without_space_or_punctuation() {
+        // The stub counter of RecursiveChunkerTest cannot reach this case: one 'word' is worth
+        // exactly one token there.
         String blob = "QWxvcnNRdWVMZURvY3VtZW50TmVQb3J0ZUF1Y3VuZUZyb250aWVyZQ".repeat(400);
 
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(blob));
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(blob));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits).allSatisfy(extrait -> assertThat(tokenCounter.count(extrait.text()))
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks).allSatisfy(chunk -> assertThat(tokenCounter.count(chunk.text()))
                 .isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS));
     }
 
     @Test
-    void la_coupe_au_caractere_ne_separe_jamais_une_paire_de_substituts() {
-        // Un emoji est une paire de substituts UTF-16 : coupée en son milieu, la moitié
-        // orpheline n'est plus de l'UTF-8 valide, et le round-trip la rend en U+FFFD.
+    void the_character_cut_never_splits_a_surrogate_pair() {
+        // An emoji is a UTF-16 surrogate pair: cut in the middle, the orphaned half is no
+        // longer valid UTF-8, and the round-trip renders it as U+FFFD.
         String blob = "😀".repeat(2000);
 
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(blob));
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(blob));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits).allSatisfy(extrait -> {
-            assertThat(tokenCounter.count(extrait.text())).isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS);
-            assertThat(new String(extrait.text().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8))
-                    .isEqualTo(extrait.text());
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks).allSatisfy(chunk -> {
+            assertThat(tokenCounter.count(chunk.text())).isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS);
+            assertThat(new String(chunk.text().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8))
+                    .isEqualTo(chunk.text());
         });
     }
 }

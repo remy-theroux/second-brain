@@ -16,76 +16,76 @@ final class AgentDefinitionLoader {
 
     private static final Pattern FRONT_MATTER = Pattern.compile("\\A---\\R(.*?)\\R---\\R", Pattern.DOTALL);
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{([a-z-]+)}}");
-    private static final List<String> CLES_OBLIGATOIRES =
+    private static final List<String> REQUIRED_KEYS =
             List.of("name", "version", "refus-introuvable", "refus-hors-perimetre");
 
     private AgentDefinitionLoader() {}
 
-    static Agent depuisLeClasspath(String chemin) {
-        try (InputStream flux = AgentDefinitionLoader.class.getClassLoader().getResourceAsStream(chemin)) {
-            if (flux == null) {
+    static Agent fromClasspath(String path) {
+        try (InputStream stream = AgentDefinitionLoader.class.getClassLoader().getResourceAsStream(path)) {
+            if (stream == null) {
                 throw new IllegalStateException(
-                        "La définition d'agent " + chemin + " est introuvable dans le classpath.");
+                        "La définition d'agent " + path + " est introuvable dans le classpath.");
             }
-            return analyse(new String(flux.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException illisible) {
-            throw new IllegalStateException("La définition d'agent " + chemin + " est illisible.", illisible);
+            return parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+        } catch (IOException unreadable) {
+            throw new IllegalStateException("La définition d'agent " + path + " est illisible.", unreadable);
         }
     }
 
-    static Agent analyse(String contenu) {
-        Matcher enTete = FRONT_MATTER.matcher(contenu);
-        if (!enTete.find()) {
+    static Agent parse(String content) {
+        Matcher header = FRONT_MATTER.matcher(content);
+        if (!header.find()) {
             throw new IllegalStateException("La définition d'agent n'a pas de front matter délimité par ---.");
         }
-        Map<String, String> cles = cles(enTete.group(1));
-        for (String obligatoire : CLES_OBLIGATOIRES) {
-            if (!cles.containsKey(obligatoire)) {
+        Map<String, String> keys = keys(header.group(1));
+        for (String required : REQUIRED_KEYS) {
+            if (!keys.containsKey(required)) {
                 throw new IllegalStateException(
-                        "La définition d'agent n'a pas de clé « " + obligatoire + " » dans son front matter.");
+                        "La définition d'agent n'a pas de clé « " + required + " » dans son front matter.");
             }
         }
-        String prose = substitue(contenu.substring(enTete.end()).strip(), cles);
+        String prose = substitute(content.substring(header.end()).strip(), keys);
         if (prose.isEmpty()) {
             throw new IllegalStateException(
                     "La définition d'agent n'a pas de prose : un agent sans consignes" + " répondrait n'importe quoi.");
         }
         return new Agent(
-                cles.get("name"),
-                cles.get("version"),
+                keys.get("name"),
+                keys.get("version"),
                 prose,
-                new AgentRefusals(cles.get("refus-introuvable"), cles.get("refus-hors-perimetre")),
-                DocumentAgent.OUTILS,
+                new AgentRefusals(keys.get("refus-introuvable"), keys.get("refus-hors-perimetre")),
+                DocumentAgent.TOOLS,
                 DocumentAgent.BUDGET,
                 DocumentAgent.TEMPERATURE);
     }
 
-    private static Map<String, String> cles(String frontMatter) {
-        Map<String, String> cles = new LinkedHashMap<>();
-        for (String ligne : frontMatter.lines().toList()) {
-            int separateur = ligne.indexOf(':');
-            if (separateur > 0) {
-                cles.put(
-                        ligne.substring(0, separateur).strip(),
-                        ligne.substring(separateur + 1).strip());
+    private static Map<String, String> keys(String frontMatter) {
+        Map<String, String> keys = new LinkedHashMap<>();
+        for (String line : frontMatter.lines().toList()) {
+            int separator = line.indexOf(':');
+            if (separator > 0) {
+                keys.put(
+                        line.substring(0, separator).strip(),
+                        line.substring(separator + 1).strip());
             }
         }
-        return cles;
+        return keys;
     }
 
-    private static String substitue(String prose, Map<String, String> cles) {
-        Matcher trouve = PLACEHOLDER.matcher(prose);
-        StringBuilder resolu = new StringBuilder();
-        while (trouve.find()) {
-            String cle = trouve.group(1);
-            String valeur = cles.get(cle);
-            if (valeur == null) {
+    private static String substitute(String prose, Map<String, String> keys) {
+        Matcher matcher = PLACEHOLDER.matcher(prose);
+        StringBuilder resolved = new StringBuilder();
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            String value = keys.get(key);
+            if (value == null) {
                 throw new IllegalStateException(
-                        "La définition d'agent appelle « " + cle + " », que son front matter ne déclare pas.");
+                        "La définition d'agent appelle « " + key + " », que son front matter ne déclare pas.");
             }
-            trouve.appendReplacement(resolu, Matcher.quoteReplacement(valeur));
+            matcher.appendReplacement(resolved, Matcher.quoteReplacement(value));
         }
-        trouve.appendTail(resolu);
-        return resolu.toString();
+        matcher.appendTail(resolved);
+        return resolved.toString();
     }
 }

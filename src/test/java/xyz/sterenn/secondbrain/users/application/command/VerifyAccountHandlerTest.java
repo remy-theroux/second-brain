@@ -29,7 +29,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification
 @Transactional
 class VerifyAccountHandlerTest {
 
-    private static final String MOT_DE_PASSE_VALIDE = "chevalpile42";
+    private static final String VALID_PASSWORD = "chevalpile42";
 
     @Autowired
     private CommandBus commandBus;
@@ -47,32 +47,32 @@ class VerifyAccountHandlerTest {
     private EntityManager entityManager;
 
     @BeforeEach
-    void vide_les_notifications() {
+    void clears_the_notifications() {
         notifications.clear();
     }
 
-    private VerificationNotification inscrit(String email) {
-        commandBus.dispatch(new RegisterUser(email, MOT_DE_PASSE_VALIDE));
-        return notifications.derniere();
+    private VerificationNotification register(String email) {
+        commandBus.dispatch(new RegisterUser(email, VALID_PASSWORD));
+        return notifications.last();
     }
 
-    private void vieillitLeJeton(UUID compte, Duration age) {
-        // Le handler écrit le jeton avec l'horloge réelle : le vieillir en base est le seul
-        // moyen d'observer l'expiration sans figer l'horloge du contexte.
+    private void ageTheToken(UUID accountId, Duration age) {
+        // The handler writes the token with the real clock: ageing it in the database is
+        // the only way to observe expiry without freezing the context clock.
         entityManager.flush();
         jdbcTemplate.update(
                 "UPDATE users_verification_tokens "
                         + "SET expires_at = expires_at - CAST(? AS interval) WHERE user_id = ?",
                 age.toHours() + " hours",
-                compte);
-        // Sans ce clear, le cache de premier niveau d'Hibernate resservirait l'entité telle
-        // qu'elle était avant l'UPDATE.
+                accountId);
+        // Without this clear, Hibernate's first-level cache would serve the entity back as
+        // it was before the UPDATE.
         entityManager.clear();
     }
 
     @Test
-    void verifie_le_compte_quand_le_jeton_correspond() {
-        VerificationNotification notification = inscrit("alice@example.com");
+    void verifies_the_account_when_the_token_matches() {
+        VerificationNotification notification = register("alice@example.com");
 
         commandBus.dispatch(new VerifyAccount(
                 notification.accountId().toString(), notification.rawToken().value()));
@@ -85,8 +85,8 @@ class VerifyAccountHandlerTest {
     }
 
     @Test
-    void refuse_un_jeton_qui_ne_correspond_pas() {
-        VerificationNotification notification = inscrit("bob@example.com");
+    void rejects_a_token_that_does_not_match() {
+        VerificationNotification notification = register("bob@example.com");
 
         assertThatThrownBy(() -> commandBus.dispatch(
                         new VerifyAccount(notification.accountId().toString(), "un-autre-jeton")))
@@ -100,8 +100,8 @@ class VerifyAccountHandlerTest {
     }
 
     @Test
-    void refuse_un_compte_inconnu() {
-        VerificationNotification notification = inscrit("carol@example.com");
+    void rejects_an_unknown_account() {
+        VerificationNotification notification = register("carol@example.com");
 
         assertThatThrownBy(() -> commandBus.dispatch(new VerifyAccount(
                         UUID.randomUUID().toString(), notification.rawToken().value())))
@@ -109,8 +109,8 @@ class VerifyAccountHandlerTest {
     }
 
     @Test
-    void refuse_un_identifiant_de_compte_mal_forme() {
-        VerificationNotification notification = inscrit("dave@example.com");
+    void rejects_a_malformed_account_id() {
+        VerificationNotification notification = register("dave@example.com");
 
         assertThatThrownBy(() -> commandBus.dispatch(
                         new VerifyAccount("pas-un-uuid", notification.rawToken().value())))
@@ -118,9 +118,9 @@ class VerifyAccountHandlerTest {
     }
 
     @Test
-    void refuse_un_jeton_expire() {
-        VerificationNotification notification = inscrit("erin@example.com");
-        vieillitLeJeton(notification.accountId(), Duration.ofHours(25));
+    void rejects_an_expired_token() {
+        VerificationNotification notification = register("erin@example.com");
+        ageTheToken(notification.accountId(), Duration.ofHours(25));
 
         assertThatThrownBy(() -> commandBus.dispatch(new VerifyAccount(
                         notification.accountId().toString(),
@@ -135,8 +135,8 @@ class VerifyAccountHandlerTest {
     }
 
     @Test
-    void refuse_un_jeton_deja_utilise() {
-        VerificationNotification notification = inscrit("frank@example.com");
+    void rejects_an_already_used_token() {
+        VerificationNotification notification = register("frank@example.com");
         commandBus.dispatch(new VerifyAccount(
                 notification.accountId().toString(), notification.rawToken().value()));
 

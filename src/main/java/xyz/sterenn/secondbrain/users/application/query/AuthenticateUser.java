@@ -4,7 +4,7 @@ import xyz.sterenn.secondbrain.shared.bus.Query;
 
 public record AuthenticateUser(String email, String rawPassword) implements Query<AccessTokenView> {
 
-    /** Masque {@code rawPassword} : ni log ni message d'échec d'assertion ne doit le rendre en clair. */
+    /** Masks {@code rawPassword}: neither a log nor an assertion failure message may reveal it. */
     @Override
     public String toString() {
         return "AuthenticateUser[email=" + email + ", rawPassword=***]";

@@ -18,73 +18,74 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 public final class KnowledgeFixture {
 
-    /** {@code DeleteObjects} plafonne à 1000 clés par appel : au-delà, S3 refuse la requête. */
-    private static final int LOT_DE_SUPPRESSION = 1000;
+    /** {@code DeleteObjects} caps at 1000 keys per call: beyond that, S3 rejects the request. */
+    private static final int DELETION_BATCH = 1000;
 
     private KnowledgeFixture() {}
 
-    public static String jeton(AccessTokenIssuer accessTokenIssuer, UUID compte) {
-        Instant maintenant = Instant.now();
+    public static String token(AccessTokenIssuer accessTokenIssuer, UUID account) {
+        Instant now = Instant.now();
         return accessTokenIssuer
-                .issue(compte, maintenant, maintenant.plus(Duration.ofHours(1)))
+                .issue(account, now, now.plus(Duration.ofHours(1)))
                 .value();
     }
 
     /**
-     * {@code @Transactional} annule la base, jamais le stockage objet : sans ce nettoyage, un
-     * original survit et le refus d'écrasement de l'adapter fait échouer un scénario voisin.
+     * {@code @Transactional} rolls back the database, never the object storage: without this
+     * cleanup an original survives and the adapter's refusal to overwrite fails a neighbouring
+     * scenario.
      */
-    public static void videLesOriginaux(S3Client s3Client, String bucket) {
-        List<ObjectIdentifier> cles =
+    public static void emptyTheOriginals(S3Client s3Client, String bucket) {
+        List<ObjectIdentifier> keys =
                 s3Client
                         .listObjectsV2Paginator(
                                 ListObjectsV2Request.builder().bucket(bucket).build())
                         .contents()
                         .stream()
-                        .map(objet ->
-                                ObjectIdentifier.builder().key(objet.key()).build())
+                        .map(object ->
+                                ObjectIdentifier.builder().key(object.key()).build())
                         .toList();
 
-        for (int debut = 0; debut < cles.size(); debut += LOT_DE_SUPPRESSION) {
-            List<ObjectIdentifier> lot = cles.subList(debut, Math.min(debut + LOT_DE_SUPPRESSION, cles.size()));
-            DeleteObjectsResponse reponse = s3Client.deleteObjects(DeleteObjectsRequest.builder()
+        for (int start = 0; start < keys.size(); start += DELETION_BATCH) {
+            List<ObjectIdentifier> batch = keys.subList(start, Math.min(start + DELETION_BATCH, keys.size()));
+            DeleteObjectsResponse response = s3Client.deleteObjects(DeleteObjectsRequest.builder()
                     .bucket(bucket)
-                    .delete(Delete.builder().objects(lot).build())
+                    .delete(Delete.builder().objects(batch).build())
                     .build());
-            // Un 200 ne vaut pas succès ici : DeleteObjects range les échecs clé par clé dans le
-            // corps de la réponse, et le SDK ne lève donc rien.
-            if (!reponse.errors().isEmpty()) {
-                String echecs = reponse.errors().stream()
-                        .map(erreur -> erreur.key() + " (" + erreur.code() + " : " + erreur.message() + ")")
+            // A 200 is not success here: DeleteObjects reports failures key by key in the response
+            // body, so the SDK throws nothing.
+            if (!response.errors().isEmpty()) {
+                String failures = response.errors().stream()
+                        .map(error -> error.key() + " (" + error.code() + " : " + error.message() + ")")
                         .collect(Collectors.joining(", "));
                 throw new IllegalStateException(
-                        "Le nettoyage du bucket " + bucket + " a laissé des originaux derrière lui : " + echecs);
+                        "Le nettoyage du bucket " + bucket + " a laissé des originaux derrière lui : " + failures);
             }
         }
     }
 
-    public static Embedding unVecteur(float valeur) {
-        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
-        Arrays.fill(valeurs, valeur);
-        return Embedding.of(valeurs);
+    public static Embedding aVector(float value) {
+        float[] values = new float[EmbeddingPolicy.DIMENSIONS];
+        Arrays.fill(values, value);
+        return Embedding.of(values);
     }
 
     /**
-     * La question de référence des tests de proximité : orientée sur la seule dimension 0.
-     * {@link #unVecteur} ne convient pas — elle rend des vecteurs tous colinéaires, donc à
-     * distance cosinus nulle deux à deux.
+     * The reference question of the proximity tests: oriented along dimension 0 only.
+     * {@link #aVector} does not fit — it returns vectors that are all collinear, hence at zero
+     * cosine distance from one another.
      */
-    public static Embedding uneQuestion() {
-        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
-        valeurs[0] = 1f;
-        return Embedding.of(valeurs);
+    public static Embedding aQuestion() {
+        float[] values = new float[EmbeddingPolicy.DIMENSIONS];
+        values[0] = 1f;
+        return Embedding.of(values);
     }
 
-    /** D'autant plus proche de {@link #uneQuestion()} que {@code proximite} approche de 1. */
-    public static Embedding unVecteurProche(float proximite) {
-        float[] valeurs = new float[EmbeddingPolicy.DIMENSIONS];
-        valeurs[0] = proximite;
-        valeurs[1] = 1f - proximite;
-        return Embedding.of(valeurs);
+    /** The closer {@code proximity} gets to 1, the closer to {@link #aQuestion()}. */
+    public static Embedding aNearbyVector(float proximity) {
+        float[] values = new float[EmbeddingPolicy.DIMENSIONS];
+        values[0] = proximity;
+        values[1] = 1f - proximity;
+        return Embedding.of(values);
     }
 }

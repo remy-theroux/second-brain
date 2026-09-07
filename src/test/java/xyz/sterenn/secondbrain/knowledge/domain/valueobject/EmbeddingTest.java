@@ -11,61 +11,61 @@ import xyz.sterenn.secondbrain.knowledge.domain.EmbeddingPolicy;
 class EmbeddingTest {
 
     @Test
-    void accepte_un_vecteur_de_la_dimension_attendue() {
-        Embedding vecteur = Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS));
+    void accepts_a_vector_of_the_expected_dimension() {
+        Embedding vector = Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS));
 
-        assertThat(vecteur.values()).hasSize(EmbeddingPolicy.DIMENSIONS);
+        assertThat(vector.values()).hasSize(EmbeddingPolicy.DIMENSIONS);
     }
 
     @Test
-    void refuse_un_vecteur_trop_court_en_nommant_la_dimension_recue() {
+    void rejects_a_vector_too_short_while_naming_the_dimension_received() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> Embedding.of(unVecteur(768)))
+                .isThrownBy(() -> Embedding.of(aVector(768)))
                 .withMessageContaining("768")
                 .withMessageContaining(String.valueOf(EmbeddingPolicy.DIMENSIONS));
     }
 
     @Test
-    void refuse_un_vecteur_absent() {
+    void rejects_a_missing_vector() {
         assertThatNullPointerException().isThrownBy(() -> Embedding.of(null));
     }
 
     @Test
-    void deux_vecteurs_de_meme_contenu_sont_egaux() {
-        assertThat(Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS)))
-                .isEqualTo(Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS)))
-                .hasSameHashCodeAs(Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS)));
+    void two_vectors_with_the_same_content_are_equal() {
+        assertThat(Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS)))
+                .isEqualTo(Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS)))
+                .hasSameHashCodeAs(Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS)));
     }
 
     @Test
-    void ne_laisse_pas_modifier_le_tableau_qu_il_a_recu() {
-        float[] source = unVecteur(EmbeddingPolicy.DIMENSIONS);
-        Embedding vecteur = Embedding.of(source);
+    void does_not_let_the_array_it_received_be_modified() {
+        float[] source = aVector(EmbeddingPolicy.DIMENSIONS);
+        Embedding vector = Embedding.of(source);
 
         source[0] = 42f;
 
-        assertThat(vecteur.values()[0]).isEqualTo(0.5f);
+        assertThat(vector.values()[0]).isEqualTo(0.5f);
     }
 
     @Test
-    void ne_laisse_pas_modifier_le_tableau_qu_il_rend() {
-        Embedding vecteur = Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS));
+    void does_not_let_the_array_it_returns_be_modified() {
+        Embedding vector = Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS));
 
-        vecteur.values()[0] = 42f;
+        vector.values()[0] = 42f;
 
-        assertThat(vecteur.values()[0]).isEqualTo(0.5f);
+        assertThat(vector.values()[0]).isEqualTo(0.5f);
     }
 
     @Test
-    void ne_montre_jamais_ses_valeurs_quand_on_l_affiche() {
-        assertThat(Embedding.of(unVecteur(EmbeddingPolicy.DIMENSIONS)).toString())
+    void never_shows_its_values_when_printed() {
+        assertThat(Embedding.of(aVector(EmbeddingPolicy.DIMENSIONS)).toString())
                 .contains(String.valueOf(EmbeddingPolicy.DIMENSIONS))
                 .doesNotContain("0.5");
     }
 
-    private static float[] unVecteur(int dimensions) {
-        float[] valeurs = new float[dimensions];
-        Arrays.fill(valeurs, 0.5f);
-        return valeurs;
+    private static float[] aVector(int dimensions) {
+        float[] values = new float[dimensions];
+        Arrays.fill(values, 0.5f);
+        return values;
     }
 }

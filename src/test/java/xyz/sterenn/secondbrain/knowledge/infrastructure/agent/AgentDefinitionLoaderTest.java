@@ -23,81 +23,81 @@ class AgentDefinitionLoaderTest {
             """;
 
     @Test
-    void lit_le_nom_la_version_et_les_deux_refus() {
-        Agent agent = AgentDefinitionLoader.analyse(MINIMAL);
+    void reads_the_name_the_version_and_the_two_refusals() {
+        Agent agent = AgentDefinitionLoader.parse(MINIMAL);
 
         assertThat(agent.name()).isEqualTo("agent-de-test");
         assertThat(agent.version()).isEqualTo("v7");
-        assertThat(agent.refusals().introuvable()).isEqualTo("Rien trouvé.");
-        assertThat(agent.refusals().horsPerimetre()).isEqualTo("Hors sujet.");
+        assertThat(agent.refusals().notFound()).isEqualTo("Rien trouvé.");
+        assertThat(agent.refusals().outOfScope()).isEqualTo("Hors sujet.");
     }
 
     @Test
-    void substitue_les_messages_de_refus_dans_la_prose() {
-        Agent agent = AgentDefinitionLoader.analyse(MINIMAL);
+    void substitutes_the_refusal_messages_into_the_prose() {
+        Agent agent = AgentDefinitionLoader.parse(MINIMAL);
 
         assertThat(agent.systemPrompt()).contains("« Rien trouvé. »").doesNotContain("{{");
     }
 
     @Test
-    void refuse_un_placeholder_qu_il_ne_sait_pas_resoudre() {
-        String inconnu = MINIMAL.replace("{{refus-introuvable}}", "{{refus-inexistant}}");
+    void rejects_a_placeholder_it_cannot_resolve() {
+        String unknown = MINIMAL.replace("{{refus-introuvable}}", "{{refus-inexistant}}");
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> AgentDefinitionLoader.analyse(inconnu))
+                .isThrownBy(() -> AgentDefinitionLoader.parse(unknown))
                 .withMessageContaining("refus-inexistant");
     }
 
     @Test
-    void refuse_un_front_matter_incomplet() {
-        String sansVersion = MINIMAL.replace("version: v7\n", "");
+    void rejects_an_incomplete_front_matter() {
+        String withoutVersion = MINIMAL.replace("version: v7\n", "");
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> AgentDefinitionLoader.analyse(sansVersion))
+                .isThrownBy(() -> AgentDefinitionLoader.parse(withoutVersion))
                 .withMessageContaining("version");
     }
 
     @Test
-    void refuse_un_contenu_sans_front_matter() {
+    void rejects_a_content_without_a_front_matter() {
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> AgentDefinitionLoader.analyse("Tu es un agent."));
+                .isThrownBy(() -> AgentDefinitionLoader.parse("Tu es un agent."));
     }
 
     @Test
-    void refuse_une_prose_vide() {
-        String sansCorps = MINIMAL.substring(0, MINIMAL.indexOf("Tu es un agent"));
+    void rejects_an_empty_prose() {
+        String withoutBody = MINIMAL.substring(0, MINIMAL.indexOf("Tu es un agent"));
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> AgentDefinitionLoader.analyse(sansCorps));
+                .isThrownBy(() -> AgentDefinitionLoader.parse(withoutBody));
     }
 
     @Test
-    void refuse_un_fichier_absent() {
+    void rejects_a_missing_file() {
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> AgentDefinitionLoader.depuisLeClasspath("agents/inexistant.md"))
+                .isThrownBy(() -> AgentDefinitionLoader.fromClasspath("agents/inexistant.md"))
                 .withMessageContaining("agents/inexistant.md");
     }
 
     @Test
-    void charge_l_agent_reel_du_projet_sans_placeholder_residuel() {
-        Agent agent = AgentDefinitionLoader.depuisLeClasspath("agents/document-agent.md");
+    void loads_the_real_project_agent_without_a_leftover_placeholder() {
+        Agent agent = AgentDefinitionLoader.fromClasspath("agents/document-agent.md");
 
         assertThat(agent.name()).isEqualTo("document-agent");
         assertThat(agent.systemPrompt()).doesNotContain("{{");
     }
 
     @Test
-    void decrit_a_l_agent_la_balise_que_le_code_emet_reellement() {
-        Agent agent = AgentDefinitionLoader.depuisLeClasspath("agents/document-agent.md");
+    void describes_to_the_agent_the_tag_the_code_actually_emits() {
+        Agent agent = AgentDefinitionLoader.fromClasspath("agents/document-agent.md");
 
-        assertThat(agent.systemPrompt()).contains(CitationPolicy.BALISE_OUVRANTE);
-        assertThat(agent.systemPrompt()).contains(CitationPolicy.BALISE_FERMANTE);
+        assertThat(agent.systemPrompt()).contains(CitationPolicy.OPENING_MARKER);
+        assertThat(agent.systemPrompt()).contains(CitationPolicy.CLOSING_MARKER);
     }
 
     @Test
-    void nomme_a_l_agent_l_outil_que_le_code_lui_declare() {
-        Agent agent = AgentDefinitionLoader.depuisLeClasspath("agents/document-agent.md");
+    void names_to_the_agent_the_tool_the_code_declares_to_it() {
+        Agent agent = AgentDefinitionLoader.fromClasspath("agents/document-agent.md");
 
-        assertThat(agent.systemPrompt()).contains(DocumentAgent.OUTIL_RECHERCHE);
+        assertThat(agent.systemPrompt()).contains(DocumentAgent.SEARCH_TOOL);
     }
 }

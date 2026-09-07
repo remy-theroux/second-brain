@@ -59,36 +59,36 @@ class SearchChunksControllerTest {
     private AccessTokenIssuer accessTokenIssuer;
 
     private UUID alice;
-    private String jetonAlice;
+    private String aliceToken;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingEmbeddingPort.clear();
-        recordingEmbeddingPort.repondra(KnowledgeFixture.uneQuestion());
+        recordingEmbeddingPort.willAnswer(KnowledgeFixture.aQuestion());
         alice = userRepository
                 .save(User.register(new Email("alice@exemple.fr"), "empreinte"))
                 .getId();
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, alice);
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, alice);
     }
 
     @AfterEach
-    void rend_le_port_de_vectorisation_comme_il_l_a_trouve() {
+    void leaves_the_embedding_port_as_it_found_it() {
         recordingEmbeddingPort.clear();
     }
 
     @Test
-    void rend_le_contenu_le_document_la_position_et_le_score_de_chaque_extrait() throws Exception {
-        Document document = unDocumentDepose("rapport-annuel.md");
+    void returns_the_content_the_document_the_position_and_the_score_of_each_chunk() throws Exception {
+        Document document = anUploadedDocument("rapport-annuel.md");
         textChunkRepository.saveAll(List.of(TextChunk.of(
                 document.getId(),
                 2,
                 new Chunk("Introduction", "Le corps de l'extrait."),
-                KnowledgeFixture.unVecteurProche(1f),
+                KnowledgeFixture.aNearbyVector(1f),
                 Instant.now())));
 
         mockMvc.perform(get("/api/search")
                         .param("q", "Quelle est la réponse ?")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].documentId").value(document.getId().toString()))
                 .andExpect(jsonPath("$[0].filename").value("rapport-annuel.md"))
@@ -99,49 +99,49 @@ class SearchChunksControllerTest {
     }
 
     @Test
-    void rend_une_liste_vide_pour_une_base_de_connaissance_vide() throws Exception {
+    void returns_an_empty_list_for_an_empty_knowledge_base() throws Exception {
         mockMvc.perform(get("/api/search")
                         .param("q", "Quelle est la réponse ?")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
-    void refuse_sans_jeton() throws Exception {
+    void refuses_without_a_token() throws Exception {
         mockMvc.perform(get("/api/search").param("q", "Quelle est la réponse ?"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void refuse_une_question_vide_en_nommant_le_parametre() throws Exception {
-        mockMvc.perform(get("/api/search").param("q", "   ").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+    void refuses_an_empty_question_by_naming_the_parameter() throws Exception {
+        mockMvc.perform(get("/api/search").param("q", "   ").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.q").value("La question ne peut pas être vide."));
     }
 
     @Test
-    void refuse_une_question_absente_comme_une_question_vide() throws Exception {
-        mockMvc.perform(get("/api/search").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+    void refuses_a_missing_question_like_an_empty_question() throws Exception {
+        mockMvc.perform(get("/api/search").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.q").value("La question ne peut pas être vide."));
     }
 
     @Test
-    void repond_indisponible_quand_la_vectorisation_ne_repond_pas() throws Exception {
-        recordingEmbeddingPort.tombeEnPanne();
+    void answers_unavailable_when_the_embedding_service_does_not_answer() throws Exception {
+        recordingEmbeddingPort.willFail();
 
         mockMvc.perform(get("/api/search")
                         .param("q", "Quelle est la réponse ?")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").isNotEmpty());
     }
 
-    private Document unDocumentDepose(String nom) {
-        byte[] octets = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
+    private Document anUploadedDocument(String filename) {
+        byte[] bytes = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
         return documentRepository.save(
-                Document.upload(alice, nom, DocumentFormat.MARKDOWN, Checksum.of(octets), octets.length));
+                Document.upload(alice, filename, DocumentFormat.MARKDOWN, Checksum.of(bytes), bytes.length));
     }
 }

@@ -14,9 +14,9 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCatalogue;
 
 class GroundingPolicyTest {
 
-    private static final Agent AGENT = AgentDeTest.unAgent();
+    private static final Agent AGENT = TestAgents.anAgent();
 
-    private static SourceCatalogue troisExtraits() {
+    private static SourceCatalogue threeChunks() {
         UUID document = UUID.randomUUID();
         return SourceCatalogue.empty()
                 .absorb(List.of(
@@ -27,63 +27,62 @@ class GroundingPolicyTest {
     }
 
     @Test
-    void laisse_passer_une_reponse_sans_recherche() {
-        Answer reponse = GroundingPolicy.verdict(AGENT, "Bonjour, je vous écoute.", SourceCatalogue.empty(), false);
+    void lets_through_an_answer_that_did_not_search() {
+        Answer answer = GroundingPolicy.verdict(AGENT, "Bonjour, je vous écoute.", SourceCatalogue.empty(), false);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
-        assertThat(reponse.text()).isEqualTo("Bonjour, je vous écoute.");
-        assertThat(reponse.sources()).isEmpty();
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.CONVERSATIONAL);
+        assertThat(answer.text()).isEqualTo("Bonjour, je vous écoute.");
+        assertThat(answer.sources()).isEmpty();
     }
 
     @Test
-    void retient_une_reponse_citee_et_ne_garde_que_les_extraits_cites() {
-        Answer reponse = GroundingPolicy.verdict(AGENT, "Quatorze jours [3] et [1].", troisExtraits(), true);
+    void keeps_a_cited_answer_and_only_the_cited_chunks() {
+        Answer answer = GroundingPolicy.verdict(AGENT, "Quatorze jours [3] et [1].", threeChunks(), true);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.SOURCEE);
-        assertThat(reponse.text()).isEqualTo("Quatorze jours [3] et [1].");
-        assertThat(reponse.sources()).extracting(Source::number).containsExactly(3, 1);
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.GROUNDED);
+        assertThat(answer.text()).isEqualTo("Quatorze jours [3] et [1].");
+        assertThat(answer.sources()).extracting(Source::number).containsExactly(3, 1);
     }
 
     @Test
-    void remplace_une_reponse_non_citee_par_l_aveu_d_ignorance() {
-        Answer reponse = GroundingPolicy.verdict(AGENT, "Canberra est la capitale.", troisExtraits(), true);
+    void replaces_an_uncited_answer_with_the_admission_of_ignorance() {
+        Answer answer = GroundingPolicy.verdict(AGENT, "Canberra est la capitale.", threeChunks(), true);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.SANS_SOURCE);
-        assertThat(reponse.text()).isEqualTo(AgentDeTest.AVEU);
-        assertThat(reponse.sources()).isEmpty();
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.UNGROUNDED);
+        assertThat(answer.text()).isEqualTo(TestAgents.NOT_FOUND);
+        assertThat(answer.sources()).isEmpty();
     }
 
     @Test
-    void ne_tient_pas_une_citation_hors_catalogue_pour_un_ancrage() {
-        Answer reponse = GroundingPolicy.verdict(AGENT, "Canberra [9] est la capitale.", troisExtraits(), true);
+    void does_not_take_a_citation_outside_the_catalogue_as_grounding() {
+        Answer answer = GroundingPolicy.verdict(AGENT, "Canberra [9] est la capitale.", threeChunks(), true);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.SANS_SOURCE);
-        assertThat(reponse.text()).isEqualTo(AgentDeTest.AVEU);
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.UNGROUNDED);
+        assertThat(answer.text()).isEqualTo(TestAgents.NOT_FOUND);
     }
 
     @Test
-    void ignore_la_citation_fantome_mais_retient_la_reponse_si_une_autre_est_valide() {
-        Answer reponse = GroundingPolicy.verdict(AGENT, "Faux [9] mais vrai [2].", troisExtraits(), true);
+    void ignores_the_phantom_citation_but_keeps_the_answer_if_another_one_is_valid() {
+        Answer answer = GroundingPolicy.verdict(AGENT, "Faux [9] mais vrai [2].", threeChunks(), true);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.SOURCEE);
-        assertThat(reponse.text()).isEqualTo("Faux [9] mais vrai [2].");
-        assertThat(reponse.sources()).extracting(Source::number).containsExactly(2);
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.GROUNDED);
+        assertThat(answer.text()).isEqualTo("Faux [9] mais vrai [2].");
+        assertThat(answer.sources()).extracting(Source::number).containsExactly(2);
     }
 
     @Test
-    void ne_retouche_jamais_le_texte_qu_il_retient() {
-        String tel_quel = "  Quatorze jours [1].  ";
+    void never_alters_the_text_it_keeps() {
+        String asIs = "  Quatorze jours [1].  ";
 
-        assertThat(GroundingPolicy.verdict(AGENT, tel_quel, troisExtraits(), true)
-                        .text())
-                .isEqualTo(tel_quel);
+        assertThat(GroundingPolicy.verdict(AGENT, asIs, threeChunks(), true).text())
+                .isEqualTo(asIs);
     }
 
     @Test
-    void rend_l_aveu_quand_le_budget_est_epuise() {
-        Answer reponse = GroundingPolicy.budgetExceeded(AGENT);
+    void returns_the_admission_when_the_budget_is_exhausted() {
+        Answer answer = GroundingPolicy.budgetExceeded(AGENT);
 
-        assertThat(reponse.verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
-        assertThat(reponse.text()).isEqualTo(AgentDeTest.AVEU);
+        assertThat(answer.verdict()).isEqualTo(AnswerVerdict.BUDGET_EXCEEDED);
+        assertThat(answer.text()).isEqualTo(TestAgents.NOT_FOUND);
     }
 }

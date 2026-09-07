@@ -8,53 +8,53 @@ import org.junit.jupiter.api.Test;
 
 class SpringCommandBusTest {
 
-    record Saluer(String nom) implements Command {}
+    record Greet(String name) implements Command {}
 
-    record Partir() implements Command {}
+    record Leave() implements Command {}
 
-    static class SaluerHandler implements CommandHandler<Saluer> {
-        String recu;
+    static class GreetHandler implements CommandHandler<Greet> {
+        String received;
 
         @Override
-        public void handle(Saluer command) {
-            this.recu = command.nom();
+        public void handle(Greet command) {
+            this.received = command.name();
         }
     }
 
-    static class PartirHandler implements CommandHandler<Partir> {
-        boolean appele;
+    static class LeaveHandler implements CommandHandler<Leave> {
+        boolean called;
 
         @Override
-        public void handle(Partir command) {
-            this.appele = true;
+        public void handle(Leave command) {
+            this.called = true;
         }
     }
 
     @Test
-    void route_la_commande_vers_son_seul_handler() {
-        SaluerHandler saluer = new SaluerHandler();
-        PartirHandler partir = new PartirHandler();
-        CommandBus bus = new SpringCommandBus(List.of(saluer, partir));
+    void routes_the_command_to_its_single_handler() {
+        GreetHandler greet = new GreetHandler();
+        LeaveHandler leave = new LeaveHandler();
+        CommandBus bus = new SpringCommandBus(List.of(greet, leave));
 
-        bus.dispatch(new Saluer("Rémy"));
+        bus.dispatch(new Greet("Rémy"));
 
-        assertThat(saluer.recu).isEqualTo("Rémy");
-        assertThat(partir.appele).isFalse();
+        assertThat(greet.received).isEqualTo("Rémy");
+        assertThat(leave.called).isFalse();
     }
 
     @Test
-    void echoue_si_aucun_handler_ne_traite_la_commande() {
+    void fails_when_no_handler_handles_the_command() {
         CommandBus bus = new SpringCommandBus(List.of());
 
-        assertThatThrownBy(() -> bus.dispatch(new Saluer("Rémy")))
+        assertThatThrownBy(() -> bus.dispatch(new Greet("Rémy")))
                 .isInstanceOf(HandlerNotFoundException.class)
-                .hasMessageContaining("Saluer");
+                .hasMessageContaining("Greet");
     }
 
     @Test
-    void echoue_au_demarrage_si_deux_handlers_visent_la_meme_commande() {
-        assertThatThrownBy(() -> new SpringCommandBus(List.of(new SaluerHandler(), new SaluerHandler())))
+    void fails_at_startup_when_two_handlers_target_the_same_command() {
+        assertThatThrownBy(() -> new SpringCommandBus(List.of(new GreetHandler(), new GreetHandler())))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Saluer");
+                .hasMessageContaining("Greet");
     }
 }

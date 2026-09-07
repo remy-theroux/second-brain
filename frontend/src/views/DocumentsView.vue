@@ -20,10 +20,10 @@ import {
 } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
-// Filtre du sélecteur de fichiers, pas une règle : c'est le serveur qui refuse un format
-// (415) et son message énonce la liste qui fait foi, construite depuis `DocumentFormat`.
-// Cette copie ne sert qu'au confort du sélecteur et peut diverger sans qu'un test le voie —
-// même nature de copie que `VERIFICATION_MESSAGES` dans LoginView — ADR-0022.
+// Filter of the file picker, not a rule: it is the server that refuses a format (415) and
+// its message states the list that prevails, built from `DocumentFormat`. This copy only
+// serves the comfort of the picker and may diverge without a test seeing it — same nature
+// of copy as `VERIFICATION_MESSAGES` in LoginView — ADR-0022.
 const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
 
 const auth = useAuthStore()
@@ -35,12 +35,12 @@ const documents = ref([])
 const loading = ref(false)
 const busy = ref(false)
 const errorMessage = ref('')
-// Identifiant du document que le serveur a désigné comme doublon du dernier dépôt refusé :
-// la ligne correspondante est mise en évidence plutôt que laissée à chercher.
+// Identifier of the document the server designated as the duplicate of the last refused
+// upload: the matching row is highlighted rather than left to be searched for.
 const duplicateId = ref(null)
 
-// Le serveur fait autorité : un 401 sur n'importe quel appel déconnecte, quoi qu'en
-// pense le navigateur. Toute autre panne s'affiche, sans déconnecter.
+// The server prevails: a 401 on any call signs out, whatever the browser thinks. Any
+// other failure is displayed, without signing out.
 async function handle(error) {
   if (error instanceof UnauthorizedError) {
     auth.logout()
@@ -67,21 +67,21 @@ async function upload({ files }) {
   busy.value = true
   try {
     await uploadDocument(auth.token, files[0])
-    // Le 201 n'a pas de corps : c'est la liste qui donne l'état complet de la base.
+    // The 201 has no body: it is the list that gives the complete state of the base.
     await load()
   } catch (error) {
     if (error instanceof DuplicateDocumentError) {
       duplicateId.value = error.existingDocumentId
     }
     if (error instanceof ValidationError) {
-      // Un seul champ dans ce formulaire : son message est le message global.
+      // A single field in this form: its message is the global message.
       errorMessage.value = error.errors.file ?? error.message
     } else {
       await handle(error)
     }
   } finally {
     busy.value = false
-    // Remet le composant à zéro, pour que le même fichier puisse être re-sélectionné.
+    // Resets the component, so that the same file can be selected again.
     uploader.value?.clear()
   }
 }

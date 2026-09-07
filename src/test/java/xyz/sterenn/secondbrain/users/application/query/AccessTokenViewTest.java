@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 class AccessTokenViewTest {
 
     @Test
-    void ne_divulgue_pas_sa_valeur_dans_son_rendu_texte() {
-        AccessTokenView vue = new AccessTokenView("eyJ.secret.abc", 3600L);
+    void does_not_disclose_its_value_in_its_string_representation() {
+        AccessTokenView view = new AccessTokenView("eyJ.secret.abc", 3600L);
 
-        assertThat(vue.toString()).doesNotContain("eyJ.secret.abc");
+        assertThat(view.toString()).doesNotContain("eyJ.secret.abc");
     }
 }

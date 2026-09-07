@@ -13,9 +13,9 @@ const app = createApp(App)
   .use(createPinia())
   .use(router)
   .use(PrimeVue, { theme: { preset: Aura }, locale: fr })
-  // Service des confirmations (ConfirmPopup) : un seul, pour toute action destructive.
+  // Confirmation service (ConfirmPopup): a single one, for every destructive action.
   .use(ConfirmationService)
 
-// L'App choisit son layout d'après route.meta ; monter avant la résolution de la route
-// initiale afficherait le layout invité un instant, puis le bon. isReady() supprime ce flash.
+// App picks its layout from route.meta; mounting before the initial route is resolved
+// would show the guest layout for an instant, then the right one. isReady() removes that flash.
 router.isReady().then(() => app.mount('#app'))

@@ -30,16 +30,16 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolCall;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ToolSpecification;
 
 /**
- * Ni commande ni query, et le contrôleur l'appelle directement : une conversation dure des
- * minutes, et la transaction qu'ouvre un bus tiendrait une connexion PostgreSQL tout ce
- * temps. Les accès à la base restent derrière les bus — une transaction courte par recherche.
+ * Neither a command nor a query, and the controller calls it directly: a conversation lasts
+ * minutes, and the transaction a bus opens would hold a PostgreSQL connection all that time.
+ * Database access stays behind the buses — one short transaction per search.
  */
 @Component
 public class ConversationAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConversationAgent.class);
 
-    private record ToolOutcome(String texte, SourceCatalogue catalogue, Optional<String> requete) {}
+    private record ToolOutcome(String text, SourceCatalogue catalogue, Optional<String> query) {}
 
     private final Agent agent;
     private final LlmPort llmPort;
@@ -65,79 +65,78 @@ public class ConversationAgent {
         return agent.version();
     }
 
-    /** Au retour, le texte de l'{@code Answer} rendue a déjà été émis par {@code onToken} : ne pas le réémettre. */
+    /** On return, the text of the {@code Answer} has already been emitted by {@code onToken}: do not re-emit it. */
     public ConversationOutcome answer(Question question, UUID ownerId, Consumer<String> onToken) {
-        Instant debut = clock.instant();
+        Instant start = clock.instant();
         List<LlmMessage> messages =
                 new ArrayList<>(List.of(PromptBuilder.systemMessage(agent), LlmMessage.user(question.value())));
         SourceCatalogue catalogue = SourceCatalogue.empty();
-        List<String> recherches = new ArrayList<>();
-        int tours = 0;
+        List<String> searches = new ArrayList<>();
+        int turns = 0;
 
-        while (tours < agent.budget().maxTurns() && !budgetEcoule(debut)) {
-            tours++;
-            boolean rechercheEffectuee = !recherches.isEmpty();
-            CitationBuffer tampon = new CitationBuffer(catalogue, onToken);
-            LlmTurn tour =
-                    llmPort.stream(new LlmRequest(messages, agent.tools(), agent.temperature()), tampon::accepte);
+        while (turns < agent.budget().maxTurns() && !budgetExhausted(start)) {
+            turns++;
+            boolean searchPerformed = !searches.isEmpty();
+            CitationBuffer buffer = new CitationBuffer(catalogue, onToken);
+            LlmTurn turn = llmPort.stream(new LlmRequest(messages, agent.tools(), agent.temperature()), buffer::accept);
 
-            if (!tour.requestsATool()) {
-                if (tampon.texte().isBlank()) {
-                    LOG.warn("Le modèle a rendu un tour vide (tour {}) ; tour consommé sans relance.", tours);
+            if (!turn.requestsATool()) {
+                if (buffer.text().isBlank()) {
+                    LOG.warn("Le modèle a rendu un tour vide (tour {}) ; tour consommé sans relance.", turns);
                     continue;
                 }
-                Answer reponse = GroundingPolicy.verdict(agent, tampon.texte(), catalogue, rechercheEffectuee);
-                if (!tampon.aOuvert()) {
-                    onToken.accept(reponse.text());
+                Answer answer = GroundingPolicy.verdict(agent, buffer.text(), catalogue, searchPerformed);
+                if (!buffer.isOpen()) {
+                    onToken.accept(answer.text());
                 }
-                return new ConversationOutcome(reponse, recherches, tours, ecoule(debut));
+                return new ConversationOutcome(answer, searches, turns, elapsed(start));
             }
 
-            messages.add(LlmMessage.toolRequest(tour.toolCalls()));
-            for (ToolCall appel : tour.toolCalls()) {
-                ToolOutcome resultat = execute(appel, ownerId, catalogue);
-                catalogue = resultat.catalogue();
-                resultat.requete().ifPresent(recherches::add);
-                messages.add(LlmMessage.toolResult(appel.id(), resultat.texte()));
+            messages.add(LlmMessage.toolRequest(turn.toolCalls()));
+            for (ToolCall call : turn.toolCalls()) {
+                ToolOutcome outcome = execute(call, ownerId, catalogue);
+                catalogue = outcome.catalogue();
+                outcome.query().ifPresent(searches::add);
+                messages.add(LlmMessage.toolResult(call.id(), outcome.text()));
             }
         }
 
-        Answer reponse = GroundingPolicy.budgetExceeded(agent);
-        onToken.accept(reponse.text());
-        return new ConversationOutcome(reponse, recherches, tours, ecoule(debut));
+        Answer answer = GroundingPolicy.budgetExceeded(agent);
+        onToken.accept(answer.text());
+        return new ConversationOutcome(answer, searches, turns, elapsed(start));
     }
 
-    private ToolOutcome execute(ToolCall appel, UUID ownerId, SourceCatalogue catalogue) {
-        if (!agent.knows(appel.name())) {
-            String connus = agent.tools().stream().map(ToolSpecification::name).collect(Collectors.joining(", "));
+    private ToolOutcome execute(ToolCall call, UUID ownerId, SourceCatalogue catalogue) {
+        if (!agent.knows(call.name())) {
+            String known = agent.tools().stream().map(ToolSpecification::name).collect(Collectors.joining(", "));
             return new ToolOutcome(
-                    "L'outil « " + appel.name() + " » n'existe pas. Outils disponibles : " + connus + ".",
+                    "L'outil « " + call.name() + " » n'existe pas. Outils disponibles : " + known + ".",
                     catalogue,
                     Optional.empty());
         }
-        String requete = appel.argument(DocumentAgent.PARAMETRE_QUESTION);
-        if (requete == null || requete.isBlank()) {
+        String query = call.argument(DocumentAgent.QUESTION_PARAMETER);
+        if (query == null || query.isBlank()) {
             return new ToolOutcome(
-                    "L'appel est incomplet : le paramètre « " + DocumentAgent.PARAMETRE_QUESTION
+                    "L'appel est incomplet : le paramètre « " + DocumentAgent.QUESTION_PARAMETER
                             + " » est obligatoire.",
                     catalogue,
                     Optional.empty());
         }
-        List<SourceCandidate> candidats;
+        List<SourceCandidate> candidates;
         try {
-            candidats = documentSearchTool.rechercher(requete, ownerId);
-        } catch (InvalidQuestionException refus) {
-            return new ToolOutcome("La recherche a été refusée : " + refus.getMessage(), catalogue, Optional.empty());
+            candidates = documentSearchTool.search(query, ownerId);
+        } catch (InvalidQuestionException refusal) {
+            return new ToolOutcome("La recherche a été refusée : " + refusal.getMessage(), catalogue, Optional.empty());
         }
-        Absorption absorption = catalogue.absorb(candidats);
-        return new ToolOutcome(PromptBuilder.searchResult(absorption), absorption.catalogue(), Optional.of(requete));
+        Absorption absorption = catalogue.absorb(candidates);
+        return new ToolOutcome(PromptBuilder.searchResult(absorption), absorption.catalogue(), Optional.of(query));
     }
 
-    private boolean budgetEcoule(Instant debut) {
-        return ecoule(debut).compareTo(agent.budget().limit()) >= 0;
+    private boolean budgetExhausted(Instant start) {
+        return elapsed(start).compareTo(agent.budget().limit()) >= 0;
     }
 
-    private Duration ecoule(Instant debut) {
-        return Duration.between(debut, clock.instant());
+    private Duration elapsed(Instant start) {
+        return Duration.between(start, clock.instant());
     }
 }

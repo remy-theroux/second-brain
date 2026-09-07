@@ -13,12 +13,12 @@ class AgentConfiguration {
 
     @Bean
     Agent documentAgent() {
-        return AgentDefinitionLoader.depuisLeClasspath(DEFINITION);
+        return AgentDefinitionLoader.fromClasspath(DEFINITION);
     }
 
     /**
-     * La conversation bloque des minutes sur le modèle : un thread de plateforme par question
-     * serait un thread de plateforme immobilisé.
+     * A conversation blocks on the model for minutes: one platform thread per question would be
+     * one platform thread tied up.
      */
     @Bean(destroyMethod = "close")
     ExecutorService conversationExecutor() {

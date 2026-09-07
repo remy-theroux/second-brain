@@ -34,21 +34,21 @@ public class UploadDocumentController {
     @SecurityRequirement(name = "bearer")
     public ResponseEntity<Object> upload(@RequestParam("file") MultipartFile file, @AuthenticationPrincipal Jwt jwt) {
         if (file.isEmpty()) {
-            // UNPROCESSABLE_CONTENT et non UNPROCESSABLE_ENTITY : RFC 9110 a renommé le 422,
-            // et Spring 7 a déprécié l'ancien nom. Même code, même corps.
+            // UNPROCESSABLE_CONTENT and not UNPROCESSABLE_ENTITY: RFC 9110 renamed the 422,
+            // and Spring 7 deprecated the old name. Same code, same body.
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                     .body(new ValidationErrorResponse(Map.of("file", "Le fichier est obligatoire.")));
         }
 
-        byte[] contenu;
+        byte[] content;
         try {
-            contenu = file.getBytes();
+            content = file.getBytes();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
 
         try {
-            commandBus.dispatch(new UploadDocument(JwtSubject.accountId(jwt), file.getOriginalFilename(), contenu));
+            commandBus.dispatch(new UploadDocument(JwtSubject.accountId(jwt), file.getOriginalFilename(), content));
         } catch (UnsupportedDocumentFormatException e) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(new ErrorResponse(e.getMessage()));
         } catch (DuplicateDocumentException e) {
@@ -60,18 +60,18 @@ public class UploadDocumentController {
     }
 
     /**
-     * Ne voit l'exception que parce que {@code spring.servlet.multipart.resolve-lazily} est à
-     * {@code true} : sinon le multipart est résolu par {@code DispatcherServlet} avant qu'un
-     * contrôleur soit choisi, et seul un {@code @RestControllerAdvice} global la capterait.
+     * Sees the exception only because {@code spring.servlet.multipart.resolve-lazily} is
+     * {@code true}: otherwise the multipart is resolved by {@code DispatcherServlet} before a
+     * controller is chosen, and only a global {@code @RestControllerAdvice} would catch it.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Object> tropVolumineux() {
+    public ResponseEntity<Object> tooLarge() {
         return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
                 .body(new ErrorResponse("Ce fichier dépasse la taille maximale acceptée."));
     }
 
     @ExceptionHandler(JwtSubject.UnreadableSubjectException.class)
-    public ResponseEntity<Object> sujetIllisible() {
+    public ResponseEntity<Object> unreadableSubject() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 }

@@ -5,12 +5,12 @@ import AuthenticatedLayout from '@/components/AuthenticatedLayout.vue'
 import GuestLayout from '@/components/GuestLayout.vue'
 
 const route = useRoute()
-// Le layout se déduit des métas d'authentification déjà portées par les routes : une méta
-// `layout` dédiée dirait deux fois la même chose. Le layout invité est le défaut.
+// The layout is derived from the authentication metas the routes already carry: a dedicated
+// `layout` meta would say the same thing twice. The guest layout is the default.
 //
-// Seule exception : `layout: 'bare'`, pour une page qui pose son propre conteneur (le
-// design system, trop large pour la carte invité). Un troisième layout pour une seule
-// page serait de trop ; `null` rend le slot tel quel.
+// Only exception: `layout: 'bare'`, for a page that lays out its own container (the
+// design system, too wide for the guest card). A third layout for a single page
+// would be one too many; `null` renders the slot as is.
 const layout = computed(() => {
   if (route.meta.layout === 'bare') return null
   return route.meta.requiresAuth ? AuthenticatedLayout : GuestLayout

@@ -25,10 +25,10 @@ public final class Embedding {
         return values.clone();
     }
 
-    // Arrays.equals : l'equals qu'un record engendrerait comparerait les références du tableau.
+    // Arrays.equals: the equals a record would generate would compare array references.
     @Override
-    public boolean equals(Object autre) {
-        return autre instanceof Embedding vecteur && Arrays.equals(values, vecteur.values);
+    public boolean equals(Object other) {
+        return other instanceof Embedding vector && Arrays.equals(values, vector.values);
     }
 
     @Override

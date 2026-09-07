@@ -4,9 +4,9 @@ import java.time.Duration;
 import java.util.List;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Answer;
 
-public record ConversationOutcome(Answer answer, List<String> recherches, int tours, Duration duree) {
+public record ConversationOutcome(Answer answer, List<String> searches, int turns, Duration duration) {
 
     public ConversationOutcome {
-        recherches = List.copyOf(recherches);
+        searches = List.copyOf(searches);
     }
 }

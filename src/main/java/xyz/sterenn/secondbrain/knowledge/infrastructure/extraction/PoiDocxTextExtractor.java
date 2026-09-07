@@ -23,8 +23,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 /**
- * Les cellules de tableau ne sont pas lues : {@code getParagraphs()} ne rend que le corps du
- * document.
+ * Table cells are not read: {@code getParagraphs()} returns only the body of the document.
  */
 @Component
 public class PoiDocxTextExtractor implements DocumentTextExtractor {
@@ -41,68 +40,66 @@ public class PoiDocxTextExtractor implements DocumentTextExtractor {
     public ExtractedText extract(byte[] content) {
         List<Section> sections;
         try (XWPFDocument docx = new XWPFDocument(new ByteArrayInputStream(content))) {
-            sections = lis(docx);
+            sections = read(docx);
         } catch (IOException
                 | UnsupportedFileFormatException
                 | EmptyFileException
                 | OpenXML4JRuntimeException
-                | POIXMLException illisible) {
-            // POI signale un zip qui n'est pas un docx par une famille d'exceptions dont
-            // certaines héritent d'IllegalArgumentException : les nommer une à une plutôt
-            // que d'attraper RuntimeException, qui masquerait un vrai défaut d'ici.
-            throw new UnreadableDocumentException(illisible);
+                | POIXMLException unreadable) {
+            // POI reports a zip that is not a docx through a family of exceptions, some of which
+            // extend IllegalArgumentException: naming them one by one rather than catching
+            // RuntimeException, which would hide a genuine defect from here.
+            throw new UnreadableDocumentException(unreadable);
         }
-        // Hors du try : le refus d'un document muet est métier, pas une panne de lecture.
+        // Outside the try: refusing a mute document is a business decision, not a read failure.
         return Section.assemble(sections);
     }
 
-    private static List<Section> lis(XWPFDocument docx) {
+    private static List<Section> read(XWPFDocument docx) {
         List<Section> sections = new ArrayList<>();
-        String titre = "";
-        int niveau = 0;
-        StringBuilder corps = new StringBuilder();
+        String heading = "";
+        int level = 0;
+        StringBuilder body = new StringBuilder();
 
-        for (XWPFParagraph paragraphe : docx.getParagraphs()) {
-            String texte = paragraphe.getText();
-            if (texte.isBlank()) {
+        for (XWPFParagraph paragraph : docx.getParagraphs()) {
+            String text = paragraph.getText();
+            if (text.isBlank()) {
                 continue;
             }
-            OptionalInt niveauDuTitre = niveauDeTitre(docx, paragraphe);
-            if (niveauDuTitre.isPresent()) {
-                sections.add(new Section(titre, niveau, corps.toString()));
-                titre = texte;
-                niveau = Math.min(niveauDuTitre.getAsInt(), TextBlock.MAX_HEADING_LEVEL);
-                corps.setLength(0);
+            OptionalInt headingLevel = headingLevelOf(docx, paragraph);
+            if (headingLevel.isPresent()) {
+                sections.add(new Section(heading, level, body.toString()));
+                heading = text;
+                level = Math.min(headingLevel.getAsInt(), TextBlock.MAX_HEADING_LEVEL);
+                body.setLength(0);
             } else {
-                corps.append(texte).append("\n\n");
+                body.append(text).append("\n\n");
             }
         }
-        sections.add(new Section(titre, niveau, corps.toString()));
+        sections.add(new Section(heading, level, body.toString()));
         return sections;
     }
 
-    /** L'identifiant du style, puis son nom déclaré : un Word français écrit « Titre 1 ». */
-    private static OptionalInt niveauDeTitre(XWPFDocument docx, XWPFParagraph paragraphe) {
-        String identifiant = paragraphe.getStyleID();
-        if (identifiant == null) {
+    /** The style id, then its declared name: a French Word writes "Titre 1". */
+    private static OptionalInt headingLevelOf(XWPFDocument docx, XWPFParagraph paragraph) {
+        String styleId = paragraph.getStyleID();
+        if (styleId == null) {
             return OptionalInt.empty();
         }
-        OptionalInt parIdentifiant = niveau(identifiant);
-        if (parIdentifiant.isPresent()) {
-            return parIdentifiant;
+        OptionalInt byId = levelOf(styleId);
+        if (byId.isPresent()) {
+            return byId;
         }
         XWPFStyles styles = docx.getStyles();
-        XWPFStyle style = styles == null ? null : styles.getStyle(identifiant);
-        return style == null ? OptionalInt.empty() : niveau(style.getName());
+        XWPFStyle style = styles == null ? null : styles.getStyle(styleId);
+        return style == null ? OptionalInt.empty() : levelOf(style.getName());
     }
 
-    private static OptionalInt niveau(String nomDeStyle) {
-        if (nomDeStyle == null) {
+    private static OptionalInt levelOf(String styleName) {
+        if (styleName == null) {
             return OptionalInt.empty();
         }
-        Matcher correspondance = HEADING_STYLE.matcher(nomDeStyle.strip());
-        return correspondance.matches()
-                ? OptionalInt.of(Integer.parseInt(correspondance.group(1)))
-                : OptionalInt.empty();
+        Matcher matcher = HEADING_STYLE.matcher(styleName.strip());
+        return matcher.matches() ? OptionalInt.of(Integer.parseInt(matcher.group(1))) : OptionalInt.empty();
     }
 }

@@ -11,7 +11,7 @@ public record ToolCall(String id, String name, Map<String, String> arguments) {
         arguments = Map.copyOf(arguments);
     }
 
-    public String argument(String nom) {
-        return arguments.get(nom);
+    public String argument(String name) {
+        return arguments.get(name);
     }
 }

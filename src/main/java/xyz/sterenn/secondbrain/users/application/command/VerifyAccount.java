@@ -4,7 +4,7 @@ import xyz.sterenn.secondbrain.shared.bus.Command;
 
 public record VerifyAccount(String accountId, String rawToken) implements Command {
 
-    /** Masque {@code rawToken} : tant qu'il n'est pas consommé, il vaut mot de passe à usage unique. */
+    /** Masks {@code rawToken}: until it is consumed, it is worth a single-use password. */
     @Override
     public String toString() {
         return "VerifyAccount[accountId=" + accountId + ", rawToken=***]";

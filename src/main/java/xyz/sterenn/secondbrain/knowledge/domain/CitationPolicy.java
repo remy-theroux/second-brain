@@ -9,32 +9,32 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * La syntaxe de citation, et sa seule source : {@code PromptBuilder} l'énonce au modèle,
- * l'analyse la relit. Les deux côtés ne peuvent pas diverger.
+ * The citation syntax, and its single source: {@code PromptBuilder} states it to the model,
+ * parsing reads it back. The two sides cannot drift apart.
  */
 public final class CitationPolicy {
 
-    public static final String BALISE_OUVRANTE = "<extrait";
-    public static final String BALISE_FERMANTE = "</extrait>";
+    public static final String OPENING_MARKER = "<extrait";
+    public static final String CLOSING_MARKER = "</extrait>";
 
     private static final Pattern CITATION = Pattern.compile("\\[(\\d+)]");
 
     private CitationPolicy() {}
 
-    public static List<Integer> citations(String texte) {
-        Set<Integer> vues = new LinkedHashSet<>();
-        Matcher chercheur = CITATION.matcher(texte);
-        while (chercheur.find()) {
-            vues.add(Integer.parseInt(chercheur.group(1)));
+    public static List<Integer> citations(String text) {
+        Set<Integer> seen = new LinkedHashSet<>();
+        Matcher matcher = CITATION.matcher(text);
+        while (matcher.find()) {
+            seen.add(Integer.parseInt(matcher.group(1)));
         }
-        return List.copyOf(vues);
+        return List.copyOf(seen);
     }
 
-    public static OptionalInt endOfFirstValidCitation(String texte, IntPredicate connu) {
-        Matcher chercheur = CITATION.matcher(texte);
-        while (chercheur.find()) {
-            if (connu.test(Integer.parseInt(chercheur.group(1)))) {
-                return OptionalInt.of(chercheur.end());
+    public static OptionalInt endOfFirstValidCitation(String text, IntPredicate known) {
+        Matcher matcher = CITATION.matcher(text);
+        while (matcher.find()) {
+            if (known.test(Integer.parseInt(matcher.group(1)))) {
+                return OptionalInt.of(matcher.end());
             }
         }
         return OptionalInt.empty();

@@ -29,15 +29,15 @@ public class TextChunk {
     @Column(name = "document_id", nullable = false, columnDefinition = "uuid")
     private UUID documentId;
 
-    // `position` est un mot-clé SQL qu'Hibernate écrirait sans guillemets.
+    // `position` is a SQL keyword that Hibernate would write unquoted.
     @Column(name = "chunk_position", nullable = false)
     private int position;
 
     @Column(nullable = false, length = TextBlock.MAX_HEADING_LENGTH)
     private String heading;
 
-    // columnDefinition explicite : sans lui, Hibernate attendrait un varchar(255) et
-    // `ddl-auto: validate` refuserait de démarrer contre une colonne `text`.
+    // Explicit columnDefinition: without it, Hibernate would expect a varchar(255) and
+    // `ddl-auto: validate` would refuse to start against a `text` column.
     @Column(nullable = false, columnDefinition = "text")
     private String text;
 

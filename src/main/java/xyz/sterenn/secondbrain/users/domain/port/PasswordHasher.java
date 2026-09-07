@@ -1,6 +1,6 @@
 package xyz.sterenn.secondbrain.users.domain.port;
 
-/** Hache un mot de passe et compare une saisie à une empreinte, par un algorithme que le domaine ignore. */
+/** Hashes a password and matches an input against a digest, with an algorithm unknown to the domain. */
 public interface PasswordHasher {
 
     String hash(String rawPassword);

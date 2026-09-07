@@ -10,13 +10,13 @@ public record Source(int number, UUID documentId, String filename, int position,
         }
     }
 
-    static Source numerote(int number, SourceCandidate candidat) {
+    static Source numbered(int number, SourceCandidate candidate) {
         return new Source(
                 number,
-                candidat.documentId(),
-                candidat.filename(),
-                candidat.position(),
-                candidat.heading(),
-                candidat.text());
+                candidate.documentId(),
+                candidate.filename(),
+                candidate.position(),
+                candidate.heading(),
+                candidate.text());
     }
 }

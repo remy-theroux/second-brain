@@ -30,9 +30,9 @@ import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
- * Pas de {@code @Transactional} : dans une transaction, Hibernate rendrait le
- * {@code TextExtraction} depuis son cache de premier niveau sans interroger la base, et le test
- * passerait au vert quelle que soit la migration. D'où le nettoyage en {@code @AfterEach}.
+ * No {@code @Transactional}: inside a transaction, Hibernate would return the
+ * {@code TextExtraction} from its first-level cache without querying the database, and the test
+ * would pass whatever the migration says. Hence the cleanup in {@code @AfterEach}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -60,20 +60,20 @@ class DeleteDocumentCascadeTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
-    private final List<String> comptesCrees = new ArrayList<>();
+    private final List<String> createdAccounts = new ArrayList<>();
 
     @AfterEach
-    void efface_ce_qui_a_ete_commite() {
-        comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
-        comptesCrees.clear();
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erases_what_was_committed() {
+        createdAccounts.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
+        createdAccounts.clear();
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void la_suppression_d_un_document_emporte_son_texte_extrait() {
-        Document document = unDocumentDepose();
+    void deleting_a_document_takes_its_extracted_text_with_it() {
+        Document document = anUploadedDocument();
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
         assertThat(textExtractionRepository.findByDocumentId(document.getId())).isPresent();
 
@@ -85,14 +85,10 @@ class DeleteDocumentCascadeTest {
     }
 
     @Test
-    void la_suppression_d_un_document_emporte_ses_extraits() {
-        Document document = unDocumentDepose();
+    void deleting_a_document_takes_its_chunks_with_it() {
+        Document document = anUploadedDocument();
         textChunkRepository.saveAll(List.of(TextChunk.of(
-                document.getId(),
-                0,
-                new Chunk("Titre", "Un corps."),
-                KnowledgeFixture.unVecteur(0.5f),
-                Instant.now())));
+                document.getId(), 0, new Chunk("Titre", "Un corps."), KnowledgeFixture.aVector(0.5f), Instant.now())));
         assertThat(textChunkRepository.findByDocumentId(document.getId())).isNotEmpty();
 
         commandBus.dispatch(new DeleteDocument(document.getId(), document.getOwnerId()));
@@ -100,16 +96,16 @@ class DeleteDocumentCascadeTest {
         assertThat(textChunkRepository.findByDocumentId(document.getId())).isEmpty();
     }
 
-    private Document unDocumentDepose() {
+    private Document anUploadedDocument() {
         String email = UUID.randomUUID() + "@exemple.fr";
-        UUID proprietaire = userRepository
+        UUID owner = userRepository
                 .save(User.register(new Email(email), "empreinte"))
                 .getId();
-        comptesCrees.add(email);
-        byte[] contenu = Fixtures.lire(Fixtures.BRUT_TXT);
-        commandBus.dispatch(new UploadDocument(proprietaire, "notes.txt", contenu));
+        createdAccounts.add(email);
+        byte[] content = Fixtures.read(Fixtures.RAW_TXT);
+        commandBus.dispatch(new UploadDocument(owner, "notes.txt", content));
         return documentRepository
-                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .findByOwnerIdAndChecksum(owner, Checksum.of(content))
                 .orElseThrow();
     }
 }

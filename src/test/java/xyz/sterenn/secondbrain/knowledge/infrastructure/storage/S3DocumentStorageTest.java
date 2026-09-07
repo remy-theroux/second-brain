@@ -20,7 +20,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 @SpringBootTest
 class S3DocumentStorageTest {
 
-    private static final byte[] CONTENU = "le contenu d'origine".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] CONTENT = "le contenu d'origine".getBytes(StandardCharsets.UTF_8);
 
     @Autowired
     private DocumentStorage documentStorage;
@@ -29,32 +29,32 @@ class S3DocumentStorageTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     @AfterEach
-    void videLesOriginaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void emptyTheOriginals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void conserve_puis_relit_un_contenu() {
+    void stores_then_reads_back_a_content() {
         UUID document = UUID.randomUUID();
 
-        documentStorage.store(document, CONTENU);
+        documentStorage.store(document, CONTENT);
 
         assertThat(documentStorage.read(document))
-                .hasValueSatisfying(relu -> assertThat(relu).isEqualTo(CONTENU));
+                .hasValueSatisfying(reloaded -> assertThat(reloaded).isEqualTo(CONTENT));
     }
 
     @Test
-    void ne_rend_rien_pour_un_document_sans_original() {
+    void returns_nothing_for_a_document_without_an_original() {
         assertThat(documentStorage.read(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    void efface_un_contenu_conserve() {
+    void deletes_a_stored_content() {
         UUID document = UUID.randomUUID();
-        documentStorage.store(document, CONTENU);
+        documentStorage.store(document, CONTENT);
 
         documentStorage.delete(document);
 
@@ -62,16 +62,16 @@ class S3DocumentStorageTest {
     }
 
     @Test
-    void reste_silencieux_en_effacant_ce_qui_n_existe_pas() {
-        // L'adapter n'attrape rien à cet endroit : l'idempotence est celle de DeleteObject,
-        // et ce test est ce qui l'établit contre un vrai serveur.
+    void stays_silent_when_deleting_what_does_not_exist() {
+        // The adapter catches nothing here: the idempotence is DeleteObject's own, and this test
+        // is what establishes it against a real server.
         documentStorage.delete(UUID.randomUUID());
     }
 
     @Test
-    void refuse_d_ecraser_un_original_deja_conserve() {
+    void refuses_to_overwrite_an_already_stored_original() {
         UUID document = UUID.randomUUID();
-        documentStorage.store(document, CONTENU);
+        documentStorage.store(document, CONTENT);
 
         assertThatThrownBy(() -> documentStorage.store(document, "autre chose".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(IllegalStateException.class);

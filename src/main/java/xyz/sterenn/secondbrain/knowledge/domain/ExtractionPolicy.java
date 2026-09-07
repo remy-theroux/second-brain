@@ -1,6 +1,6 @@
 package xyz.sterenn.secondbrain.knowledge.domain;
 
-/** Voir ADR-0025. */
+/** See ADR-0025. */
 public final class ExtractionPolicy {
 
     public static final int MINIMUM_USEFUL_CHARACTERS = 50;

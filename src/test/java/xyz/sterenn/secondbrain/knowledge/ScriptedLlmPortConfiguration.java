@@ -25,45 +25,45 @@ public class ScriptedLlmPortConfiguration {
 
     public static class ScriptedLlmPort implements LlmPort {
 
-        private record TourScripte(List<String> fragments, List<ToolCall> appels) {}
+        private record ScriptedTurn(List<String> fragments, List<ToolCall> toolCalls) {}
 
-        private final Deque<TourScripte> script = new ArrayDeque<>();
-        private volatile boolean enPanne;
+        private final Deque<ScriptedTurn> script = new ArrayDeque<>();
+        private volatile boolean failing;
 
-        public ScriptedLlmPort texte(String... fragments) {
-            script.add(new TourScripte(List.of(fragments), List.of()));
+        public ScriptedLlmPort text(String... fragments) {
+            script.add(new ScriptedTurn(List.of(fragments), List.of()));
             return this;
         }
 
-        public ScriptedLlmPort appelleOutil(String nom, String parametre, String valeur) {
-            script.add(new TourScripte(
-                    List.of(), List.of(new ToolCall("appel-" + script.size(), nom, Map.of(parametre, valeur)))));
+        public ScriptedLlmPort callsTool(String name, String parameter, String value) {
+            script.add(new ScriptedTurn(
+                    List.of(), List.of(new ToolCall("appel-" + script.size(), name, Map.of(parameter, value)))));
             return this;
         }
 
-        public ScriptedLlmPort tombeEnPanne() {
-            enPanne = true;
+        public ScriptedLlmPort willFail() {
+            failing = true;
             return this;
         }
 
         public void clear() {
             script.clear();
-            enPanne = false;
+            failing = false;
         }
 
         @Override
         public LlmTurn stream(LlmRequest request, Consumer<String> onToken) {
-            if (enPanne) {
+            if (failing) {
                 throw new LlmUnavailableException("Le service de génération n'a pas répondu.");
             }
-            TourScripte tour =
-                    script.isEmpty() ? new TourScripte(List.of("Rien à ajouter."), List.of()) : script.poll();
-            StringBuilder texte = new StringBuilder();
-            for (String fragment : tour.fragments()) {
-                texte.append(fragment);
+            ScriptedTurn turn =
+                    script.isEmpty() ? new ScriptedTurn(List.of("Rien à ajouter."), List.of()) : script.poll();
+            StringBuilder text = new StringBuilder();
+            for (String fragment : turn.fragments()) {
+                text.append(fragment);
                 onToken.accept(fragment);
             }
-            return new LlmTurn(texte.toString(), tour.appels());
+            return new LlmTurn(text.toString(), turn.toolCalls());
         }
     }
 }

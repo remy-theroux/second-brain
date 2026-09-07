@@ -38,15 +38,15 @@ public class UploadDocumentHandler implements CommandHandler<UploadDocument> {
 
         Checksum checksum = Checksum.of(command.content());
 
-        Optional<Document> existant = documentRepository.findByOwnerIdAndChecksum(command.ownerId(), checksum);
-        if (existant.isPresent()) {
-            throw new DuplicateDocumentException(existant.get().getId());
+        Optional<Document> existing = documentRepository.findByOwnerIdAndChecksum(command.ownerId(), checksum);
+        if (existing.isPresent()) {
+            throw new DuplicateDocumentException(existing.get().getId());
         }
 
         Document document = documentRepository.save(
                 Document.upload(command.ownerId(), command.filename(), format, checksum, command.content().length));
 
-        // Le fichier après la ligne : voir ADR-0020.
+        // The file after the row: see ADR-0020.
         documentStorage.store(document.getId(), command.content());
 
         domainEventPublisher.publish(new DocumentUploaded(document.getId(), document.getOwnerId(), clock.instant()));

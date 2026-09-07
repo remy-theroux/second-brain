@@ -52,7 +52,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @ExtendWith(OutputCaptureExtension.class)
 class KnowledgeEventListenerTest {
 
-    private static final Duration DELAI = Duration.ofSeconds(20);
+    private static final Duration TIMEOUT = Duration.ofSeconds(20);
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -91,27 +91,27 @@ class KnowledgeEventListenerTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
-    private final List<String> comptesCrees = new ArrayList<>();
+    private final List<String> createdAccounts = new ArrayList<>();
 
     @AfterEach
-    void efface_ce_qui_a_ete_commite() {
-        // La clé étrangère en cascade emporte les documents et leurs textes avec le compte ;
-        // le stockage objet, lui, ne participe à aucune transaction (ADR-0020).
-        comptesCrees.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
-        comptesCrees.clear();
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erase_what_has_been_committed() {
+        // The cascading foreign key takes the documents and their texts away with the account;
+        // the object storage, for its part, takes part in no transaction (ADR-0020).
+        createdAccounts.forEach(email -> jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", email));
+        createdAccounts.clear();
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
         embeddingPort.clear();
     }
 
     @Test
-    void declare_la_queue_du_contexte() {
+    void declares_the_queue_of_the_context() {
         assertThat(amqpAdmin.getQueueInfo("domain.knowledge.events")).isNotNull();
     }
 
     @Test
-    void le_role_worker_demarre_sans_serveur_http_ni_filtre_de_securite() {
+    void the_worker_role_starts_without_an_http_server_nor_a_security_filter() {
         assertThat(applicationContext).isNotInstanceOf(WebApplicationContext.class);
         assertThat(applicationContext.getBeanNamesForType(SecurityFilterChain.class))
                 .isEmpty();
@@ -120,77 +120,79 @@ class KnowledgeEventListenerTest {
     }
 
     @Test
-    void indexe_le_document_dont_le_depot_est_annonce_et_le_declare_pret() {
-        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
+    void indexes_the_document_whose_upload_is_announced_and_declares_it_ready() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
-        publie(document);
+        publish(document);
 
-        await().atMost(DELAI).untilAsserted(() -> {
+        await().atMost(TIMEOUT).untilAsserted(() -> {
             assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .get()
-                    .satisfies(texte -> assertThat(texte.getBlocks()).isNotEmpty());
+                    .satisfies(text -> assertThat(text.getBlocks()).isNotEmpty());
             assertThat(textChunkRepository.findByDocumentId(document.getId())).isNotEmpty();
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY);
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY);
         });
     }
 
     @Test
-    void marque_le_document_en_echec_quand_l_extraction_refuse() {
-        Document document = unDocumentDepose("scan.pdf", Fixtures.NUMERISE_PDF);
+    void marks_the_document_as_failed_when_the_extraction_refuses() {
+        Document document = anUploadedDocument("scan.pdf", Fixtures.SCANNED_PDF);
 
-        publie(document);
+        publish(document);
 
-        await().atMost(DELAI).untilAsserted(() -> {
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.FAILED);
-            assertThat(motifDe(document)).contains("pas de texte exploitable");
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.FAILED);
+            assertThat(errorMessageOf(document)).contains("pas de texte exploitable");
         });
         assertThat(textExtractionRepository.findByDocumentId(document.getId())).isEmpty();
     }
 
     @Test
-    void n_expose_pas_le_message_d_une_panne_technique() {
-        Document document = unDocumentDepose("notes.txt", Fixtures.BRUT_TXT);
+    void does_not_expose_the_message_of_a_technical_failure() {
+        Document document = anUploadedDocument("notes.txt", Fixtures.RAW_TXT);
         documentStorage.delete(document.getId());
 
-        publie(document);
+        publish(document);
 
-        await().atMost(DELAI).untilAsserted(() -> assertThat(motifDe(document)).contains("n'a pas pu être lu"));
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(errorMessageOf(document)).contains("n'a pas pu être lu"));
     }
 
     @Test
-    void ne_double_ni_le_texte_ni_les_extraits_quand_l_evenement_est_livre_deux_fois() {
-        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
-        publie(document);
-        await().atMost(DELAI).untilAsserted(() -> assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY));
-        int extraits = textChunkRepository.findByDocumentId(document.getId()).size();
+    void doubles_neither_the_text_nor_the_chunks_when_the_event_is_delivered_twice() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
+        publish(document);
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY));
+        int chunks = textChunkRepository.findByDocumentId(document.getId()).size();
 
-        publie(document);
+        publish(document);
 
-        await().during(Duration.ofSeconds(2)).atMost(DELAI).untilAsserted(() -> {
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.READY);
+        await().during(Duration.ofSeconds(2)).atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY);
             assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                     .isPresent();
-            assertThat(textChunkRepository.findByDocumentId(document.getId())).hasSize(extraits);
+            assertThat(textChunkRepository.findByDocumentId(document.getId())).hasSize(chunks);
         });
     }
 
     @Test
-    void marque_le_document_en_echec_quand_la_vectorisation_ne_repond_pas() {
-        Document document = unDocumentDepose("structure.md", Fixtures.STRUCTURE_MD);
-        embeddingPort.tombeEnPanne();
+    void marks_the_document_as_failed_when_the_embedding_service_does_not_answer() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
+        embeddingPort.willFail();
 
-        publie(document);
+        publish(document);
 
-        await().atMost(DELAI).untilAsserted(() -> {
-            assertThat(statutDe(document)).isEqualTo(DocumentStatus.FAILED);
-            assertThat(motifDe(document)).contains("vectorisation");
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.FAILED);
+            assertThat(errorMessageOf(document)).contains("vectorisation");
         });
         assertThat(textChunkRepository.findByDocumentId(document.getId())).isEmpty();
         assertThat(textExtractionRepository.findByDocumentId(document.getId())).isPresent();
     }
 
     @Test
-    void rejette_un_evenement_non_declare_sans_le_retraiter(CapturedOutput sortie) throws InterruptedException {
+    void rejects_an_undeclared_event_without_reprocessing_it(CapturedOutput output) throws InterruptedException {
         UUID document = UUID.randomUUID();
         Message message = rabbitTemplate
                 .getMessageConverter()
@@ -199,58 +201,58 @@ class KnowledgeEventListenerTest {
                         new MessageProperties());
         message.getMessageProperties().setHeader("__TypeId__", "knowledge.inconnu.survenu");
 
-        // La queue est liée sur `knowledge.#` : elle reçoit tout le contexte, et c'est
-        // l'en-tête de type qui est jugé, pas la clé de routage.
+        // The queue is bound on `knowledge.#`: it receives the whole context, and it is the
+        // type header that is judged, not the routing key.
         rabbitTemplate.send("domain.events", "knowledge.inconnu.survenu", message);
 
         await().atMost(Duration.ofSeconds(5))
-                .untilAsserted(() -> assertThat(sortie).contains("knowledge.inconnu.survenu"));
+                .untilAsserted(() -> assertThat(output).contains("knowledge.inconnu.survenu"));
 
-        int occurrences = occurrencesDe("knowledge.inconnu.survenu", sortie);
+        int occurrences = occurrencesOf("knowledge.inconnu.survenu", output);
         Thread.sleep(1000);
-        assertThat(occurrencesDe("knowledge.inconnu.survenu", sortie)).isEqualTo(occurrences);
+        assertThat(occurrencesOf("knowledge.inconnu.survenu", output)).isEqualTo(occurrences);
     }
 
-    private void publie(Document document) {
+    private void publish(Document document) {
         rabbitTemplate.convertAndSend(
                 "domain.events",
                 "knowledge.document.uploaded",
                 new DocumentUploaded(document.getId(), document.getOwnerId(), Instant.now()));
     }
 
-    private Document unDocumentDepose(String filename, String fixture) {
+    private Document anUploadedDocument(String filename, String fixture) {
         String email = UUID.randomUUID() + "@exemple.fr";
-        UUID proprietaire = userRepository
+        UUID ownerId = userRepository
                 .save(User.register(new Email(email), "empreinte"))
                 .getId();
-        comptesCrees.add(email);
-        byte[] contenu = Fixtures.lire(fixture);
-        commandBus.dispatch(new UploadDocument(proprietaire, filename, contenu));
+        createdAccounts.add(email);
+        byte[] content = Fixtures.read(fixture);
+        commandBus.dispatch(new UploadDocument(ownerId, filename, content));
         return documentRepository
-                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .findByOwnerIdAndChecksum(ownerId, Checksum.of(content))
                 .orElseThrow();
     }
 
-    private DocumentStatus statutDe(Document document) {
-        return relis(document).getStatus();
+    private DocumentStatus statusOf(Document document) {
+        return reload(document).getStatus();
     }
 
-    private String motifDe(Document document) {
-        return relis(document).getErrorMessage();
+    private String errorMessageOf(Document document) {
+        return reload(document).getErrorMessage();
     }
 
-    private Document relis(Document document) {
+    private Document reload(Document document) {
         return documentRepository
                 .findByIdAndOwnerId(document.getId(), document.getOwnerId())
                 .orElseThrow();
     }
 
-    private int occurrencesDe(String motif, CapturedOutput sortie) {
+    private int occurrencesOf(String pattern, CapturedOutput output) {
         int total = 0;
-        int index = sortie.getOut().indexOf(motif);
+        int index = output.getOut().indexOf(pattern);
         while (index >= 0) {
             total++;
-            index = sortie.getOut().indexOf(motif, index + motif.length());
+            index = output.getOut().indexOf(pattern, index + pattern.length());
         }
         return total;
     }

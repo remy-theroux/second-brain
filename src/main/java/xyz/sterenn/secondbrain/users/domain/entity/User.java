@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-// Annotations JPA dans le domaine : écart assumé, voir ADR-0002.
+// JPA annotations in the domain: accepted deviation, see ADR-0002.
 @Entity
 @Table(name = "users_users")
 public class User {

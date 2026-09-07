@@ -1,6 +1,6 @@
 <script setup>
-// Titre d'écran : un seul par vue. Le `h1` vit ici pour que sa taille ne soit décidée
-// qu'à un endroit, par le token `--sb-title-size`.
+// Screen title: one per view. The `h1` lives here so that its size is decided in a
+// single place, by the `--sb-title-size` token.
 </script>
 
 <template>

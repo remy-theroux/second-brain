@@ -42,8 +42,8 @@ public class AgentRun {
     @Column(name = "agent_version", nullable = false, length = MAX_AGENT_VERSION_LENGTH)
     private String agentVersion;
 
-    // columnDefinition : sans lui, Hibernate attend un varchar(255) et `ddl-auto: validate`
-    // échoue au démarrage sur « wrong column type ». Même motif que TextChunk.text.
+    // columnDefinition: without it, Hibernate expects a varchar(255) and `ddl-auto: validate`
+    // fails at startup on "wrong column type". Same reason as TextChunk.text.
     @Column(nullable = false, columnDefinition = "text")
     private String question;
 

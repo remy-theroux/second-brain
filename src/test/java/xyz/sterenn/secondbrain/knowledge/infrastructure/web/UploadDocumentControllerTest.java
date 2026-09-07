@@ -33,9 +33,10 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
 /**
- * Un refus est toujours le <em>dernier</em> appel HTTP de son test : l'exception marque la
- * transaction englobante « rollback-only », et un second appel derrière échouerait sur une
- * {@code UnexpectedRollbackException}. Ce qui reste à vérifier après un refus se lit par le port.
+ * A refusal is always the <em>last</em> HTTP call of its test: the exception marks the enclosing
+ * transaction rollback-only, and a second call behind it would fail on an
+ * {@code UnexpectedRollbackException}. Whatever is left to check after a refusal is read through
+ * the port.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
@@ -43,8 +44,8 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 @Transactional
 class UploadDocumentControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
-    private static final byte[] CONTENU = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
+    private static final String PASSWORD = "chevalpile42";
+    private static final byte[] CONTENT = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
 
     @Autowired
     private MockMvc mockMvc;
@@ -68,132 +69,131 @@ class UploadDocumentControllerTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
-    private UUID compte;
-    private String jeton;
+    private UUID account;
+    private String token;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingNotificationSender.clear();
-        compte = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
-        jeton = KnowledgeFixture.jeton(accessTokenIssuer, compte);
+        account =
+                AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
+        token = KnowledgeFixture.token(accessTokenIssuer, account);
     }
 
     @AfterEach
-    void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erase_the_originals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
-    private static MockMultipartFile fichier(String nom, byte[] contenu) {
-        return new MockMultipartFile("file", nom, "application/octet-stream", contenu);
+    private static MockMultipartFile file(String filename, byte[] content) {
+        return new MockMultipartFile("file", filename, "application/octet-stream", content);
     }
 
-    private void depose(String nom, byte[] contenu) throws Exception {
+    private void upload(String filename, byte[] content) throws Exception {
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier(nom, contenu))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(file(filename, content))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void enregistre_un_document_depose_en_attente_de_traitement() throws Exception {
+    void records_an_uploaded_document_as_awaiting_processing() throws Exception {
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier("rapport.pdf", CONTENU))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(file("rapport.pdf", CONTENT))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isCreated());
 
-        assertThat(documentRepository.findAllByOwnerId(compte)).singleElement().satisfies(document -> {
+        assertThat(documentRepository.findAllByOwnerId(account)).singleElement().satisfies(document -> {
             assertThat(document.getFilename()).isEqualTo("rapport.pdf");
             assertThat(document.getStatus()).isEqualTo(DocumentStatus.PENDING);
         });
     }
 
     @Test
-    void conserve_le_fichier_d_origine() throws Exception {
-        depose("rapport.pdf", CONTENU);
+    void keeps_the_original_file() throws Exception {
+        upload("rapport.pdf", CONTENT);
 
-        UUID document = documentRepository.findAllByOwnerId(compte).getFirst().getId();
+        UUID document = documentRepository.findAllByOwnerId(account).getFirst().getId();
 
         assertThat(documentStorage.read(document))
-                .hasValueSatisfying(conserve -> assertThat(conserve).isEqualTo(CONTENU));
+                .hasValueSatisfying(stored -> assertThat(stored).isEqualTo(CONTENT));
     }
 
     @Test
-    void refuse_un_contenu_deja_present_en_designant_le_document_existant() throws Exception {
-        depose("rapport.pdf", CONTENU);
-        UUID existant = documentRepository.findAllByOwnerId(compte).getFirst().getId();
+    void refuses_an_already_present_content_by_naming_the_existing_document() throws Exception {
+        upload("rapport.pdf", CONTENT);
+        UUID existing = documentRepository.findAllByOwnerId(account).getFirst().getId();
 
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier("copie-du-rapport.pdf", CONTENU))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(file("copie-du-rapport.pdf", CONTENT))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.existingDocumentId").value(existant.toString()))
+                .andExpect(jsonPath("$.existingDocumentId").value(existing.toString()))
                 .andExpect(jsonPath("$.message").isNotEmpty());
 
-        assertThat(documentRepository.findAllByOwnerId(compte)).hasSize(1);
+        assertThat(documentRepository.findAllByOwnerId(account)).hasSize(1);
     }
 
     @Test
-    void laisse_un_autre_compte_deposer_le_meme_contenu() throws Exception {
-        depose("rapport.pdf", CONTENU);
-        UUID bob = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
+    void lets_another_account_upload_the_same_content() throws Exception {
+        upload("rapport.pdf", CONTENT);
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
 
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier("rapport.pdf", CONTENU))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + KnowledgeFixture.jeton(accessTokenIssuer, bob)))
+                        .file(file("rapport.pdf", CONTENT))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + KnowledgeFixture.token(accessTokenIssuer, bob)))
                 .andExpect(status().isCreated());
 
         assertThat(documentRepository.findAllByOwnerId(bob)).hasSize(1);
     }
 
     @Test
-    void refuse_un_format_non_pris_en_charge_en_enoncant_les_formats_acceptes() throws Exception {
+    void refuses_an_unsupported_format_by_stating_the_accepted_formats() throws Exception {
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier("programme.exe", CONTENU))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(file("programme.exe", CONTENT))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(".pdf")));
 
-        assertThat(documentRepository.findAllByOwnerId(compte)).isEmpty();
+        assertThat(documentRepository.findAllByOwnerId(account)).isEmpty();
     }
 
     @Test
-    void refuse_un_fichier_vide() throws Exception {
+    void refuses_an_empty_file() throws Exception {
         mockMvc.perform(multipart("/api/documents")
-                        .file(fichier("rapport.pdf", new byte[0]))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                        .file(file("rapport.pdf", new byte[0]))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.file").isNotEmpty());
     }
 
     @Test
-    void refuse_un_depot_sans_jeton() throws Exception {
-        mockMvc.perform(multipart("/api/documents").file(fichier("rapport.pdf", CONTENU)))
+    void refuses_an_upload_without_a_token() throws Exception {
+        mockMvc.perform(multipart("/api/documents").file(file("rapport.pdf", CONTENT)))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void rattache_le_document_au_porteur_du_jeton_et_a_personne_d_autre() throws Exception {
-        UUID bob = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "bob2@exemple.fr", MOT_DE_PASSE);
+    void attaches_the_document_to_the_token_bearer_and_to_nobody_else() throws Exception {
+        UUID bob =
+                AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob2@exemple.fr", PASSWORD);
 
-        depose("rapport.pdf", CONTENU);
+        upload("rapport.pdf", CONTENT);
 
-        assertThat(documentRepository.findAllByOwnerId(compte)).hasSize(1);
+        assertThat(documentRepository.findAllByOwnerId(account)).hasSize(1);
         assertThat(documentRepository.findAllByOwnerId(bob)).isEmpty();
     }
 
     @Test
-    void accepte_les_quatre_formats_annonces() throws Exception {
-        depose("rapport.pdf", "un".getBytes(StandardCharsets.UTF_8));
-        depose("notes.md", "deux".getBytes(StandardCharsets.UTF_8));
-        depose("brouillon.txt", "trois".getBytes(StandardCharsets.UTF_8));
-        depose("contrat.docx", "quatre".getBytes(StandardCharsets.UTF_8));
+    void accepts_the_four_announced_formats() throws Exception {
+        upload("rapport.pdf", "un".getBytes(StandardCharsets.UTF_8));
+        upload("notes.md", "deux".getBytes(StandardCharsets.UTF_8));
+        upload("brouillon.txt", "trois".getBytes(StandardCharsets.UTF_8));
+        upload("contrat.docx", "quatre".getBytes(StandardCharsets.UTF_8));
 
-        assertThat(documentRepository.findAllByOwnerId(compte))
+        assertThat(documentRepository.findAllByOwnerId(account))
                 .extracting(Document::getFilename)
                 .containsExactlyInAnyOrder("rapport.pdf", "notes.md", "brouillon.txt", "contrat.docx");
     }

@@ -204,7 +204,7 @@ Avant d'écrire une classe, décider de sa couche :
   requête.
 - **`@Transactional` annule la base, jamais le stockage objet.** Un test qui écrit un
   original dans Garage le nettoie explicitement en `@AfterEach` (voir
-  `S3DocumentStorageTest.videLesOriginaux`), sans quoi il laisse derrière lui un objet
+  `S3DocumentStorageTest.emptyTheOriginals`), sans quoi il laisse derrière lui un objet
   qu'aucune ligne ne désigne — et que le refus d'écrasement de l'adapter transformera en
   échec pour un test ultérieur. Ce qui a changé depuis le disque : le conteneur Garage est
   jeté à la fin de l'exécution, donc la fuite ne traverse plus qu'**une seule** exécution —
@@ -224,7 +224,7 @@ Avant d'écrire une classe, décider de sa couche :
 - Un mapping qui ne tient qu'à un scan de packages se vérifie **en intégration**. Un test
   unitaire d'`EmailAttributeConverter` passerait au vert même si Hibernate ne l'appliquait
   jamais ; ce qui fait foi, c'est `SecondBrainApplicationTests` pour la découverte, et
-  `JpaUserRepositoryAdapterTest.projette_l_email_sur_une_colonne_texte` pour le contenu
+  `JpaUserRepositoryAdapterTest.projects_the_email_onto_a_text_column` pour le contenu
   réel de la colonne.
 
 ## Dépendances et build

@@ -22,7 +22,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @Transactional
 class JpaVerificationTokenRepositoryAdapterTest {
 
-    private static final Instant EMISSION = Instant.parse("2026-08-06T10:00:00Z");
+    private static final Instant ISSUED_AT = Instant.parse("2026-08-06T10:00:00Z");
 
     @Autowired
     private VerificationTokenRepository verificationTokenRepository;
@@ -33,60 +33,60 @@ class JpaVerificationTokenRepositoryAdapterTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private UUID compteExistant(String email) {
+    private UUID existingAccount(String email) {
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
     @Test
-    void persiste_un_jeton_pour_un_compte() {
-        UUID compte = compteExistant("alice@example.com");
+    void persists_a_token_for_an_account() {
+        UUID accountId = existingAccount("alice@example.com");
 
         VerificationToken saved =
-                verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+                verificationTokenRepository.save(VerificationToken.issue(accountId, "empreinte", ISSUED_AT));
 
         assertThat(saved.getId()).isNotNull();
-        assertThat(saved.getUserId()).isEqualTo(compte);
-        assertThat(saved.getExpiresAt()).isEqualTo(EMISSION.plus(VerificationToken.VALIDITY));
+        assertThat(saved.getUserId()).isEqualTo(accountId);
+        assertThat(saved.getExpiresAt()).isEqualTo(ISSUED_AT.plus(VerificationToken.VALIDITY));
         assertThat(saved.getConsumedAt()).isNull();
         assertThat(saved.getCreatedAt()).isNotNull();
     }
 
     @Test
-    void retrouve_le_jeton_d_un_compte() {
-        UUID compte = compteExistant("bob@example.com");
-        verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
+    void finds_the_token_of_an_account() {
+        UUID accountId = existingAccount("bob@example.com");
+        verificationTokenRepository.save(VerificationToken.issue(accountId, "empreinte", ISSUED_AT));
 
-        assertThat(verificationTokenRepository.findByUserId(compte))
+        assertThat(verificationTokenRepository.findByUserId(accountId))
                 .isPresent()
-                .hasValueSatisfying(jeton -> assertThat(jeton.getTokenHash()).isEqualTo("empreinte"));
+                .hasValueSatisfying(token -> assertThat(token.getTokenHash()).isEqualTo("empreinte"));
     }
 
     @Test
-    void ne_retrouve_rien_pour_un_compte_sans_jeton() {
+    void finds_nothing_for_an_account_without_a_token() {
         assertThat(verificationTokenRepository.findByUserId(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    void enregistre_la_consommation_du_jeton() {
-        UUID compte = compteExistant("carol@example.com");
-        VerificationToken jeton =
-                verificationTokenRepository.save(VerificationToken.issue(compte, "empreinte", EMISSION));
-        Instant clic = EMISSION.plusSeconds(60);
+    void records_the_consumption_of_the_token() {
+        UUID accountId = existingAccount("carol@example.com");
+        VerificationToken token =
+                verificationTokenRepository.save(VerificationToken.issue(accountId, "empreinte", ISSUED_AT));
+        Instant click = ISSUED_AT.plusSeconds(60);
 
-        jeton.consume(clic);
-        verificationTokenRepository.save(jeton);
+        token.consume(click);
+        verificationTokenRepository.save(token);
 
-        assertThat(verificationTokenRepository.findByUserId(compte))
-                .hasValueSatisfying(relu -> assertThat(relu.isConsumed()).isTrue());
+        assertThat(verificationTokenRepository.findByUserId(accountId))
+                .hasValueSatisfying(reread -> assertThat(reread.isConsumed()).isTrue());
     }
 
     @Test
-    void persiste_l_empreinte_sans_la_tronquer() {
-        UUID compte = compteExistant("dave@example.com");
-        verificationTokenRepository.save(VerificationToken.issue(compte, "{bcrypt}$2a$10$empreinte", EMISSION));
+    void persists_the_hash_without_truncating_it() {
+        UUID accountId = existingAccount("dave@example.com");
+        verificationTokenRepository.save(VerificationToken.issue(accountId, "{bcrypt}$2a$10$empreinte", ISSUED_AT));
 
         assertThat(jdbcTemplate.queryForObject(
-                        "SELECT token_hash FROM users_verification_tokens WHERE user_id = ?", String.class, compte))
+                        "SELECT token_hash FROM users_verification_tokens WHERE user_id = ?", String.class, accountId))
                 .isEqualTo("{bcrypt}$2a$10$empreinte");
     }
 }

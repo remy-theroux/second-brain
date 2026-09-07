@@ -13,15 +13,15 @@ public final class DomainEventNames {
     private static final String ROOT = "xyz.sterenn.secondbrain";
     private static final Set<String> NOT_A_CONTEXT = Set.of("shared", "config");
 
-    // Coupe avant une majuscule qui suit une minuscule ou un chiffre, et avant la dernière
-    // majuscule d'une suite : un acronyme reste un seul mot (`PDFExtracted` → `PDF`, `Extracted`).
+    // Splits before an uppercase letter following a lowercase or a digit, and before the last
+    // uppercase of a run: an acronym stays one word (`PDFExtracted` → `PDF`, `Extracted`).
     private static final String WORD_BOUNDARY = "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])";
 
     private DomainEventNames() {}
 
     public static String of(Class<? extends DomainEvent> type) {
-        // `DomainEvent` n'a qu'une méthode abstraite : une lambda compile, et son nom simple est
-        // vide ou synthétique — elle voyagerait sous un nom que rien ne peut redésérialiser.
+        // `DomainEvent` has a single abstract method: a lambda compiles, and its simple name is
+        // empty or synthetic — it would travel under a name nothing can deserialise back.
         if (type.isAnonymousClass()
                 || type.isLocalClass()
                 || type.isSynthetic()

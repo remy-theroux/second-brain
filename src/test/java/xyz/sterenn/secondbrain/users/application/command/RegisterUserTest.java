@@ -7,10 +7,10 @@ import org.junit.jupiter.api.Test;
 class RegisterUserTest {
 
     @Test
-    void n_expose_jamais_le_mot_de_passe_dans_sa_representation_textuelle() {
-        String texte = new RegisterUser("alice@example.com", "chevalpile42").toString();
+    void never_exposes_the_password_in_its_string_representation() {
+        String text = new RegisterUser("alice@example.com", "chevalpile42").toString();
 
-        assertThat(texte).doesNotContain("chevalpile42");
-        assertThat(texte).contains("alice@example.com");
+        assertThat(text).doesNotContain("chevalpile42");
+        assertThat(text).contains("alice@example.com");
     }
 }

@@ -4,7 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.util.UUID;
 
-/** Voir ADR-0002 : l'écart qui autorise les annotations JPA dans le domaine. */
+/** See ADR-0002: the deviation that allows JPA annotations in the domain. */
 @Embeddable
 public class CitedSource {
 
@@ -14,7 +14,7 @@ public class CitedSource {
     @Column(name = "source_number", nullable = false)
     private int number;
 
-    /** Sans contrainte : il sert au diagnostic, et il a le droit de ne plus désigner personne. */
+    /** No constraint: it serves diagnosis, and is allowed to designate nobody any more. */
     @Column(name = "document_id", nullable = false, columnDefinition = "uuid")
     private UUID documentId;
 

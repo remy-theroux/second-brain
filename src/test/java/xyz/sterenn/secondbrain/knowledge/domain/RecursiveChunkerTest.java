@@ -14,158 +14,156 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 class RecursiveChunkerTest {
 
-    /** Un mot, un token. La doublure qui rend les frontières lisibles. */
-    private static final TokenCounter UN_MOT_UN_TOKEN =
-            texte -> texte == null || texte.isBlank() ? 0 : texte.strip().split("\\s+").length;
+    /** One word, one token. The stub that keeps the boundaries readable. */
+    private static final TokenCounter ONE_WORD_ONE_TOKEN =
+            text -> text == null || text.isBlank() ? 0 : text.strip().split("\\s+").length;
 
-    private final RecursiveChunker chunker = new RecursiveChunker(UN_MOT_UN_TOKEN);
+    private final RecursiveChunker chunker = new RecursiveChunker(ONE_WORD_ONE_TOKEN);
 
     @Test
-    void refuse_un_texte_absent() {
+    void rejects_a_missing_text() {
         assertThatNullPointerException().isThrownBy(() -> chunker.chunk(null));
     }
 
     @Test
-    void un_document_plus_court_qu_un_extrait_donne_un_seul_extrait() {
-        ExtractedText texte = ExtractedText.untitled(paragraphe(1, 10));
+    void a_document_shorter_than_a_chunk_yields_a_single_chunk() {
+        ExtractedText text = ExtractedText.untitled(paragraph(1, 10));
 
-        assertThat(chunker.chunk(texte)).hasSize(1);
+        assertThat(chunker.chunk(text)).hasSize(1);
     }
 
     @Test
-    void un_document_court_mais_titre_donne_un_extrait_par_section() {
-        ExtractedText texte = new ExtractedText(List.of(
-                TextBlock.of("Première section", 1, paragraphe(1, 4)),
-                TextBlock.of("Deuxième section", 1, paragraphe(5, 4)),
-                TextBlock.of("Troisième section", 1, paragraphe(9, 4))));
+    void a_short_but_headed_document_yields_one_chunk_per_section() {
+        ExtractedText text = new ExtractedText(List.of(
+                TextBlock.of("Première section", 1, paragraph(1, 4)),
+                TextBlock.of("Deuxième section", 1, paragraph(5, 4)),
+                TextBlock.of("Troisième section", 1, paragraph(9, 4))));
 
-        assertThat(chunker.chunk(texte)).hasSize(3);
+        assertThat(chunker.chunk(text)).hasSize(3);
     }
 
     @Test
-    void une_section_sous_le_plafond_donne_un_extrait_meme_au_dessus_de_la_cible() {
-        ExtractedText texte = ExtractedText.untitled(paragraphe(1, 70));
+    void a_section_under_the_ceiling_yields_one_chunk_even_above_the_target() {
+        ExtractedText text = ExtractedText.untitled(paragraph(1, 70));
 
-        assertThat(chunker.chunk(texte)).hasSize(1);
+        assertThat(chunker.chunk(text)).hasSize(1);
     }
 
     @Test
-    void aucun_extrait_ne_depasse_le_plafond() {
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 200)));
+    void no_chunk_exceeds_the_ceiling() {
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(paragraph(1, 200)));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits).allSatisfy(extrait -> assertThat(UN_MOT_UN_TOKEN.count(extrait.text()))
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks).allSatisfy(chunk -> assertThat(ONE_WORD_ONE_TOKEN.count(chunk.text()))
                 .isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS));
     }
 
     @Test
-    void aucun_extrait_ne_commence_ni_ne_finit_au_milieu_d_une_phrase() {
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 200)));
+    void no_chunk_starts_or_ends_in_the_middle_of_a_sentence() {
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(paragraph(1, 200)));
 
-        assertThat(extraits).allSatisfy(extrait -> {
-            assertThat(extrait.text()).endsWith(".");
-            assertThat(extrait.text()).startsWith("Phrase numero ");
+        assertThat(chunks).allSatisfy(chunk -> {
+            assertThat(chunk.text()).endsWith(".");
+            assertThat(chunk.text()).startsWith("Phrase numero ");
         });
     }
 
     @Test
-    void deux_extraits_consecutifs_d_une_section_se_recouvrent() {
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 200)));
+    void two_consecutive_chunks_of_a_section_overlap() {
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(paragraph(1, 200)));
 
-        String premierePhraseDuSecond = extraits.get(1).text().split("(?<=\\.)\\s+")[0];
-        assertThat(extraits.get(0).text()).contains(premierePhraseDuSecond);
+        String firstSentenceOfTheSecond = chunks.get(1).text().split("(?<=\\.)\\s+")[0];
+        assertThat(chunks.get(0).text()).contains(firstSentenceOfTheSecond);
     }
 
     @Test
-    void le_recouvrement_ne_franchit_pas_une_frontiere_de_section() {
-        ExtractedText texte = new ExtractedText(List.of(
-                TextBlock.of("Section A", 1, marque("Alpha", 200)), TextBlock.of("Section B", 1, marque("Beta", 200))));
+    void the_overlap_does_not_cross_a_section_boundary() {
+        ExtractedText text = new ExtractedText(List.of(
+                TextBlock.of("Section A", 1, marker("Alpha", 200)), TextBlock.of("Section B", 1, marker("Beta", 200))));
 
-        List<Chunk> extraits = chunker.chunk(texte);
+        List<Chunk> chunks = chunker.chunk(text);
 
-        assertThat(extraits)
-                .filteredOn(extrait -> extrait.heading().equals("Section B"))
-                .allSatisfy(extrait -> assertThat(extrait.text()).doesNotContain("Alpha"));
+        assertThat(chunks)
+                .filteredOn(chunk -> chunk.heading().equals("Section B"))
+                .allSatisfy(chunk -> assertThat(chunk.text()).doesNotContain("Alpha"));
     }
 
     @Test
-    void chaque_extrait_porte_le_titre_de_la_section_dont_il_vient() {
-        ExtractedText texte = new ExtractedText(List.of(
-                TextBlock.of("Introduction", 1, paragraphe(1, 200)), TextBlock.of("Conclusion", 1, paragraphe(1, 5))));
+    void each_chunk_carries_the_heading_of_the_section_it_comes_from() {
+        ExtractedText text = new ExtractedText(List.of(
+                TextBlock.of("Introduction", 1, paragraph(1, 200)), TextBlock.of("Conclusion", 1, paragraph(1, 5))));
 
-        List<Chunk> extraits = chunker.chunk(texte);
+        List<Chunk> chunks = chunker.chunk(text);
 
-        assertThat(extraits).extracting(Chunk::heading).contains("Introduction", "Conclusion");
-        assertThat(extraits).last().satisfies(extrait -> assertThat(extrait.heading())
-                .isEqualTo("Conclusion"));
+        assertThat(chunks).extracting(Chunk::heading).contains("Introduction", "Conclusion");
+        assertThat(chunks).last().satisfies(chunk -> assertThat(chunk.heading()).isEqualTo("Conclusion"));
     }
 
     @Test
-    void decoupe_aux_paragraphes_avant_de_descendre_aux_phrases() {
-        String corps = paragraphe(1, 30) + "\n\n" + paragraphe(31, 30) + "\n\n" + paragraphe(61, 30);
+    void splits_at_paragraphs_before_falling_back_to_sentences() {
+        String body = paragraph(1, 30) + "\n\n" + paragraph(31, 30) + "\n\n" + paragraph(61, 30);
 
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(corps));
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(body));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits.get(0).text()).contains("\n\n");
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks.get(0).text()).contains("\n\n");
     }
 
     @Test
-    void un_paragraphe_geant_sans_ponctuation_est_coupe_faute_de_frontiere() {
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled("mot ".repeat(3000)));
+    void a_giant_paragraph_without_punctuation_is_cut_for_lack_of_a_boundary() {
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled("mot ".repeat(3000)));
 
-        assertThat(extraits).hasSizeGreaterThan(1);
-        assertThat(extraits).allSatisfy(extrait -> assertThat(UN_MOT_UN_TOKEN.count(extrait.text()))
+        assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(chunks).allSatisfy(chunk -> assertThat(ONE_WORD_ONE_TOKEN.count(chunk.text()))
                 .isLessThanOrEqualTo(ChunkingPolicy.MAX_TOKENS));
     }
 
     @Test
-    void le_recouvrement_cede_devant_le_plafond() {
-        String phraseGeante = "Mot " + "mot ".repeat(798) + "final.";
+    void the_overlap_yields_to_the_ceiling() {
+        String giantSentence = "Mot " + "mot ".repeat(798) + "final.";
 
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 60) + " " + phraseGeante));
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(paragraph(1, 60) + " " + giantSentence));
 
-        assertThat(extraits).hasSize(2);
-        assertThat(extraits.get(1).text()).isEqualTo(phraseGeante.strip());
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.get(1).text()).isEqualTo(giantSentence.strip());
     }
 
     @Test
-    void ne_publie_pas_un_extrait_que_le_suivant_reprend_en_entier() {
-        ExtractedText texte =
-                ExtractedText.untitled("Introduction." + "\n\n" + paragraphe(1, 70) + "\n\n" + paragraphe(71, 70));
+    void does_not_emit_a_chunk_that_the_next_one_contains_entirely() {
+        ExtractedText text =
+                ExtractedText.untitled("Introduction." + "\n\n" + paragraph(1, 70) + "\n\n" + paragraph(71, 70));
 
-        List<Chunk> extraits = chunker.chunk(texte);
+        List<Chunk> chunks = chunker.chunk(text);
 
-        for (int index = 0; index < extraits.size() - 1; index++) {
-            assertThat(extraits.get(index + 1).text())
-                    .doesNotContain(extraits.get(index).text());
+        for (int index = 0; index < chunks.size() - 1; index++) {
+            assertThat(chunks.get(index + 1).text())
+                    .doesNotContain(chunks.get(index).text());
         }
     }
 
     @Test
-    void ne_perd_aucune_phrase_du_document() {
-        List<Chunk> extraits = chunker.chunk(ExtractedText.untitled(paragraphe(1, 200)));
+    void loses_no_sentence_of_the_document() {
+        List<Chunk> chunks = chunker.chunk(ExtractedText.untitled(paragraph(1, 200)));
 
-        for (int numero = 1; numero <= 200; numero++) {
-            String attendue = phrase(numero);
-            assertThat(extraits)
-                    .anySatisfy(extrait -> assertThat(extrait.text()).contains(attendue));
+        for (int number = 1; number <= 200; number++) {
+            String expected = sentence(number);
+            assertThat(chunks).anySatisfy(chunk -> assertThat(chunk.text()).contains(expected));
         }
     }
 
-    private static String phrase(int numero) {
-        return "Phrase numero " + numero + " avec quelques mots pour occuper la place.";
+    private static String sentence(int number) {
+        return "Phrase numero " + number + " avec quelques mots pour occuper la place.";
     }
 
-    private static String paragraphe(int premiere, int nombre) {
-        return IntStream.range(0, nombre)
-                .mapToObj(index -> phrase(premiere + index))
+    private static String paragraph(int first, int count) {
+        return IntStream.range(0, count)
+                .mapToObj(index -> sentence(first + index))
                 .collect(Collectors.joining(" "));
     }
 
-    private static String marque(String marque, int nombre) {
-        return IntStream.range(0, nombre)
-                .mapToObj(index -> marque + " numero " + index + " avec quelques mots pour occuper la place.")
+    private static String marker(String marker, int count) {
+        return IntStream.range(0, count)
+                .mapToObj(index -> marker + " numero " + index + " avec quelques mots pour occuper la place.")
                 .collect(Collectors.joining(" "));
     }
 }

@@ -5,9 +5,9 @@ import jakarta.persistence.Converter;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 
 /**
- * Aucune ligne de code ne référence ce converter : {@code autoApply} l'applique à tout
- * attribut {@link Checksum}, et Hibernate ne le découvre que par le scan de packages. Le
- * supprimer au motif qu'il paraît inutilisé fait échouer le démarrage.
+ * No line of code references this converter: {@code autoApply} applies it to every
+ * {@link Checksum} attribute, and Hibernate only discovers it through the package scan.
+ * Deleting it because it looks unused makes startup fail.
  */
 @Converter(autoApply = true)
 public class ChecksumAttributeConverter implements AttributeConverter<Checksum, String> {

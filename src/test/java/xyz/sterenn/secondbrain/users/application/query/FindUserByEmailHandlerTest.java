@@ -28,25 +28,25 @@ class FindUserByEmailHandlerTest {
     private QueryBus queryBus;
 
     @Test
-    void renvoie_la_vue_d_un_compte_existant() {
+    void returns_the_view_of_an_existing_account() {
         commandBus.dispatch(new RegisterUser("grace@example.com", "chevalpile42"));
 
-        Optional<UserView> vue = queryBus.ask(new FindUserByEmail("GRACE@Example.com"));
+        Optional<UserView> view = queryBus.ask(new FindUserByEmail("GRACE@Example.com"));
 
-        assertThat(vue).isPresent();
-        assertThat(vue.get().email()).isEqualTo("grace@example.com");
-        assertThat(vue.get().verified()).isFalse();
-        assertThat(vue.get().id()).isNotNull();
-        assertThat(vue.get().createdAt()).isNotNull();
+        assertThat(view).isPresent();
+        assertThat(view.get().email()).isEqualTo("grace@example.com");
+        assertThat(view.get().verified()).isFalse();
+        assertThat(view.get().id()).isNotNull();
+        assertThat(view.get().createdAt()).isNotNull();
     }
 
     @Test
-    void renvoie_vide_pour_un_email_inconnu() {
+    void returns_empty_for_an_unknown_email() {
         assertThat(queryBus.ask(new FindUserByEmail("inconnu@example.com"))).isEmpty();
     }
 
     @Test
-    void refuse_un_email_mal_forme() {
+    void rejects_a_malformed_email() {
         assertThatThrownBy(() -> queryBus.ask(new FindUserByEmail("pas-un-email")))
                 .isInstanceOf(InvalidEmailException.class);
     }

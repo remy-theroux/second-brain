@@ -83,7 +83,7 @@ gtest() {
 | Toute la suite | `gtest test` |
 | Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.valueobject.EmailTest"` |
 | Un package | `gtest test --tests "xyz.sterenn.secondbrain.shared.bus.*"` |
-| Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
+| Une méthode | `gtest test --tests "…EmailTest.rejects_a_blank_email"` |
 | Compilation seule | `gtest compileJava` |
 | Build complet (ce que fait la CI) | `gtest build` |
 | Refabriquer les fixtures binaires d'extraction | `gtest generateFixtures` |
@@ -694,7 +694,7 @@ cherche.
 totale :**
 
 - **Il ne s'applique que si une recherche a eu lieu.** Si le modèle répond de mémoire sans
-  jamais appeler l'outil, la conversation est classée `CONVERSATIONNELLE` et son texte part
+  jamais appeler l'outil, la conversation est classée `CONVERSATIONAL` et son texte part
   inchangé : la seule défense contre l'invention y est alors la consigne écrite dans
   `document-agent.md`, pas un contrôle programmatique. C'est le trou assumé de la spec, et
   c'est le ticket d'évaluation (RAG-14) qui le mesurera.

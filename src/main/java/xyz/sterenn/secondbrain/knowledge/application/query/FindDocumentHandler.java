@@ -24,10 +24,10 @@ public class FindDocumentHandler implements QueryHandler<FindDocument, Optional<
     public Optional<DocumentDetailView> handle(FindDocument query) {
         return documentRepository
                 .findByIdAndOwnerId(query.documentId(), query.ownerId())
-                .map(document -> DocumentDetailView.of(document, extractionDe(document)));
+                .map(document -> DocumentDetailView.of(document, extractionOf(document)));
     }
 
-    private TextExtractionView extractionDe(Document document) {
+    private TextExtractionView extractionOf(Document document) {
         if (document.getFormat().type() != DocumentType.TEXTUAL) {
             return null;
         }

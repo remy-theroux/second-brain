@@ -26,9 +26,9 @@ public class JpaTextExtractionRepositoryAdapter implements TextExtractionReposit
     }
 
     /**
-     * Le handler efface puis écrit dans la même transaction, et {@code document_id} est
-     * {@code UNIQUE} : sans ce flush, Hibernate ordonnerait l'insertion avant la
-     * suppression au moment du vidage.
+     * The handler deletes then writes within the same transaction, and {@code document_id} is
+     * {@code UNIQUE}: without this flush, Hibernate would order the insert before the delete
+     * when flushing.
      */
     @Override
     public void deleteByDocumentId(UUID documentId) {

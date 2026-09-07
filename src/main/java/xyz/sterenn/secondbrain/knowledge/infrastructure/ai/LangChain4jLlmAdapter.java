@@ -44,54 +44,54 @@ class LangChain4jLlmAdapter implements LlmPort {
 
     @Override
     public LlmTurn stream(LlmRequest request, Consumer<String> onToken) {
-        CompletableFuture<ChatResponse> attendu = new CompletableFuture<>();
-        StringBuilder texte = new StringBuilder();
+        CompletableFuture<ChatResponse> pending = new CompletableFuture<>();
+        StringBuilder text = new StringBuilder();
 
-        chatModel.chat(versLangChain4j(request), new StreamingChatResponseHandler() {
+        chatModel.chat(toLangChain4j(request), new StreamingChatResponseHandler() {
             @Override
             public void onPartialResponse(String fragment) {
-                texte.append(fragment);
-                // Une exception ici — le client a fermé sa connexion SSE — doit interrompre le
-                // tour et remonter telle quelle : c'est le mécanisme d'annulation.
+                text.append(fragment);
+                // An exception here — the client closed its SSE connection — must break the turn
+                // and propagate as is: that is the cancellation mechanism.
                 try {
                     onToken.accept(fragment);
-                } catch (RuntimeException abandon) {
-                    // Emballée pour être reconnue à la sortie : c'est le client qui est parti,
-                    // pas le service de génération qui a échoué.
-                    attendu.completeExceptionally(new ConsumerFailure(abandon));
-                    throw abandon;
+                } catch (RuntimeException abort) {
+                    // Wrapped so it can be recognised on the way out: the client left, the
+                    // generation service did not fail.
+                    pending.completeExceptionally(new ConsumerFailure(abort));
+                    throw abort;
                 }
             }
 
             @Override
-            public void onCompleteResponse(ChatResponse reponse) {
-                attendu.complete(reponse);
+            public void onCompleteResponse(ChatResponse response) {
+                pending.complete(response);
             }
 
             @Override
-            public void onError(Throwable echec) {
-                attendu.completeExceptionally(echec);
+            public void onError(Throwable failure) {
+                pending.completeExceptionally(failure);
             }
         });
 
-        ChatResponse reponse = attendre(attendu);
-        return new LlmTurn(texte.toString(), appelsDOutil(reponse.aiMessage()));
+        ChatResponse response = await(pending);
+        return new LlmTurn(text.toString(), toolCallsOf(response.aiMessage()));
     }
 
-    private static ChatResponse attendre(CompletableFuture<ChatResponse> attendu) {
+    private static ChatResponse await(CompletableFuture<ChatResponse> pending) {
         try {
-            return attendu.join();
-        } catch (CompletionException echec) {
-            Throwable cause = echec.getCause() == null ? echec : echec.getCause();
-            if (cause instanceof ConsumerFailure abandon) {
-                throw (RuntimeException) abandon.getCause();
+            return pending.join();
+        } catch (CompletionException failure) {
+            Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+            if (cause instanceof ConsumerFailure abort) {
+                throw (RuntimeException) abort.getCause();
             }
             throw new LlmUnavailableException(
                     "Le service de génération n'a pas répondu : " + cause.getMessage(), cause);
         }
     }
 
-    /** Distingue « le client est parti » de « le service a échoué » sans deviner un type de la bibliothèque. */
+    /** Tells "the client left" from "the service failed" without guessing a library type. */
     private static final class ConsumerFailure extends RuntimeException {
 
         ConsumerFailure(RuntimeException cause) {
@@ -99,37 +99,37 @@ class LangChain4jLlmAdapter implements LlmPort {
         }
     }
 
-    private static List<ToolCall> appelsDOutil(AiMessage message) {
+    private static List<ToolCall> toolCallsOf(AiMessage message) {
         if (!message.hasToolExecutionRequests()) {
             return List.of();
         }
-        List<ToolCall> appels = new ArrayList<>();
-        for (ToolExecutionRequest demande : message.toolExecutionRequests()) {
-            String identifiant = demande.id() == null ? UUID.randomUUID().toString() : demande.id();
-            appels.add(new ToolCall(identifiant, demande.name(), arguments(demande.name(), demande.arguments())));
+        List<ToolCall> calls = new ArrayList<>();
+        for (ToolExecutionRequest request : message.toolExecutionRequests()) {
+            String id = request.id() == null ? UUID.randomUUID().toString() : request.id();
+            calls.add(new ToolCall(id, request.name(), arguments(request.name(), request.arguments())));
         }
-        return appels;
+        return calls;
     }
 
-    /** Les arguments arrivent en JSON ; le domaine ne connaît que des paires de chaînes. */
-    private static Map<String, String> arguments(String nomDeLOutil, String json) {
+    /** Arguments arrive as JSON; the domain only knows pairs of strings. */
+    private static Map<String, String> arguments(String toolName, String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }
         Map<String, String> arguments = new LinkedHashMap<>();
         try {
-            Map<?, ?> brut = OBJECT_MAPPER.readValue(json, Map.class);
-            brut.forEach((cle, valeur) -> arguments.put(String.valueOf(cle), String.valueOf(valeur)));
-        } catch (RuntimeException jsonIllisible) {
-            // Un petit modèle produit des arguments illisibles : la boucle en fait une erreur
-            // d'outil rendue au modèle, pas une panne — mais l'exploitant doit pouvoir l'imputer.
-            LOG.warn("Arguments illisibles pour l'outil « {} » : {}", nomDeLOutil, jsonIllisible.getMessage());
+            Map<?, ?> raw = OBJECT_MAPPER.readValue(json, Map.class);
+            raw.forEach((key, value) -> arguments.put(String.valueOf(key), String.valueOf(value)));
+        } catch (RuntimeException unreadableJson) {
+            // A small model produces unreadable arguments: the loop turns that into a tool error
+            // handed back to the model, not an outage — but the operator must be able to see it.
+            LOG.warn("Arguments illisibles pour l'outil « {} » : {}", toolName, unreadableJson.getMessage());
             return Map.of();
         }
         return arguments;
     }
 
-    private ChatRequest versLangChain4j(LlmRequest request) {
+    private ChatRequest toLangChain4j(LlmRequest request) {
         List<ChatMessage> messages = new ArrayList<>();
         for (LlmMessage message : request.messages()) {
             messages.add(
@@ -140,10 +140,10 @@ class LangChain4jLlmAdapter implements LlmPort {
                             message.toolCalls().isEmpty()
                                     ? AiMessage.from(message.content())
                                     : AiMessage.from(message.toolCalls().stream()
-                                            .map(appel -> ToolExecutionRequest.builder()
-                                                    .id(appel.id())
-                                                    .name(appel.name())
-                                                    .arguments(OBJECT_MAPPER.writeValueAsString(appel.arguments()))
+                                            .map(call -> ToolExecutionRequest.builder()
+                                                    .id(call.id())
+                                                    .name(call.name())
+                                                    .arguments(OBJECT_MAPPER.writeValueAsString(call.arguments()))
                                                     .build())
                                             .toList());
                         case TOOL_RESULT ->
@@ -155,23 +155,23 @@ class LangChain4jLlmAdapter implements LlmPort {
                 .parameters(ChatRequestParameters.builder()
                         .temperature(request.temperature())
                         .toolSpecifications(request.tools().stream()
-                                .map(LangChain4jLlmAdapter::versLangChain4j)
+                                .map(LangChain4jLlmAdapter::toLangChain4j)
                                 .toList())
                         .build())
                 .build();
     }
 
-    private static dev.langchain4j.agent.tool.ToolSpecification versLangChain4j(ToolSpecification outil) {
+    private static dev.langchain4j.agent.tool.ToolSpecification toLangChain4j(ToolSpecification tool) {
         JsonObjectSchema.Builder schema = JsonObjectSchema.builder();
-        outil.parameters().forEach(parametre -> {
-            schema.addStringProperty(parametre.name(), parametre.description());
-            if (parametre.required()) {
-                schema.required(parametre.name());
+        tool.parameters().forEach(parameter -> {
+            schema.addStringProperty(parameter.name(), parameter.description());
+            if (parameter.required()) {
+                schema.required(parameter.name());
             }
         });
         return dev.langchain4j.agent.tool.ToolSpecification.builder()
-                .name(outil.name())
-                .description(outil.description())
+                .name(tool.name())
+                .description(tool.description())
                 .parameters(schema.build())
                 .build();
     }

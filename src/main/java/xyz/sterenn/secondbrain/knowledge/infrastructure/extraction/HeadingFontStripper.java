@@ -8,33 +8,33 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 
 /**
- * {@code writeString} est le seul point de passage qui voie les positions des glyphes : le
- * {@code getText} d'un {@link PDFTextStripper} rend une chaîne, qui ne dit rien de la police.
+ * {@code writeString} is the only hook that sees glyph positions: the {@code getText} of a
+ * {@link PDFTextStripper} returns a string, which says nothing about the font.
  */
 class HeadingFontStripper extends PDFTextStripper {
 
     private final List<TextLine> lines = new ArrayList<>();
 
     HeadingFontStripper() throws IOException {
-        // L'ordre du flux de contenu d'un PDF n'est pas l'ordre de lecture, et le séparateur
-        // fixé rend le résultat indépendant du système.
+        // The order of a PDF content stream is not reading order, and a fixed separator makes
+        // the result independent of the platform.
         setSortByPosition(true);
         setLineSeparator("\n");
     }
 
     @Override
     protected void writeString(String text, List<TextPosition> textPositions) throws IOException {
-        float plusGrande = 0f;
+        float largest = 0f;
         for (TextPosition position : textPositions) {
-            plusGrande = Math.max(plusGrande, position.getFontSizeInPt());
+            largest = Math.max(largest, position.getFontSizeInPt());
         }
-        lines.add(new TextLine(text, plusGrande));
+        lines.add(new TextLine(text, largest));
         super.writeString(text, textPositions);
     }
 
     /**
-     * {@code getText} n'est appelé que pour son effet de bord : c'est {@code writeString} qui
-     * collecte. Un PDF numérisé ne l'appelle jamais, et la liste reste vide.
+     * {@code getText} is called only for its side effect: {@code writeString} does the
+     * collecting. A scanned PDF never calls it, and the list stays empty.
      */
     List<TextLine> lines(PDDocument pdf) throws IOException {
         getText(pdf);

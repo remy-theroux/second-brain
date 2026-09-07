@@ -20,9 +20,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # `build` déclenche `check`, à laquelle Spotless accroche `spotlessCheck` : du
-      # Java mal formaté fait échouer ce job, sans étape dédiée. Les tests utilisent
-      # Testcontainers, et Docker est disponible par défaut sur les runners ubuntu-latest.
+      # `build` triggers `check`, to which Spotless hooks `spotlessCheck`: badly
+      # formatted Java fails this job, without a dedicated step. The tests use
+      # Testcontainers, and Docker is available by default on ubuntu-latest runners.
       - name: Build & test
         run: ./gradlew --no-daemon build
 
@@ -47,7 +47,7 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      # Le front n'a pas de compilation à vérifier au-delà du build : les deux comptent.
+      # The front end has no compilation to check beyond the build: both count.
       - name: Unit tests
         run: npm run test:unit
 

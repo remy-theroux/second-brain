@@ -33,8 +33,8 @@ import xyz.sterenn.secondbrain.shared.web.ValidationErrorResponse;
 public class AskAgentController {
 
     /**
-     * Budget de l'agent (120 s) + un tour au pire, le délai de lecture d'Ollama (180 s) + 30 s
-     * de marge : la génération peut légitimement dépasser le budget pendant son dernier tour.
+     * Agent budget (120 s) + one worst-case turn, the Ollama read timeout (180 s) + 30 s of
+     * margin: generation may legitimately overrun the budget during its last turn.
      */
     private static final long TIMEOUT_MILLIS = 330_000L;
 
@@ -56,115 +56,112 @@ public class AskAgentController {
     @PostMapping("/api/chat")
     @SecurityRequirement(name = "bearer")
     public SseEmitter chat(@RequestBody AskAgentRequest request, @AuthenticationPrincipal Jwt jwt) {
-        // Validé sur le thread servlet : une question refusée doit rendre 422, pas un flux.
+        // Validated on the servlet thread: a refused question must return 422, not a stream.
         Question question = conversationAgent.validate(request.question());
         UUID ownerId = JwtSubject.accountId(jwt);
         SseEmitter emitter = new SseEmitter(TIMEOUT_MILLIS);
-        AtomicBoolean expire = new AtomicBoolean(false);
-        enregistreLeCycleDeVie(emitter, ownerId, expire);
-        conversationExecutor.execute(() -> conduire(emitter, question, ownerId, expire));
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+        logLifecycle(emitter, ownerId, timedOut);
+        conversationExecutor.execute(() -> converse(emitter, question, ownerId, timedOut));
         return emitter;
     }
 
-    /** Demandés par le ticket : ils journalisent le cycle de vie du flux, l'ownerId en contexte. */
-    private void enregistreLeCycleDeVie(SseEmitter emitter, UUID ownerId, AtomicBoolean expire) {
+    /** Asked for by the ticket: they log the stream's lifecycle, with the ownerId in context. */
+    private void logLifecycle(SseEmitter emitter, UUID ownerId, AtomicBoolean timedOut) {
         emitter.onTimeout(() -> {
-            expire.set(true);
+            timedOut.set(true);
             LOG.warn(
                     "Le flux SSE a expiré après {} ms sans que la conversation ne se termine (ownerId={}).",
                     TIMEOUT_MILLIS,
                     ownerId);
         });
-        emitter.onError(erreur -> LOG.warn("Le flux SSE s'est terminé en erreur (ownerId={}).", ownerId, erreur));
+        emitter.onError(error -> LOG.warn("Le flux SSE s'est terminé en erreur (ownerId={}).", ownerId, error));
         emitter.onCompletion(() -> LOG.debug("Le flux SSE est terminé (ownerId={}).", ownerId));
     }
 
-    private void conduire(SseEmitter emitter, Question question, UUID ownerId, AtomicBoolean expire) {
+    private void converse(SseEmitter emitter, Question question, UUID ownerId, AtomicBoolean timedOut) {
         try {
-            ConversationOutcome resultat =
-                    conversationAgent.answer(question, ownerId, fragment -> emettre(emitter, "token", fragment));
-            emettre(
+            ConversationOutcome outcome =
+                    conversationAgent.answer(question, ownerId, fragment -> emit(emitter, "token", fragment));
+            emit(
                     emitter,
                     "sources",
-                    resultat.answer().sources().stream().map(SourceView::of).toList());
-            emettre(
-                    emitter,
-                    "done",
-                    Map.of("verdict", resultat.answer().verdict().name()));
+                    outcome.answer().sources().stream().map(SourceView::of).toList());
+            emit(emitter, "done", Map.of("verdict", outcome.answer().verdict().name()));
             emitter.complete();
-            tracer(question, ownerId, resultat);
-        } catch (ClientGoneException clientParti) {
-            // Une expiration marque déjà l'emitter complet : le compléter à nouveau n'a pas lieu d'être.
-            if (expire.get()) {
+            trace(question, ownerId, outcome);
+        } catch (ClientGoneException clientGone) {
+            // A timeout already marks the emitter complete: completing it again has no purpose.
+            if (timedOut.get()) {
                 LOG.info("La génération a été interrompue par l'expiration du flux (ownerId={}).", ownerId);
             } else {
                 LOG.info("Le client a fermé sa connexion : la génération est interrompue (ownerId={}).", ownerId);
                 emitter.complete();
             }
-        } catch (LlmUnavailableException | EmbeddingUnavailableException serviceInjoignable) {
+        } catch (LlmUnavailableException | EmbeddingUnavailableException unreachableService) {
             LOG.error(
                     "La conversation a échoué : un service d'IA n'a pas répondu (ownerId={}).",
                     ownerId,
-                    serviceInjoignable);
-            echouer(
+                    unreachableService);
+            fail(
                     emitter,
                     ownerId,
                     "La conversation est momentanément indisponible : un service d'IA n'a pas "
                             + "répondu. Réessayez dans quelques instants.");
-        } catch (RuntimeException echec) {
-            LOG.error("La conversation a échoué (ownerId={}).", ownerId, echec);
-            echouer(emitter, ownerId, "La conversation a échoué. Réessayez dans quelques instants.");
+        } catch (RuntimeException failure) {
+            LOG.error("La conversation a échoué (ownerId={}).", ownerId, failure);
+            fail(emitter, ownerId, "La conversation a échoué. Réessayez dans quelques instants.");
         }
     }
 
-    /** La trace est écrite APRÈS la fermeture du flux : son échec ne doit rien coûter à une réponse déjà livrée. */
-    private void tracer(Question question, UUID ownerId, ConversationOutcome resultat) {
+    /** The trace is written AFTER the stream is closed: its failure must cost nothing to a delivered answer. */
+    private void trace(Question question, UUID ownerId, ConversationOutcome outcome) {
         try {
             commandBus.dispatch(new RecordAgentRun(
                     ownerId,
                     conversationAgent.agentName(),
                     conversationAgent.agentVersion(),
                     question.value(),
-                    resultat.answer().text(),
-                    resultat.answer().verdict(),
-                    resultat.tours(),
-                    resultat.duree().toMillis(),
-                    resultat.recherches(),
-                    resultat.answer().sources()));
-        } catch (RuntimeException tracePerdue) {
-            LOG.error("La trace de cette conversation n'a pas pu être écrite (ownerId={}).", ownerId, tracePerdue);
+                    outcome.answer().text(),
+                    outcome.answer().verdict(),
+                    outcome.turns(),
+                    outcome.duration().toMillis(),
+                    outcome.searches(),
+                    outcome.answer().sources()));
+        } catch (RuntimeException lostTrace) {
+            LOG.error("La trace de cette conversation n'a pas pu être écrite (ownerId={}).", ownerId, lostTrace);
         }
     }
 
-    private void echouer(SseEmitter emitter, UUID ownerId, String message) {
+    private void fail(SseEmitter emitter, UUID ownerId, String message) {
         try {
             emitter.send(SseEmitter.event().name("error").data(new ErrorResponse(message)));
-        } catch (IOException | IllegalStateException clientDejaParti) {
+        } catch (IOException | IllegalStateException clientAlreadyGone) {
             LOG.info("Le client était déjà parti quand l'erreur a été émise (ownerId={}).", ownerId);
         }
         emitter.complete();
     }
 
-    private void emettre(SseEmitter emitter, String evenement, Object donnees) {
+    private void emit(SseEmitter emitter, String event, Object data) {
         try {
-            emitter.send(SseEmitter.event().name(evenement).data(donnees));
-        } catch (IOException | IllegalStateException clientParti) {
-            throw new ClientGoneException(clientParti);
+            emitter.send(SseEmitter.event().name(event).data(data));
+        } catch (IOException | IllegalStateException clientGone) {
+            throw new ClientGoneException(clientGone);
         }
     }
 
     @ExceptionHandler(InvalidQuestionException.class)
-    public ResponseEntity<Object> questionIllisible(InvalidQuestionException refus) {
+    public ResponseEntity<Object> unreadableQuestion(InvalidQuestionException refusal) {
         return ResponseEntity.unprocessableEntity()
-                .body(new ValidationErrorResponse(Map.of("question", refus.getMessage())));
+                .body(new ValidationErrorResponse(Map.of("question", refusal.getMessage())));
     }
 
     @ExceptionHandler(JwtSubject.UnreadableSubjectException.class)
-    public ResponseEntity<Object> sujetIllisible() {
+    public ResponseEntity<Object> unreadableSubject() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
-    /** Traverse la boucle sans être rattrapée : c'est ainsi qu'une déconnexion arrête la génération. */
+    /** Crosses the loop uncaught: that is how a disconnection stops the generation. */
     private static final class ClientGoneException extends RuntimeException {
 
         ClientGoneException(Throwable cause) {

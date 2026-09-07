@@ -21,7 +21,7 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 @SpringBootTest
 class JwtConfigurationTest {
 
-    private static final String SUJET = "7f000001-0000-4000-8000-000000000000";
+    private static final String SUBJECT = "7f000001-0000-4000-8000-000000000000";
 
     @Autowired
     private JwtEncoder jwtEncoder;
@@ -30,39 +30,37 @@ class JwtConfigurationTest {
     private JwtDecoder jwtDecoder;
 
     @Test
-    void relit_un_jeton_qu_il_vient_de_signer() {
-        Instant maintenant = Instant.now();
-        JwtClaimsSet revendications = JwtClaimsSet.builder()
-                .subject(SUJET)
-                .issuedAt(maintenant)
-                .expiresAt(maintenant.plus(Duration.ofHours(1)))
+    void reads_back_a_token_it_has_just_signed() {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(SUBJECT)
+                .issuedAt(now)
+                .expiresAt(now.plus(Duration.ofHours(1)))
                 .build();
 
-        String valeur =
-                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String value = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        Jwt relu = jwtDecoder.decode(valeur);
-        assertThat(relu.getSubject()).isEqualTo(SUJET);
-        assertThat(relu.getExpiresAt()).isNotNull();
+        Jwt decoded = jwtDecoder.decode(value);
+        assertThat(decoded.getSubject()).isEqualTo(SUBJECT);
+        assertThat(decoded.getExpiresAt()).isNotNull();
     }
 
     @Test
-    void refuse_un_jeton_expire() {
-        // Deux heures, pas une minute : le décodeur tolère 60 secondes de dérive d'horloge.
-        Instant ilYaDeuxHeures = Instant.now().minus(Duration.ofHours(2));
-        JwtClaimsSet revendications = JwtClaimsSet.builder()
-                .subject(SUJET)
-                .issuedAt(ilYaDeuxHeures)
-                .expiresAt(ilYaDeuxHeures.plus(Duration.ofMinutes(1)))
+    void rejects_an_expired_token() {
+        // Two hours, not one minute: the decoder tolerates 60 seconds of clock skew.
+        Instant twoHoursAgo = Instant.now().minus(Duration.ofHours(2));
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(SUBJECT)
+                .issuedAt(twoHoursAgo)
+                .expiresAt(twoHoursAgo.plus(Duration.ofMinutes(1)))
                 .build();
-        String valeur =
-                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String value = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        assertThatThrownBy(() -> jwtDecoder.decode(valeur)).isInstanceOf(JwtValidationException.class);
+        assertThatThrownBy(() -> jwtDecoder.decode(value)).isInstanceOf(JwtValidationException.class);
     }
 
     @Test
-    void refuse_un_secret_trop_court_au_demarrage() {
+    void rejects_a_too_short_secret_at_startup() {
         assertThatThrownBy(() -> new JwtConfiguration("trop-court"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 octets");

@@ -18,8 +18,8 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import xyz.sterenn.secondbrain.knowledge.application.query.ChunkMatchView;
 import xyz.sterenn.secondbrain.knowledge.application.query.SearchChunks;
-import xyz.sterenn.secondbrain.knowledge.domain.AgentDeTest;
 import xyz.sterenn.secondbrain.knowledge.domain.DocumentAgent;
+import xyz.sterenn.secondbrain.knowledge.domain.TestAgents;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.InvalidQuestionException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.LlmPort;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.AnswerVerdict;
@@ -35,97 +35,95 @@ import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 class ConversationAgentTest {
 
     private static final UUID ALICE = UUID.randomUUID();
-    private static final UUID RAPPORT = UUID.randomUUID();
+    private static final UUID REPORT = UUID.randomUUID();
 
-    private final HorlogeDeTest horloge = new HorlogeDeTest();
-    private final LlmPortScripte llmPort = new LlmPortScripte();
-    private final List<String> sortis = new ArrayList<>();
+    private final TestClock clock = new TestClock();
+    private final ScriptedLlmPort llmPort = new ScriptedLlmPort();
+    private final List<String> emitted = new ArrayList<>();
 
-    private ConversationAgent agentAvec(List<ChunkMatchView> resultatsDeRecherche) {
+    private ConversationAgent agentWith(List<ChunkMatchView> searchResults) {
         QueryBus queryBus = new QueryBus() {
             @Override
             @SuppressWarnings("unchecked")
             public <R> R ask(Query<R> query) {
                 assertThat(query).isInstanceOf(SearchChunks.class);
                 assertThat(((SearchChunks) query).ownerId()).isEqualTo(ALICE);
-                return (R) resultatsDeRecherche;
+                return (R) searchResults;
             }
         };
-        return new ConversationAgent(AgentDeTest.unAgent(), llmPort, new DocumentSearchTool(queryBus), horloge);
+        return new ConversationAgent(TestAgents.anAgent(), llmPort, new DocumentSearchTool(queryBus), clock);
     }
 
-    private static ChunkMatchView unExtrait(int position) {
-        return new ChunkMatchView(RAPPORT, "rapport.pdf", position, "Rétractation", "Quatorze jours.", 0.9);
+    private static ChunkMatchView aChunk(int position) {
+        return new ChunkMatchView(REPORT, "rapport.pdf", position, "Rétractation", "Quatorze jours.", 0.9);
     }
 
-    private static Question laQuestion() {
+    private static Question theQuestion() {
         return new Question("Quel est le délai de rétractation ?");
     }
 
     @Test
-    void repond_sans_chercher_a_une_salutation() {
-        llmPort.texte("Bonjour", ", je vous écoute.");
+    void answers_a_greeting_without_searching() {
+        llmPort.text("Bonjour", ", je vous écoute.");
 
-        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
-        assertThat(sortis).containsExactly("Bonjour, je vous écoute.");
-        assertThat(resultat.recherches()).isEmpty();
-        assertThat(resultat.tours()).isEqualTo(1);
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONAL);
+        assertThat(emitted).containsExactly("Bonjour, je vous écoute.");
+        assertThat(outcome.searches()).isEmpty();
+        assertThat(outcome.turns()).isEqualTo(1);
     }
 
     @Test
-    void cherche_puis_repond_en_citant_ses_sources() {
-        llmPort.appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai de rétractation")
-                .texte("Quatorze jours ", "[1].");
+    void searches_then_answers_citing_its_sources() {
+        llmPort.callsTool(DocumentAgent.SEARCH_TOOL, "délai de rétractation").text("Quatorze jours ", "[1].");
 
-        ConversationOutcome resultat = agentAvec(List.of(unExtrait(0))).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of(aChunk(0))).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.SOURCEE);
-        assertThat(resultat.answer().sources()).extracting(Source::number).containsExactly(1);
-        assertThat(String.join("", sortis)).isEqualTo("Quatorze jours [1].");
-        assertThat(resultat.recherches()).containsExactly("délai de rétractation");
-        assertThat(resultat.tours()).isEqualTo(2);
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.GROUNDED);
+        assertThat(outcome.answer().sources()).extracting(Source::number).containsExactly(1);
+        assertThat(String.join("", emitted)).isEqualTo("Quatorze jours [1].");
+        assertThat(outcome.searches()).containsExactly("délai de rétractation");
+        assertThat(outcome.turns()).isEqualTo(2);
     }
 
     @Test
-    void n_affiche_jamais_une_reponse_qui_a_cherche_sans_rien_citer() {
-        llmPort.appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "capitale")
-                .texte("Canberra est ", "la capitale de l'Australie.");
+    void never_displays_an_answer_that_searched_without_citing_anything() {
+        llmPort.callsTool(DocumentAgent.SEARCH_TOOL, "capitale").text("Canberra est ", "la capitale de l'Australie.");
 
-        ConversationOutcome resultat = agentAvec(List.of(unExtrait(0))).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of(aChunk(0))).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.SANS_SOURCE);
-        assertThat(sortis).containsExactly(AgentDeTest.AVEU);
-        assertThat(String.join("", sortis)).doesNotContain("Canberra");
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.UNGROUNDED);
+        assertThat(emitted).containsExactly(TestAgents.NOT_FOUND);
+        assertThat(String.join("", emitted)).doesNotContain("Canberra");
     }
 
     @Test
-    void rend_au_modele_une_erreur_quand_il_invente_un_nom_d_outil() {
-        llmPort.appelleOutil("chercher_sur_internet", "capitale").texte("Pardon.");
+    void returns_an_error_to_the_model_when_it_invents_a_tool_name() {
+        llmPort.callsTool("chercher_sur_internet", "capitale").text("Pardon.");
 
-        agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(llmPort.dernierResultatDOutil())
+        assertThat(llmPort.lastToolResult())
                 .contains("chercher_sur_internet")
                 .contains("n'existe pas")
-                .contains(DocumentAgent.OUTIL_RECHERCHE);
+                .contains(DocumentAgent.SEARCH_TOOL);
     }
 
     @Test
-    void rend_au_modele_une_erreur_quand_l_argument_obligatoire_manque() {
-        llmPort.appelleOutilSansArgument(DocumentAgent.OUTIL_RECHERCHE).texte("Pardon.");
+    void returns_an_error_to_the_model_when_the_required_argument_is_missing() {
+        llmPort.callsToolWithoutArgument(DocumentAgent.SEARCH_TOOL).text("Pardon.");
 
-        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(llmPort.dernierResultatDOutil()).contains(DocumentAgent.PARAMETRE_QUESTION);
-        assertThat(resultat.recherches()).isEmpty();
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
+        assertThat(llmPort.lastToolResult()).contains(DocumentAgent.QUESTION_PARAMETER);
+        assertThat(outcome.searches()).isEmpty();
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONAL);
     }
 
     @Test
-    void ne_compte_pas_comme_recherche_une_recherche_refusee_par_la_question() {
-        llmPort.appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "capitale").texte("Pardon.");
+    void does_not_count_as_a_search_a_search_rejected_by_the_question() {
+        llmPort.callsTool(DocumentAgent.SEARCH_TOOL, "capitale").text("Pardon.");
         QueryBus queryBus = new QueryBus() {
             @Override
             public <R> R ask(Query<R> query) {
@@ -133,102 +131,102 @@ class ConversationAgentTest {
             }
         };
         ConversationAgent agent =
-                new ConversationAgent(AgentDeTest.unAgent(), llmPort, new DocumentSearchTool(queryBus), horloge);
+                new ConversationAgent(TestAgents.anAgent(), llmPort, new DocumentSearchTool(queryBus), clock);
 
-        ConversationOutcome resultat = agent.answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agent.answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.recherches()).isEmpty();
-        assertThat(llmPort.dernierResultatDOutil()).contains("refusée");
+        assertThat(outcome.searches()).isEmpty();
+        assertThat(llmPort.lastToolResult()).contains("refusée");
     }
 
     @Test
-    void ne_compte_pas_comme_recherche_un_appel_d_outil_refuse() {
-        llmPort.appelleOutil("chercher_sur_internet", "capitale").texte("Canberra.");
+    void does_not_count_as_a_search_a_rejected_tool_call() {
+        llmPort.callsTool("chercher_sur_internet", "capitale").text("Canberra.");
 
-        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.recherches()).isEmpty();
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
+        assertThat(outcome.searches()).isEmpty();
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONAL);
     }
 
     @Test
-    void n_apprend_rien_d_une_recherche_repetee_et_finit_par_epuiser_ses_tours() {
-        llmPort.appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai")
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai")
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai")
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai");
+    void learns_nothing_from_a_repeated_search_and_ends_up_exhausting_its_turns() {
+        llmPort.callsTool(DocumentAgent.SEARCH_TOOL, "délai")
+                .callsTool(DocumentAgent.SEARCH_TOOL, "délai")
+                .callsTool(DocumentAgent.SEARCH_TOOL, "délai")
+                .callsTool(DocumentAgent.SEARCH_TOOL, "délai");
 
-        ConversationOutcome resultat = agentAvec(List.of(unExtrait(0))).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of(aChunk(0))).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
-        assertThat(resultat.tours()).isEqualTo(4);
-        assertThat(sortis).containsExactly(AgentDeTest.AVEU);
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_EXCEEDED);
+        assertThat(outcome.turns()).isEqualTo(4);
+        assertThat(emitted).containsExactly(TestAgents.NOT_FOUND);
     }
 
     @Test
-    void abandonne_quand_le_budget_de_temps_est_ecoule() {
-        llmPort.aChaqueTour(() -> horloge.avance(Duration.ofSeconds(130)))
-                .appelleOutil(DocumentAgent.OUTIL_RECHERCHE, "délai")
-                .texte("Quatorze jours [1].");
+    void gives_up_when_the_time_budget_has_run_out() {
+        llmPort.onEachTurn(() -> clock.advance(Duration.ofSeconds(130)))
+                .callsTool(DocumentAgent.SEARCH_TOOL, "délai")
+                .text("Quatorze jours [1].");
 
-        ConversationOutcome resultat = agentAvec(List.of(unExtrait(0))).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of(aChunk(0))).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
-        assertThat(resultat.tours()).isEqualTo(1);
-        assertThat(resultat.recherches()).containsExactly("délai");
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_EXCEEDED);
+        assertThat(outcome.turns()).isEqualTo(1);
+        assertThat(outcome.searches()).containsExactly("délai");
     }
 
     @Test
-    void laisse_remonter_la_deconnexion_du_client() {
-        llmPort.texte("Bonjour");
+    void lets_the_client_disconnection_propagate() {
+        llmPort.text("Bonjour");
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> agentAvec(List.of()).answer(laQuestion(), ALICE, fragment -> {
+                .isThrownBy(() -> agentWith(List.of()).answer(theQuestion(), ALICE, fragment -> {
                     throw new IllegalStateException("le client a fermé");
                 }))
                 .withMessageContaining("le client a fermé");
     }
 
     @Test
-    void refuse_une_question_vide_avant_d_appeler_le_modele() {
+    void rejects_an_empty_question_before_calling_the_model() {
         assertThatExceptionOfType(InvalidQuestionException.class)
-                .isThrownBy(() -> agentAvec(List.of()).validate("   "));
+                .isThrownBy(() -> agentWith(List.of()).validate("   "));
     }
 
     @Test
-    void consomme_un_tour_qui_ne_rend_ni_texte_ni_appel_d_outil() {
-        llmPort.tourVide().texte("Bonjour");
+    void consumes_a_turn_that_returns_neither_text_nor_tool_call() {
+        llmPort.emptyTurn().text("Bonjour");
 
-        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.tours()).isEqualTo(2);
-        assertThat(sortis).containsExactly("Bonjour");
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONNELLE);
-        assertThat(resultat.recherches()).isEmpty();
+        assertThat(outcome.turns()).isEqualTo(2);
+        assertThat(emitted).containsExactly("Bonjour");
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.CONVERSATIONAL);
+        assertThat(outcome.searches()).isEmpty();
     }
 
     @Test
-    void epuise_ses_tours_quand_le_modele_ne_rend_jamais_rien() {
-        llmPort.tourVide().tourVide().tourVide().tourVide();
+    void exhausts_its_turns_when_the_model_never_returns_anything() {
+        llmPort.emptyTurn().emptyTurn().emptyTurn().emptyTurn();
 
-        ConversationOutcome resultat = agentAvec(List.of()).answer(laQuestion(), ALICE, sortis::add);
+        ConversationOutcome outcome = agentWith(List.of()).answer(theQuestion(), ALICE, emitted::add);
 
-        assertThat(resultat.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_DEPASSE);
-        assertThat(resultat.tours()).isEqualTo(4);
-        assertThat(sortis).containsExactly(AgentDeTest.AVEU);
+        assertThat(outcome.answer().verdict()).isEqualTo(AnswerVerdict.BUDGET_EXCEEDED);
+        assertThat(outcome.turns()).isEqualTo(4);
+        assertThat(emitted).containsExactly(TestAgents.NOT_FOUND);
     }
 
-    private static final class HorlogeDeTest extends Clock {
+    private static final class TestClock extends Clock {
 
-        private Instant maintenant = Instant.parse("2026-09-04T10:00:00Z");
+        private Instant now = Instant.parse("2026-09-04T10:00:00Z");
 
-        void avance(Duration duree) {
-            maintenant = maintenant.plus(duree);
+        void advance(Duration duration) {
+            now = now.plus(duration);
         }
 
         @Override
         public Instant instant() {
-            return maintenant;
+            return now;
         }
 
         @Override
@@ -242,46 +240,46 @@ class ConversationAgentTest {
         }
     }
 
-    private static final class LlmPortScripte implements LlmPort {
+    private static final class ScriptedLlmPort implements LlmPort {
 
-        private record TourScripte(List<String> fragments, List<ToolCall> appels) {}
+        private record ScriptedTurn(List<String> fragments, List<ToolCall> toolCalls) {}
 
-        private final Deque<TourScripte> script = new ArrayDeque<>();
-        private final List<LlmRequest> recues = new ArrayList<>();
+        private final Deque<ScriptedTurn> script = new ArrayDeque<>();
+        private final List<LlmRequest> received = new ArrayList<>();
 
-        private Runnable aChaqueTour = () -> {};
+        private Runnable onEachTurn = () -> {};
 
-        LlmPortScripte aChaqueTour(Runnable effet) {
-            this.aChaqueTour = effet;
+        ScriptedLlmPort onEachTurn(Runnable effect) {
+            this.onEachTurn = effect;
             return this;
         }
 
-        LlmPortScripte texte(String... fragments) {
-            script.add(new TourScripte(List.of(fragments), List.of()));
+        ScriptedLlmPort text(String... fragments) {
+            script.add(new ScriptedTurn(List.of(fragments), List.of()));
             return this;
         }
 
-        LlmPortScripte tourVide() {
-            script.add(new TourScripte(List.of(), List.of()));
+        ScriptedLlmPort emptyTurn() {
+            script.add(new ScriptedTurn(List.of(), List.of()));
             return this;
         }
 
-        LlmPortScripte appelleOutil(String nom, String question) {
-            return ajouteUnAppel(nom, Map.of(DocumentAgent.PARAMETRE_QUESTION, question));
+        ScriptedLlmPort callsTool(String name, String question) {
+            return addToolCall(name, Map.of(DocumentAgent.QUESTION_PARAMETER, question));
         }
 
-        LlmPortScripte appelleOutilSansArgument(String nom) {
-            return ajouteUnAppel(nom, Map.of());
+        ScriptedLlmPort callsToolWithoutArgument(String name) {
+            return addToolCall(name, Map.of());
         }
 
-        private LlmPortScripte ajouteUnAppel(String nom, Map<String, String> arguments) {
-            script.add(new TourScripte(List.of(), List.of(new ToolCall("appel-" + script.size(), nom, arguments))));
+        private ScriptedLlmPort addToolCall(String name, Map<String, String> arguments) {
+            script.add(new ScriptedTurn(List.of(), List.of(new ToolCall("appel-" + script.size(), name, arguments))));
             return this;
         }
 
-        /** Le contenu du dernier message d'outil que la boucle a rendu au modèle. */
-        String dernierResultatDOutil() {
-            return recues.getLast().messages().reversed().stream()
+        /** The content of the last tool message the loop returned to the model. */
+        String lastToolResult() {
+            return received.getLast().messages().reversed().stream()
                     .filter(message -> message.role() == LlmMessage.Role.TOOL_RESULT)
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("Aucun résultat d'outil n'a été rendu au modèle"))
@@ -290,16 +288,16 @@ class ConversationAgentTest {
 
         @Override
         public LlmTurn stream(LlmRequest request, Consumer<String> onToken) {
-            recues.add(request);
-            aChaqueTour.run();
-            TourScripte tour =
-                    script.isEmpty() ? new TourScripte(List.of("Rien à ajouter."), List.of()) : script.poll();
-            StringBuilder texte = new StringBuilder();
-            for (String fragment : tour.fragments()) {
-                texte.append(fragment);
+            received.add(request);
+            onEachTurn.run();
+            ScriptedTurn turn =
+                    script.isEmpty() ? new ScriptedTurn(List.of("Rien à ajouter."), List.of()) : script.poll();
+            StringBuilder text = new StringBuilder();
+            for (String fragment : turn.fragments()) {
+                text.append(fragment);
                 onToken.accept(fragment);
             }
-            return new LlmTurn(texte.toString(), tour.appels());
+            return new LlmTurn(text.toString(), turn.toolCalls());
         }
     }
 }

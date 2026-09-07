@@ -10,18 +10,18 @@ class BCryptPasswordHasherTest {
     private final PasswordHasher hasher = new BCryptPasswordHasher();
 
     @Test
-    void produit_une_empreinte_prefixee_de_l_algorithme() {
-        String empreinte = hasher.hash("chevalpile42");
+    void produces_a_hash_prefixed_with_the_algorithm() {
+        String hash = hasher.hash("chevalpile42");
 
-        assertThat(empreinte).startsWith("{bcrypt}$2a$");
-        assertThat(empreinte).isNotEqualTo("chevalpile42");
+        assertThat(hash).startsWith("{bcrypt}$2a$");
+        assertThat(hash).isNotEqualTo("chevalpile42");
     }
 
     @Test
-    void reconnait_le_mot_de_passe_d_origine() {
-        String empreinte = hasher.hash("chevalpile42");
+    void recognises_the_original_password() {
+        String hash = hasher.hash("chevalpile42");
 
-        assertThat(hasher.matches("chevalpile42", empreinte)).isTrue();
-        assertThat(hasher.matches("autrechose42", empreinte)).isFalse();
+        assertThat(hasher.matches("chevalpile42", hash)).isTrue();
+        assertThat(hasher.matches("autrechose42", hash)).isFalse();
     }
 }

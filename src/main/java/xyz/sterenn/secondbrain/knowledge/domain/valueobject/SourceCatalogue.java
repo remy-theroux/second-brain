@@ -9,50 +9,50 @@ import java.util.UUID;
 
 public final class SourceCatalogue {
 
-    private record Cle(UUID documentId, int position) {}
+    private record Key(UUID documentId, int position) {}
 
-    private final Map<Cle, Source> parCle;
+    private final Map<Key, Source> byKey;
 
-    private SourceCatalogue(Map<Cle, Source> parCle) {
-        this.parCle = parCle;
+    private SourceCatalogue(Map<Key, Source> byKey) {
+        this.byKey = byKey;
     }
 
     public static SourceCatalogue empty() {
         return new SourceCatalogue(Map.of());
     }
 
-    public Absorption absorb(List<SourceCandidate> candidats) {
-        Map<Cle, Source> fusionne = new LinkedHashMap<>(parCle);
-        List<Source> nouveaux = new ArrayList<>();
-        int dejaVus = 0;
-        for (SourceCandidate candidat : candidats) {
-            Cle cle = new Cle(candidat.documentId(), candidat.position());
-            if (fusionne.containsKey(cle)) {
-                dejaVus++;
+    public Absorption absorb(List<SourceCandidate> candidates) {
+        Map<Key, Source> merged = new LinkedHashMap<>(byKey);
+        List<Source> newSources = new ArrayList<>();
+        int alreadySeen = 0;
+        for (SourceCandidate candidate : candidates) {
+            Key key = new Key(candidate.documentId(), candidate.position());
+            if (merged.containsKey(key)) {
+                alreadySeen++;
                 continue;
             }
-            Source source = Source.numerote(fusionne.size() + 1, candidat);
-            fusionne.put(cle, source);
-            nouveaux.add(source);
+            Source source = Source.numbered(merged.size() + 1, candidate);
+            merged.put(key, source);
+            newSources.add(source);
         }
-        return new Absorption(new SourceCatalogue(Map.copyOf(fusionne)), nouveaux, dejaVus);
+        return new Absorption(new SourceCatalogue(Map.copyOf(merged)), newSources, alreadySeen);
     }
 
     public List<Source> sources() {
-        return parCle.values().stream()
+        return byKey.values().stream()
                 .sorted(Comparator.comparingInt(Source::number))
                 .toList();
     }
 
-    public boolean contains(int numero) {
-        return numero >= 1 && numero <= parCle.size();
+    public boolean contains(int number) {
+        return number >= 1 && number <= byKey.size();
     }
 
-    public List<Source> cited(List<Integer> numeros) {
-        List<Source> toutes = sources();
-        return numeros.stream()
+    public List<Source> cited(List<Integer> numbers) {
+        List<Source> all = sources();
+        return numbers.stream()
                 .filter(this::contains)
-                .map(numero -> toutes.get(numero - 1))
+                .map(number -> all.get(number - 1))
                 .toList();
     }
 }

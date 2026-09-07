@@ -21,7 +21,7 @@ async function submit() {
     await register(email.value, password.value)
     registered.value = true
   } catch (error) {
-    // Les messages viennent du serveur et sont affichables tels quels.
+    // The messages come from the server and are displayable as is.
     if (error instanceof ValidationError) {
       fieldErrors.value = error.errors
       return
@@ -35,7 +35,7 @@ async function submit() {
   <main class="guest-form">
     <PageTitle>Créer mon compte</PageTitle>
 
-    <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
+    <!-- A status, not an alert: the fallthrough replaces the component's role="alert". -->
     <Message v-if="registered" severity="success" role="status">
       Votre compte est créé. Un lien de vérification vient de vous être envoyé par email.
     </Message>

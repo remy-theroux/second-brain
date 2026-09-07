@@ -1,7 +1,7 @@
-// Seul module du front qui connaisse HTTP : les URL, les en-têtes, les codes d'erreur et
-// la forme des corps vivent ici, et nulle part ailleurs.
+// The only front module that knows HTTP: URLs, headers, error codes and the shape of
+// bodies live here, and nowhere else.
 
-/** Le serveur a refusé le jeton : il est expiré, révoqué, ou ne désigne plus personne. */
+/** The server refused the token: it is expired, revoked, or no longer designates anyone. */
 export class UnauthorizedError extends Error {
   constructor() {
     super('Votre session a expiré.')
@@ -10,8 +10,8 @@ export class UnauthorizedError extends Error {
 }
 
 /**
- * Le contenu déposé est déjà dans la base de connaissance. `existingDocumentId` désigne le
- * document en place, pour que l'écran puisse le montrer plutôt que laisser chercher.
+ * The uploaded content is already in the knowledge base. `existingDocumentId` designates the
+ * document in place, so the screen can show it rather than leave it to be searched for.
  */
 export class DuplicateDocumentError extends Error {
   constructor(message, existingDocumentId) {
@@ -21,7 +21,7 @@ export class DuplicateDocumentError extends Error {
   }
 }
 
-/** La saisie a été refusée champ par champ : `errors` associe un nom de champ à son message. */
+/** The input was refused field by field: `errors` maps a field name to its message. */
 export class ValidationError extends Error {
   constructor(errors) {
     super('La saisie a été refusée.')
@@ -31,8 +31,8 @@ export class ValidationError extends Error {
 }
 
 /**
- * Crée un compte. Ne rend rien en cas de succès : le serveur répond 201 sans corps,
- * puisque rien du compte créé n'est lisible tant qu'il n'est pas vérifié.
+ * Creates an account. Returns nothing on success: the server answers 201 without a body,
+ * since nothing of the created account is readable until it is verified.
  */
 export async function register(email, password) {
   const response = await fetch('/api/registrations', {
@@ -45,8 +45,8 @@ export async function register(email, password) {
     return
   }
 
-  // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
-  // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+  // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+  // must not replace the business message with a syntax error.
   const payload = await response.json().catch(() => null)
 
   if (response.status === 422) {
@@ -56,8 +56,8 @@ export async function register(email, password) {
 }
 
 /**
- * Échange un email et un mot de passe contre un jeton d'accès.
- * Forme du `password grant` de RFC 6749 : corps encodé en formulaire.
+ * Exchanges an email and a password for an access token.
+ * Shape of the RFC 6749 `password grant`: form-encoded body.
  */
 export async function requestToken(email, password) {
   const response = await fetch('/api/token', {
@@ -67,16 +67,16 @@ export async function requestToken(email, password) {
   })
 
   if (!response.ok) {
-    // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
-    // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+    // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+    // must not replace the business message with a syntax error.
     const payload = await response.json().catch(() => null)
-    // error_description porte le message métier du serveur, affichable tel quel.
+    // error_description carries the server's business message, displayable as is.
     throw new Error(payload?.error_description ?? 'La connexion a échoué.')
   }
   return response.json()
 }
 
-/** Lit le profil du porteur du jeton. C'est cet appel qui dit si la session tient encore. */
+/** Reads the profile of the token bearer. This call says whether the session still holds. */
 export async function fetchProfile(token) {
   const response = await fetch('/api/profile', {
     headers: { Authorization: `Bearer ${token}` },
@@ -91,7 +91,7 @@ export async function fetchProfile(token) {
   return response.json()
 }
 
-/** Liste les documents du porteur du jeton. Une base vide rend une liste vide, pas une erreur. */
+/** Lists the token bearer's documents. An empty base returns an empty list, not an error. */
 export async function listDocuments(token) {
   const response = await fetch('/api/documents', {
     headers: { Authorization: `Bearer ${token}` },
@@ -107,8 +107,8 @@ export async function listDocuments(token) {
 }
 
 /**
- * Lit un document et ce qui en a été extrait. Le corps porte la typologie (`type`), qui dit
- * quelle forme a `extraction` — absent tant que rien n'a été extrait.
+ * Reads a document and what has been extracted from it. The body carries the typology (`type`),
+ * which says what shape `extraction` has — absent as long as nothing has been extracted.
  */
 export async function fetchDocument(token, id) {
   const response = await fetch(`/api/documents/${id}`, {
@@ -122,19 +122,19 @@ export async function fetchDocument(token, id) {
     return response.json()
   }
 
-  // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
-  // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+  // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+  // must not replace the business message with a syntax error.
   const payload = await response.json().catch(() => null)
-  // Le 404 porte son message, affichable tel quel.
+  // The 404 carries its own message, displayable as is.
   throw new Error(payload?.message ?? "Ce document n'a pas pu être chargé.")
 }
 
 /**
- * Dépose un document. Ne rend rien en cas de succès : le serveur répond 201 sans corps, et
- * c'est la liste qui donne l'état complet de la base.
+ * Uploads a document. Returns nothing on success: the server answers 201 without a body, and
+ * it is the list that gives the complete state of the base.
  *
- * Aucun `Content-Type` n'est posé : le navigateur l'écrit lui-même avec le boundary du
- * multipart, que le serveur a besoin de connaître pour découper le corps.
+ * No `Content-Type` is set: the browser writes it itself with the multipart boundary, which
+ * the server needs to know to split the body.
  */
 export async function uploadDocument(token, file) {
   const body = new FormData()
@@ -153,8 +153,8 @@ export async function uploadDocument(token, file) {
     throw new UnauthorizedError()
   }
 
-  // Le corps n'est pas garanti d'être du JSON (proxy en panne, 502 HTML…) : un parsing
-  // qui échoue ne doit pas remplacer le message métier par une erreur de syntaxe.
+  // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+  // must not replace the business message with a syntax error.
   const payload = await response.json().catch(() => null)
 
   if (response.status === 409) {
@@ -163,11 +163,11 @@ export async function uploadDocument(token, file) {
   if (response.status === 422) {
     throw new ValidationError(payload?.errors ?? {})
   }
-  // 415 (format) et 413 (taille) portent chacun leur message, affichable tel quel.
+  // 415 (format) and 413 (size) each carry their message, displayable as is.
   throw new Error(payload?.message ?? "Le document n'a pas pu être déposé.")
 }
 
-/** Retire un document. Ne rend rien : le serveur répond 204. */
+/** Removes a document. Returns nothing: the server answers 204. */
 export async function deleteDocument(token, id) {
   const response = await fetch(`/api/documents/${id}`, {
     method: 'DELETE',

@@ -16,8 +16,8 @@ public record Chunk(String heading, String text) {
 
     public String contextualised(String filename) {
         Objects.requireNonNull(filename, "Le nom du document est obligatoire");
-        String prefixe =
+        String prefix =
                 heading.isEmpty() ? "Document: " + filename : "Document: " + filename + " — Section: " + heading;
-        return prefixe + "\n\n" + text;
+        return prefix + "\n\n" + text;
     }
 }

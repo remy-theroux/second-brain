@@ -11,18 +11,18 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification
 
 class EmailNotificationSenderTest {
 
-    private static final UUID COMPTE = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID ACCOUNT = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    // JavaMailSender nul : buildMessage ne le sollicite jamais, seul son résultat est testé.
+    // Null JavaMailSender: buildMessage never calls it, only its result is tested.
     private final EmailNotificationSender sender =
             new EmailNotificationSender(null, "http://localhost:8080", "no-reply@second-brain.localhost");
 
-    private SimpleMailMessage message(RawVerificationToken jeton) {
-        return sender.buildMessage(new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton));
+    private SimpleMailMessage message(RawVerificationToken token) {
+        return sender.buildMessage(new VerificationNotification(new Email("alice@example.com"), ACCOUNT, token));
     }
 
     @Test
-    void adresse_le_message_au_destinataire_de_la_notification() {
+    void addresses_the_message_to_the_notification_recipient() {
         SimpleMailMessage message = message(RawVerificationToken.generate());
 
         assertThat(message.getTo()).containsExactly("alice@example.com");
@@ -30,22 +30,22 @@ class EmailNotificationSenderTest {
     }
 
     @Test
-    void annonce_la_verification_dans_le_sujet() {
+    void announces_the_verification_in_the_subject() {
         assertThat(message(RawVerificationToken.generate()).getSubject()).isEqualTo("Vérifiez votre adresse email");
     }
 
     @Test
-    void construit_le_lien_absolu_de_verification() {
-        RawVerificationToken jeton = RawVerificationToken.generate();
+    void builds_the_absolute_verification_link() {
+        RawVerificationToken token = RawVerificationToken.generate();
 
-        assertThat(message(jeton).getText())
+        assertThat(message(token).getText())
                 .contains("http://localhost:8080/verification"
                         + "?compte=11111111-1111-1111-1111-111111111111"
-                        + "&jeton=" + jeton.value());
+                        + "&jeton=" + token.value());
     }
 
     @Test
-    void annonce_la_duree_de_validite_du_lien() {
+    void announces_the_validity_period_of_the_link() {
         assertThat(message(RawVerificationToken.generate()).getText()).contains("24 heures");
     }
 }

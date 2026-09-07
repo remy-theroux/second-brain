@@ -37,7 +37,7 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     private SimpleMailMessage verificationMessage(VerificationNotification notification) {
-        String lien = UriComponentsBuilder.fromUriString(baseUrl)
+        String link = UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/verification")
                 .queryParam("compte", notification.accountId())
                 .queryParam("jeton", notification.rawToken().value())
@@ -59,7 +59,7 @@ public class EmailNotificationSender implements NotificationSender {
             Ce lien est valable 24 heures et ne fonctionne qu'une fois.
 
             Si vous n'êtes pas à l'origine de cette création de compte, ignorez ce message.
-            """.formatted(lien));
+            """.formatted(link));
         return message;
     }
 }

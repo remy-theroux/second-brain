@@ -13,7 +13,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCatalogue;
 
 class CitationBufferTest {
 
-    private static SourceCatalogue troisExtraits() {
+    private static SourceCatalogue threeChunks() {
         UUID document = UUID.randomUUID();
         return SourceCatalogue.empty()
                 .absorb(List.of(
@@ -24,80 +24,80 @@ class CitationBufferTest {
     }
 
     @Test
-    void ne_laisse_rien_passer_tant_qu_aucune_citation_n_est_apparue() {
-        List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
+    void lets_nothing_through_until_a_citation_has_appeared() {
+        List<String> emitted = new ArrayList<>();
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), emitted::add);
 
-        tampon.accepte("Canberra est ");
-        tampon.accepte("la capitale de l'Australie.");
+        buffer.accept("Canberra est ");
+        buffer.accept("la capitale de l'Australie.");
 
-        assertThat(sortis).isEmpty();
-        assertThat(tampon.aOuvert()).isFalse();
-        assertThat(tampon.texte()).isEqualTo("Canberra est la capitale de l'Australie.");
+        assertThat(emitted).isEmpty();
+        assertThat(buffer.isOpen()).isFalse();
+        assertThat(buffer.text()).isEqualTo("Canberra est la capitale de l'Australie.");
     }
 
     @Test
-    void ouvre_les_vannes_a_la_premiere_citation_et_rejoue_ce_qui_precede() {
-        List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
+    void opens_the_gates_at_the_first_citation_and_replays_what_came_before() {
+        List<String> emitted = new ArrayList<>();
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), emitted::add);
 
-        tampon.accepte("Quatorze jours ");
-        tampon.accepte("[2].");
-        tampon.accepte(" Et ensuite [1].");
+        buffer.accept("Quatorze jours ");
+        buffer.accept("[2].");
+        buffer.accept(" Et ensuite [1].");
 
-        assertThat(sortis).containsExactly("Quatorze jours [2].", " Et ensuite [1].");
-        assertThat(tampon.aOuvert()).isTrue();
+        assertThat(emitted).containsExactly("Quatorze jours [2].", " Et ensuite [1].");
+        assertThat(buffer.isOpen()).isTrue();
     }
 
     @Test
-    void reconnait_une_citation_coupee_entre_deux_fragments() {
-        List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
+    void recognises_a_citation_split_across_two_fragments() {
+        List<String> emitted = new ArrayList<>();
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), emitted::add);
 
-        tampon.accepte("Quatorze jours [");
-        assertThat(sortis).isEmpty();
-        tampon.accepte("3].");
+        buffer.accept("Quatorze jours [");
+        assertThat(emitted).isEmpty();
+        buffer.accept("3].");
 
-        assertThat(sortis).containsExactly("Quatorze jours [3].");
+        assertThat(emitted).containsExactly("Quatorze jours [3].");
     }
 
     @Test
-    void n_ouvre_pas_sur_une_citation_hors_catalogue() {
-        List<String> sortis = new ArrayList<>();
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortis::add);
+    void does_not_open_on_a_citation_outside_the_catalogue() {
+        List<String> emitted = new ArrayList<>();
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), emitted::add);
 
-        tampon.accepte("Canberra [9] est la capitale.");
+        buffer.accept("Canberra [9] est la capitale.");
 
-        assertThat(sortis).isEmpty();
-        assertThat(tampon.aOuvert()).isFalse();
+        assertThat(emitted).isEmpty();
+        assertThat(buffer.isOpen()).isFalse();
     }
 
     @Test
-    void laisse_remonter_l_echec_de_la_sortie_a_l_ouverture() {
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), fragment -> {
+    void lets_the_sink_failure_propagate_at_opening() {
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), fragment -> {
             throw new IllegalStateException("le client a fermé");
         });
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> tampon.accepte("Quatorze jours [1]."))
+                .isThrownBy(() -> buffer.accept("Quatorze jours [1]."))
                 .withMessageContaining("le client a fermé");
     }
 
     @Test
-    void laisse_remonter_l_echec_de_la_sortie_une_fois_le_flux_ouvert() {
-        List<String> sortis = new ArrayList<>();
-        Consumer<String> sortie = fragment -> {
-            if (!sortis.isEmpty()) {
+    void lets_the_sink_failure_propagate_once_the_stream_is_open() {
+        List<String> emitted = new ArrayList<>();
+        Consumer<String> sink = fragment -> {
+            if (!emitted.isEmpty()) {
                 throw new IllegalStateException("le client a fermé");
             }
-            sortis.add(fragment);
+            emitted.add(fragment);
         };
-        CitationBuffer tampon = new CitationBuffer(troisExtraits(), sortie);
-        tampon.accepte("Quatorze jours [1].");
-        assertThat(tampon.aOuvert()).isTrue();
+        CitationBuffer buffer = new CitationBuffer(threeChunks(), sink);
+        buffer.accept("Quatorze jours [1].");
+        assertThat(buffer.isOpen()).isTrue();
 
         assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> tampon.accepte(" Et ensuite."))
+                .isThrownBy(() -> buffer.accept(" Et ensuite."))
                 .withMessageContaining("le client a fermé");
     }
 }

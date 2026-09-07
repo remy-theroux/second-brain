@@ -9,8 +9,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.SourceCandidate;
 import xyz.sterenn.secondbrain.shared.bus.QueryBus;
 
 /**
- * L'exécutant de l'outil que l'agent appelle. Le propriétaire vient du jeton et jamais du
- * modèle : un agent capable de nommer un propriétaire serait une faille de cloisonnement.
+ * Runs the tool the agent calls. The owner comes from the token and never from the model: an
+ * agent able to name an owner would be a tenancy leak.
  */
 @Component
 class DocumentSearchTool {
@@ -21,11 +21,11 @@ class DocumentSearchTool {
         this.queryBus = queryBus;
     }
 
-    List<SourceCandidate> rechercher(String question, UUID ownerId) {
-        List<ChunkMatchView> resultats = queryBus.ask(new SearchChunks(question, ownerId));
-        return resultats.stream()
-                .map(vue -> new SourceCandidate(
-                        vue.documentId(), vue.filename(), vue.position(), vue.heading(), vue.text()))
+    List<SourceCandidate> search(String question, UUID ownerId) {
+        List<ChunkMatchView> results = queryBus.ask(new SearchChunks(question, ownerId));
+        return results.stream()
+                .map(view -> new SourceCandidate(
+                        view.documentId(), view.filename(), view.position(), view.heading(), view.text()))
                 .toList();
     }
 }

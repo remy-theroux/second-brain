@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 import xyz.sterenn.secondbrain.users.domain.valueobject.AccessToken;
 
-// L'encodeur de JwtConfiguration est bâti sur une clé symétrique : il pose HS256 lui-même,
-// il n'y a pas d'en-tête à construire ici.
+// JwtConfiguration's encoder is built on a symmetric key: it sets HS256 itself, there is no
+// header to build here.
 @Component
 public class JwtAccessTokenIssuer implements AccessTokenIssuer {
 
@@ -22,15 +22,14 @@ public class JwtAccessTokenIssuer implements AccessTokenIssuer {
 
     @Override
     public AccessToken issue(UUID subject, Instant issuedAt, Instant expiresAt) {
-        JwtClaimsSet revendications = JwtClaimsSet.builder()
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(subject.toString())
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .build();
 
-        String valeur =
-                jwtEncoder.encode(JwtEncoderParameters.from(revendications)).getTokenValue();
+        String value = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        return new AccessToken(valeur, expiresAt);
+        return new AccessToken(value, expiresAt);
     }
 }

@@ -7,8 +7,8 @@ import xyz.sterenn.secondbrain.users.domain.exception.EmailAlreadyUsedException;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
 /**
- * Stocke et relit les comptes ; {@code save} lève {@link EmailAlreadyUsedException} si l'unicité
- * de l'email est violée.
+ * Stores and reads back accounts; {@code save} throws {@link EmailAlreadyUsedException} when email
+ * uniqueness is violated.
  */
 public interface UserRepository {
 

@@ -9,14 +9,14 @@ import org.junit.jupiter.api.Test;
 class AccessTokenPolicyTest {
 
     @Test
-    void fait_expirer_le_jeton_une_heure_apres_son_emission() {
-        Instant emission = Instant.parse("2026-08-17T10:00:00Z");
+    void expires_the_token_one_hour_after_it_was_issued() {
+        Instant issuedAt = Instant.parse("2026-08-17T10:00:00Z");
 
-        assertThat(AccessTokenPolicy.expiresAt(emission)).isEqualTo(Instant.parse("2026-08-17T11:00:00Z"));
+        assertThat(AccessTokenPolicy.expiresAt(issuedAt)).isEqualTo(Instant.parse("2026-08-17T11:00:00Z"));
     }
 
     @Test
-    void annonce_une_duree_de_vie_d_une_heure() {
+    void announces_a_one_hour_lifetime() {
         assertThat(AccessTokenPolicy.LIFETIME).isEqualTo(Duration.ofHours(1));
     }
 }

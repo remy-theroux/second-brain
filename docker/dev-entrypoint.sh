@@ -1,16 +1,16 @@
 #!/bin/sh
 set -e
 
-# Hot reload en conteneur, en deux processus :
+# Hot reload in a container, in two processes:
 #
-#  1. Un compilateur Gradle en continu (`-t classes`) recompile les sources
-#     modifiées vers build/classes/java/main. Il utilise un --project-cache-dir
-#     séparé pour ne PAS entrer en conflit de lock avec le bootRun ci-dessous.
+#  1. A continuous Gradle compiler (`-t classes`) recompiles the modified
+#     sources into build/classes/java/main. It uses a separate
+#     --project-cache-dir so as NOT to conflict on the lock with the bootRun below.
 #
-#  2. bootRun lance l'application. Spring Boot DevTools surveille build/classes
-#     et redémarre le contexte dès qu'un .class change.
+#  2. bootRun starts the application. Spring Boot DevTools watches build/classes
+#     and restarts the context as soon as a .class changes.
 #
-# Résultat : on édite un .java sur l'hôte -> recompilation -> restart automatique.
+# Result: a .java is edited on the host -> recompilation -> automatic restart.
 
 ./gradlew --no-daemon -t classes processResources &
 

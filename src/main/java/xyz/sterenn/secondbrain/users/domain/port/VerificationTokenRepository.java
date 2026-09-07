@@ -4,7 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.users.domain.entity.VerificationToken;
 
-/** Stocke et relit le jeton de vérification d'un compte, qui n'en a qu'un à la fois. */
+/** Stores and reads back the verification token of an account, which holds only one at a time. */
 public interface VerificationTokenRepository {
 
     VerificationToken save(VerificationToken token);

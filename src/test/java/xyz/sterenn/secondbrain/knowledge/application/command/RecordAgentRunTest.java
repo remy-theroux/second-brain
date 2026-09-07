@@ -38,37 +38,37 @@ class RecordAgentRunTest {
     private UUID alice;
 
     @BeforeEach
-    void prepare_un_compte() {
+    void prepares_an_account() {
         alice = userRepository
                 .save(User.register(new Email("alice@exemple.fr"), "empreinte"))
                 .getId();
     }
 
     @Test
-    void conserve_l_agent_sa_version_et_le_verdict() {
-        commandBus.dispatch(uneTrace(AnswerVerdict.SOURCEE, List.of("délai"), List.of(uneSource(1))));
+    void keeps_the_agent_its_version_and_the_verdict() {
+        commandBus.dispatch(aRun(AnswerVerdict.GROUNDED, List.of("délai"), List.of(aSource(1))));
 
-        List<AgentRun> traces = agentRunRepository.findByOwnerId(alice);
+        List<AgentRun> runs = agentRunRepository.findByOwnerId(alice);
 
-        assertThat(traces).hasSize(1);
-        assertThat(traces.getFirst().getAgentName()).isEqualTo("document-agent");
-        assertThat(traces.getFirst().getAgentVersion()).isEqualTo("v1");
-        assertThat(traces.getFirst().getVerdict()).isEqualTo(AnswerVerdict.SOURCEE);
-        assertThat(traces.getFirst().getTurns()).isEqualTo(2);
+        assertThat(runs).hasSize(1);
+        assertThat(runs.getFirst().getAgentName()).isEqualTo("document-agent");
+        assertThat(runs.getFirst().getAgentVersion()).isEqualTo("v1");
+        assertThat(runs.getFirst().getVerdict()).isEqualTo(AnswerVerdict.GROUNDED);
+        assertThat(runs.getFirst().getTurns()).isEqualTo(2);
     }
 
     @Test
-    void conserve_les_requetes_de_recherche_dans_l_ordre() {
+    void keeps_the_search_queries_in_order() {
         commandBus.dispatch(
-                uneTrace(AnswerVerdict.SOURCEE, List.of("premier essai", "second essai"), List.of(uneSource(1))));
+                aRun(AnswerVerdict.GROUNDED, List.of("premier essai", "second essai"), List.of(aSource(1))));
 
         assertThat(agentRunRepository.findByOwnerId(alice).getFirst().getSearches())
                 .containsExactly("premier essai", "second essai");
     }
 
     @Test
-    void recopie_le_texte_des_sources_citees_plutot_que_de_les_designer() {
-        commandBus.dispatch(uneTrace(AnswerVerdict.SOURCEE, List.of("délai"), List.of(uneSource(3))));
+    void copies_the_text_of_the_cited_sources_rather_than_referencing_them() {
+        commandBus.dispatch(aRun(AnswerVerdict.GROUNDED, List.of("délai"), List.of(aSource(3))));
 
         List<CitedSource> sources =
                 agentRunRepository.findByOwnerId(alice).getFirst().getSources();
@@ -80,24 +80,24 @@ class RecordAgentRunTest {
     }
 
     @Test
-    void conserve_une_trace_sans_aucune_source() {
-        commandBus.dispatch(uneTrace(AnswerVerdict.SANS_SOURCE, List.of("capitale"), List.of()));
+    void keeps_a_run_without_any_source() {
+        commandBus.dispatch(aRun(AnswerVerdict.UNGROUNDED, List.of("capitale"), List.of()));
 
         assertThat(agentRunRepository.findByOwnerId(alice).getFirst().getSources())
                 .isEmpty();
     }
 
     @Test
-    void cloisonne_les_traces_par_proprietaire() {
+    void partitions_the_runs_by_owner() {
         UUID bob = userRepository
                 .save(User.register(new Email("bob@exemple.fr"), "empreinte"))
                 .getId();
-        commandBus.dispatch(uneTrace(AnswerVerdict.SOURCEE, List.of("délai"), List.of(uneSource(1))));
+        commandBus.dispatch(aRun(AnswerVerdict.GROUNDED, List.of("délai"), List.of(aSource(1))));
 
         assertThat(agentRunRepository.findByOwnerId(bob)).isEmpty();
     }
 
-    private RecordAgentRun uneTrace(AnswerVerdict verdict, List<String> recherches, List<Source> sources) {
+    private RecordAgentRun aRun(AnswerVerdict verdict, List<String> searches, List<Source> sources) {
         return new RecordAgentRun(
                 alice,
                 "document-agent",
@@ -107,11 +107,11 @@ class RecordAgentRunTest {
                 verdict,
                 2,
                 4200L,
-                recherches,
+                searches,
                 sources);
     }
 
-    private static Source uneSource(int numero) {
-        return new Source(numero, UUID.randomUUID(), "rapport.pdf", 0, "Rétractation", "Quatorze jours.");
+    private static Source aSource(int number) {
+        return new Source(number, UUID.randomUUID(), "rapport.pdf", 0, "Rétractation", "Quatorze jours.");
     }
 }

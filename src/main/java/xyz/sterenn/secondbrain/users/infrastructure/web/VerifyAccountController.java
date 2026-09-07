@@ -25,15 +25,15 @@ public class VerifyAccountController {
 
     @GetMapping("/verification")
     public ResponseEntity<Void> verify(
-            @RequestParam(name = "compte", defaultValue = "") String compte,
-            @RequestParam(name = "jeton", defaultValue = "") String jeton) {
+            @RequestParam(name = "compte", defaultValue = "") String accountId,
+            @RequestParam(name = "jeton", defaultValue = "") String rawToken) {
         String code;
         try {
-            commandBus.dispatch(new VerifyAccount(compte, jeton));
+            commandBus.dispatch(new VerifyAccount(accountId, rawToken));
             code = "ok";
         } catch (InvalidVerificationLinkException e) {
-            // UUID illisible, compte inconnu, jeton faux : un seul code comme un seul message,
-            // les distinguer ferait de cette route un oracle d'existence de compte.
+            // Unreadable UUID, unknown account, wrong token: one code as there is one message,
+            // telling them apart would make this route an account existence oracle.
             code = "lien-invalide";
         } catch (ExpiredVerificationLinkException e) {
             code = "lien-expire";

@@ -1,8 +1,8 @@
 <script setup>
 import { useAuthStore } from '@/stores/auth'
 
-// Le chargement du profil et la déconnexion vivent dans AuthenticatedLayout : la barre
-// latérale en a besoin sur toutes les pages connectées, celle-ci n'est que du contenu.
+// Loading the profile and signing out live in AuthenticatedLayout: the sidebar needs them
+// on every signed-in page, this one is only content.
 const auth = useAuthStore()
 </script>
 

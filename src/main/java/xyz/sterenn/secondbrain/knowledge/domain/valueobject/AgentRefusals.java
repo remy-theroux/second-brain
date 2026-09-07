@@ -1,15 +1,15 @@
 package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 
-public record AgentRefusals(String introuvable, String horsPerimetre) {
+public record AgentRefusals(String notFound, String outOfScope) {
 
     public AgentRefusals {
-        if (introuvable == null || introuvable.isBlank()) {
+        if (notFound == null || notFound.isBlank()) {
             throw new IllegalArgumentException("L'aveu d'ignorance est obligatoire : c'est lui qu'on rend");
         }
-        if (horsPerimetre == null || horsPerimetre.isBlank()) {
+        if (outOfScope == null || outOfScope.isBlank()) {
             throw new IllegalArgumentException("Le refus hors périmètre est obligatoire");
         }
-        introuvable = introuvable.strip();
-        horsPerimetre = horsPerimetre.strip();
+        notFound = notFound.strip();
+        outOfScope = outOfScope.strip();
     }
 }

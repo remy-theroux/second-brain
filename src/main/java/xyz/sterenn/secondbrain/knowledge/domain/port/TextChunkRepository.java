@@ -7,8 +7,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ChunkMatch;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Embedding;
 
 /**
- * Port sortant vers le stockage des extraits vectorisés : ils se lisent par l'identifiant de
- * leur document, dans l'ordre du document, ou par proximité avec un vecteur.
+ * Outbound port to the storage of vectorised chunks: they are read by their document
+ * identifier, in document order, or by proximity to a vector.
  */
 public interface TextChunkRepository {
 
@@ -17,14 +17,14 @@ public interface TextChunkRepository {
     List<TextChunk> findByDocumentId(UUID documentId);
 
     /**
-     * AMQP livre au moins une fois et {@code (document_id, chunk_position)} est {@code UNIQUE} :
-     * le handler efface avant d'écrire.
+     * AMQP delivers at least once and {@code (document_id, chunk_position)} is {@code UNIQUE}:
+     * the handler deletes before writing.
      */
     void deleteByDocumentId(UUID documentId);
 
     /**
-     * Les extraits du propriétaire les plus proches du vecteur donné, du plus proche au plus
-     * lointain, au plus {@code limit}.
+     * The owner's chunks closest to the given vector, from nearest to farthest, at most {@code
+     * limit}.
      */
     List<ChunkMatch> findNearest(UUID ownerId, Embedding question, int limit);
 }

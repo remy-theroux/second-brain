@@ -18,48 +18,49 @@ public final class PromptBuilder {
         if (absorption.isEmpty()) {
             return "Aucun extrait ne correspond à cette recherche.";
         }
-        if (absorption.nouveaux().isEmpty()) {
-            return "Aucun nouvel extrait (" + absorption.dejaVus() + " déjà vu" + pluriel(absorption.dejaVus()) + ").";
+        if (absorption.newSources().isEmpty()) {
+            return "Aucun nouvel extrait (" + absorption.alreadySeen() + " déjà vu" + plural(absorption.alreadySeen())
+                    + ").";
         }
-        return entete(absorption) + "\n\n" + blocs(absorption.nouveaux());
+        return header(absorption) + "\n\n" + blocks(absorption.newSources());
     }
 
-    private static String entete(Absorption absorption) {
-        int nouveaux = absorption.nouveaux().size();
-        if (absorption.dejaVus() == 0) {
-            return nouveaux + " extrait" + pluriel(nouveaux) + " trouvé" + pluriel(nouveaux) + ".";
+    private static String header(Absorption absorption) {
+        int newSources = absorption.newSources().size();
+        if (absorption.alreadySeen() == 0) {
+            return newSources + " extrait" + plural(newSources) + " trouvé" + plural(newSources) + ".";
         }
-        return nouveaux + " nouve" + (nouveaux > 1 ? "aux" : "l") + " extrait" + pluriel(nouveaux) + " ("
-                + absorption.dejaVus() + " déjà vu" + pluriel(absorption.dejaVus()) + ").";
+        return newSources + " nouve" + (newSources > 1 ? "aux" : "l") + " extrait" + plural(newSources) + " ("
+                + absorption.alreadySeen() + " déjà vu" + plural(absorption.alreadySeen()) + ").";
     }
 
-    private static String pluriel(int nombre) {
-        return nombre > 1 ? "s" : "";
+    private static String plural(int count) {
+        return count > 1 ? "s" : "";
     }
 
-    private static String blocs(List<Source> sources) {
-        StringBuilder rendu = new StringBuilder();
+    private static String blocks(List<Source> sources) {
+        StringBuilder rendered = new StringBuilder();
         for (Source source : sources) {
-            if (!rendu.isEmpty()) {
-                rendu.append("\n\n");
+            if (!rendered.isEmpty()) {
+                rendered.append("\n\n");
             }
-            rendu.append(CitationPolicy.BALISE_OUVRANTE)
+            rendered.append(CitationPolicy.OPENING_MARKER)
                     .append(" numero=\"")
                     .append(source.number())
                     .append("\" document=\"")
-                    .append(echappe(source.filename()))
+                    .append(escape(source.filename()))
                     .append('"');
             if (!source.heading().isBlank()) {
-                rendu.append(" section=\"").append(echappe(source.heading())).append('"');
+                rendered.append(" section=\"").append(escape(source.heading())).append('"');
             }
-            rendu.append(">\n").append(source.text()).append('\n').append(CitationPolicy.BALISE_FERMANTE);
+            rendered.append(">\n").append(source.text()).append('\n').append(CitationPolicy.CLOSING_MARKER);
         }
-        return rendu.toString();
+        return rendered.toString();
     }
 
-    /** Un nom de document est du contenu : sans échappement, il pourrait forger une balise. */
-    private static String echappe(String valeur) {
-        return valeur.replace("&", "&amp;")
+    /** A document name is content: without escaping, it could forge a tag. */
+    private static String escape(String value) {
+        return value.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;");

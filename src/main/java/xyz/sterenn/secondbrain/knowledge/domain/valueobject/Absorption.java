@@ -2,13 +2,13 @@ package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 
 import java.util.List;
 
-public record Absorption(SourceCatalogue catalogue, List<Source> nouveaux, int dejaVus) {
+public record Absorption(SourceCatalogue catalogue, List<Source> newSources, int alreadySeen) {
 
     public Absorption {
-        nouveaux = List.copyOf(nouveaux);
+        newSources = List.copyOf(newSources);
     }
 
     public boolean isEmpty() {
-        return nouveaux.isEmpty() && dejaVus == 0;
+        return newSources.isEmpty() && alreadySeen == 0;
     }
 }

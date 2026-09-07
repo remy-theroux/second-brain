@@ -25,15 +25,15 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
 /**
- * Pas de {@code @Transactional} sur la classe : le test observe des commits, qu'une transaction
- * englobante masquerait. La queue d'observation est effacée en {@code @AfterEach}.
+ * No {@code @Transactional} on the class: the test observes commits, which an enclosing
+ * transaction would hide. The observation queue is deleted in {@code @AfterEach}.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class AmqpDomainEventPublisherTest {
 
     private static final String OBSERVATION = "test.observation";
-    private static final long ATTENTE_MS = Duration.ofSeconds(5).toMillis();
+    private static final long WAIT_MS = Duration.ofSeconds(5).toMillis();
     private static final long SILENCE_MS = Duration.ofMillis(500).toMillis();
 
     @Autowired
@@ -48,50 +48,50 @@ class AmqpDomainEventPublisherTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
-    private DocumentUploaded evenement;
+    private DocumentUploaded event;
 
     @BeforeEach
-    void ouvre_une_queue_d_observation() {
+    void opens_an_observation_queue() {
         amqpAdmin.declareQueue(new Queue(OBSERVATION));
         amqpAdmin.declareBinding(new Binding(
                 OBSERVATION, Binding.DestinationType.QUEUE, AmqpConfiguration.EVENTS_EXCHANGE, "knowledge.#", null));
         amqpAdmin.purgeQueue(OBSERVATION);
-        evenement = new DocumentUploaded(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z"));
+        event = new DocumentUploaded(UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-08-25T10:00:00Z"));
     }
 
     @AfterEach
-    void ferme_la_queue_d_observation() {
+    void closes_the_observation_queue() {
         amqpAdmin.deleteQueue(OBSERVATION);
     }
 
     @Test
-    void publie_immediatement_hors_transaction() {
-        domainEventPublisher.publish(evenement);
+    void publishes_immediately_outside_a_transaction() {
+        domainEventPublisher.publish(event);
 
-        Message message = rabbitTemplate.receive(OBSERVATION, ATTENTE_MS);
+        Message message = rabbitTemplate.receive(OBSERVATION, WAIT_MS);
 
         assertThat(message).isNotNull();
         assertThat(message.getMessageProperties().getReceivedRoutingKey()).isEqualTo("knowledge.document.uploaded");
         assertThat(message.getMessageProperties().getHeaders())
                 .containsEntry("__TypeId__", "knowledge.document.uploaded");
-        assertThat(rabbitTemplate.getMessageConverter().fromMessage(message)).isEqualTo(evenement);
+        assertThat(rabbitTemplate.getMessageConverter().fromMessage(message)).isEqualTo(event);
     }
 
     @Test
-    void publie_apres_le_commit_d_une_transaction() {
-        transactionTemplate.executeWithoutResult(statut -> {
-            domainEventPublisher.publish(evenement);
+    void publishes_after_a_transaction_commits() {
+        transactionTemplate.executeWithoutResult(status -> {
+            domainEventPublisher.publish(event);
             assertThat(rabbitTemplate.receive(OBSERVATION, SILENCE_MS)).isNull();
         });
 
-        assertThat(rabbitTemplate.receiveAndConvert(OBSERVATION, ATTENTE_MS)).isEqualTo(evenement);
+        assertThat(rabbitTemplate.receiveAndConvert(OBSERVATION, WAIT_MS)).isEqualTo(event);
     }
 
     @Test
-    void ne_publie_rien_quand_la_transaction_est_annulee() {
+    void publishes_nothing_when_the_transaction_is_rolled_back() {
         assertThatIllegalStateException()
-                .isThrownBy(() -> transactionTemplate.executeWithoutResult(statut -> {
-                    domainEventPublisher.publish(evenement);
+                .isThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
+                    domainEventPublisher.publish(event);
                     throw new IllegalStateException("annulation volontaire");
                 }))
                 .withMessage("annulation volontaire");
@@ -100,14 +100,14 @@ class AmqpDomainEventPublisherTest {
     }
 
     @Test
-    void refuse_avant_le_commit_un_evenement_hors_d_un_contexte_borne() {
+    void rejects_before_the_commit_an_event_outside_a_bounded_context() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> transactionTemplate.executeWithoutResult(statut ->
-                        domainEventPublisher.publish(new HorsContexte(Instant.parse("2026-08-25T10:00:00Z")))))
-                .withMessageContaining(HorsContexte.class.getName());
+                .isThrownBy(() -> transactionTemplate.executeWithoutResult(status ->
+                        domainEventPublisher.publish(new OutsideContext(Instant.parse("2026-08-25T10:00:00Z")))))
+                .withMessageContaining(OutsideContext.class.getName());
 
         assertThat(rabbitTemplate.receive(OBSERVATION, SILENCE_MS)).isNull();
     }
 
-    record HorsContexte(Instant occurredAt) implements DomainEvent {}
+    record OutsideContext(Instant occurredAt) implements DomainEvent {}
 }

@@ -5,7 +5,7 @@ import jakarta.persistence.Embeddable;
 import java.text.Normalizer;
 import java.util.Objects;
 
-/** Voir ADR-0002 : l'écart qui autorise les annotations JPA dans le domaine. */
+/** See ADR-0002: the deviation that allows JPA annotations in the domain. */
 @Embeddable
 public class TextBlock {
 
@@ -19,8 +19,8 @@ public class TextBlock {
     @Column(name = "heading_level", nullable = false)
     private int headingLevel;
 
-    // columnDefinition explicite : sans lui, Hibernate attendrait un varchar(255) et
-    // `ddl-auto: validate` refuserait de démarrer contre une colonne `text`.
+    // Explicit columnDefinition: without it, Hibernate would expect a varchar(255) and
+    // `ddl-auto: validate` would refuse to start against a `text` column.
     @Column(nullable = false, columnDefinition = "text")
     private String text;
 
@@ -33,43 +33,43 @@ public class TextBlock {
     }
 
     public static TextBlock of(String heading, int headingLevel, String text) {
-        String titre = normaliseHeading(heading);
-        String corps = normalise(text);
-        if (corps.isEmpty()) {
+        String normalisedHeading = normaliseHeading(heading);
+        String body = normalise(text);
+        if (body.isEmpty()) {
             throw new IllegalArgumentException("Un bloc sans texte n'en est pas un : il ne se construit pas");
         }
-        if (!titre.isEmpty() && (headingLevel < 1 || headingLevel > MAX_HEADING_LEVEL)) {
+        if (!normalisedHeading.isEmpty() && (headingLevel < 1 || headingLevel > MAX_HEADING_LEVEL)) {
             throw new IllegalArgumentException(
                     "Le niveau d'un titre va de 1 à " + MAX_HEADING_LEVEL + ", reçu : " + headingLevel);
         }
-        return new TextBlock(titre, titre.isEmpty() ? 0 : headingLevel, corps);
+        return new TextBlock(normalisedHeading, normalisedHeading.isEmpty() ? 0 : headingLevel, body);
     }
 
     public static TextBlock untitled(String text) {
         return of("", 0, text);
     }
 
-    static String normalise(String brut) {
-        if (brut == null) {
+    static String normalise(String raw) {
+        if (raw == null) {
             return "";
         }
-        return Normalizer.normalize(brut, Normalizer.Form.NFC)
-                .replace('\uFEFF', ' ') // marque d'ordre des octets, en tête d'un fichier UTF-8
-                .replace('\u00A0', ' ') // espace insécable : un espace, pas rien — l'effacer collerait les mots
-                .replace("\u0000", "") // octet nul : un PDF mal formé en sème, et PostgreSQL le refuse
-                .replace("\u00AD", "") // trait d'union conditionnel : il couperait les mots
+        return Normalizer.normalize(raw, Normalizer.Form.NFC)
+                .replace('\uFEFF', ' ') // byte order mark, at the head of a UTF-8 file
+                .replace('\u00A0', ' ') // non-breaking space: a space, not nothing — dropping it would glue words
+                .replace("\u0000", "") // null byte: a malformed PDF sows them, and PostgreSQL rejects it
+                .replace("\u00AD", "") // soft hyphen: it would cut words
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
                 .replaceAll("[ \\t\\x0B\\f]+(?=\\n)", "")
-                .replaceAll("\n{3,}", "\n\n") // la frontière de paragraphe survit, la mise en page non
+                .replaceAll("\n{3,}", "\n\n") // the paragraph boundary survives, the layout does not
                 .strip();
     }
 
-    private static String normaliseHeading(String brut) {
-        String titre = normalise(brut).replaceAll("\\s+", " ").strip();
-        return titre.length() > MAX_HEADING_LENGTH
-                ? titre.substring(0, MAX_HEADING_LENGTH).strip()
-                : titre;
+    private static String normaliseHeading(String raw) {
+        String normalised = normalise(raw).replaceAll("\\s+", " ").strip();
+        return normalised.length() > MAX_HEADING_LENGTH
+                ? normalised.substring(0, MAX_HEADING_LENGTH).strip()
+                : normalised;
     }
 
     public String getHeading() {
@@ -85,11 +85,11 @@ public class TextBlock {
     }
 
     @Override
-    public boolean equals(Object autre) {
-        return autre instanceof TextBlock bloc
-                && headingLevel == bloc.headingLevel
-                && Objects.equals(heading, bloc.heading)
-                && Objects.equals(text, bloc.text);
+    public boolean equals(Object other) {
+        return other instanceof TextBlock block
+                && headingLevel == block.headingLevel
+                && Objects.equals(heading, block.heading)
+                && Objects.equals(text, block.text);
     }
 
     @Override

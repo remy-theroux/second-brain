@@ -9,50 +9,50 @@ import org.junit.jupiter.api.Test;
 class ChecksumTest {
 
     @Test
-    void calcule_l_empreinte_sha_256_d_un_contenu_connu() {
-        // Empreinte de référence de "abc", celle de la spécification FIPS 180-4.
+    void computes_the_sha_256_checksum_of_a_known_content() {
+        // Reference checksum of "abc", the one from the FIPS 180-4 specification.
         assertThat(Checksum.of("abc".getBytes(StandardCharsets.UTF_8)).value())
                 .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     @Test
-    void rend_la_meme_empreinte_pour_le_meme_contenu() {
-        byte[] contenu = "Le même contenu, déposé deux fois.".getBytes(StandardCharsets.UTF_8);
+    void returns_the_same_checksum_for_the_same_content() {
+        byte[] content = "Le même contenu, déposé deux fois.".getBytes(StandardCharsets.UTF_8);
 
-        assertThat(Checksum.of(contenu)).isEqualTo(Checksum.of(contenu.clone()));
+        assertThat(Checksum.of(content)).isEqualTo(Checksum.of(content.clone()));
     }
 
     @Test
-    void rend_une_empreinte_differente_pour_un_contenu_different() {
+    void returns_a_different_checksum_for_a_different_content() {
         assertThat(Checksum.of("premier".getBytes(StandardCharsets.UTF_8)))
                 .isNotEqualTo(Checksum.of("second".getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test
-    void accepte_un_contenu_vide() {
+    void accepts_an_empty_content() {
         assertThat(Checksum.of(new byte[0]).value()).hasSize(Checksum.LENGTH);
     }
 
     @Test
-    void normalise_une_empreinte_ecrite_en_majuscules() {
-        String majuscules = "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD";
+    void normalises_a_checksum_written_in_uppercase() {
+        String uppercase = "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD";
 
-        assertThat(new Checksum(majuscules)).isEqualTo(Checksum.of("abc".getBytes(StandardCharsets.UTF_8)));
+        assertThat(new Checksum(uppercase)).isEqualTo(Checksum.of("abc".getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test
-    void refuse_une_empreinte_trop_courte() {
+    void rejects_a_checksum_that_is_too_short() {
         assertThatThrownBy(() -> new Checksum("abc")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void refuse_une_empreinte_non_hexadecimale() {
+    void rejects_a_non_hexadecimal_checksum() {
         assertThatThrownBy(() -> new Checksum("z".repeat(Checksum.LENGTH)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void refuse_une_empreinte_vide() {
+    void rejects_a_blank_checksum() {
         assertThatThrownBy(() -> new Checksum("  ")).isInstanceOf(IllegalArgumentException.class);
     }
 }

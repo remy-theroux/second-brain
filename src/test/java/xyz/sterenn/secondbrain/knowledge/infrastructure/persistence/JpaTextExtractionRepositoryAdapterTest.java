@@ -29,7 +29,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @Transactional
 class JpaTextExtractionRepositoryAdapterTest {
 
-    private static final String CORPS =
+    private static final String BODY =
             "Un texte assez long pour franchir le plancher des cinquante caractères exigé par le domaine.";
 
     @Autowired
@@ -42,58 +42,56 @@ class JpaTextExtractionRepositoryAdapterTest {
     private UserRepository userRepository;
 
     @Test
-    void conserve_les_blocs_dans_l_ordre_avec_leur_titre_et_leur_niveau() {
-        Document document = unDocumentDepose("hugo@exemple.fr");
-        ExtractedText texte = new ExtractedText(List.of(
-                TextBlock.of("Introduction", 1, CORPS), TextBlock.of("Détail", 2, CORPS), TextBlock.untitled(CORPS)));
+    void keeps_the_blocks_in_order_with_their_heading_and_their_level() {
+        Document document = anUploadedDocument("hugo@exemple.fr");
+        ExtractedText text = new ExtractedText(List.of(
+                TextBlock.of("Introduction", 1, BODY), TextBlock.of("Détail", 2, BODY), TextBlock.untitled(BODY)));
 
-        textExtractionRepository.save(
-                TextExtraction.of(document.getId(), texte, Instant.parse("2026-08-26T10:00:00Z")));
+        textExtractionRepository.save(TextExtraction.of(document.getId(), text, Instant.parse("2026-08-26T10:00:00Z")));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
-                .satisfies(relu -> {
-                    assertThat(relu.getBlocks()).containsExactlyElementsOf(texte.blocks());
-                    assertThat(relu.getBlocks())
+                .satisfies(reloaded -> {
+                    assertThat(reloaded.getBlocks()).containsExactlyElementsOf(text.blocks());
+                    assertThat(reloaded.getBlocks())
                             .extracting(TextBlock::getHeading)
                             .containsExactly("Introduction", "Détail", "");
-                    assertThat(relu.getBlocks())
+                    assertThat(reloaded.getBlocks())
                             .extracting(TextBlock::getHeadingLevel)
                             .containsExactly(1, 2, 0);
-                    assertThat(relu.getExtractedAt()).isEqualTo(Instant.parse("2026-08-26T10:00:00Z"));
+                    assertThat(reloaded.getExtractedAt()).isEqualTo(Instant.parse("2026-08-26T10:00:00Z"));
                 });
     }
 
     @Test
-    void rend_le_format_du_domaine_tel_qu_il_a_ete_range() {
-        Document document = unDocumentDepose("iris@exemple.fr");
-        ExtractedText texte = ExtractedText.untitled(CORPS);
-        textExtractionRepository.save(TextExtraction.of(document.getId(), texte, Instant.now()));
+    void returns_the_domain_format_as_it_was_stored() {
+        Document document = anUploadedDocument("iris@exemple.fr");
+        ExtractedText text = ExtractedText.untitled(BODY);
+        textExtractionRepository.save(TextExtraction.of(document.getId(), text, Instant.now()));
 
-        TextExtraction relu =
+        TextExtraction reloaded =
                 textExtractionRepository.findByDocumentId(document.getId()).orElseThrow();
 
-        assertThat(relu.text()).isEqualTo(texte);
+        assertThat(reloaded.text()).isEqualTo(text);
     }
 
     @Test
-    void conserve_un_bloc_bien_plus_long_que_255_caracteres() {
-        Document document = unDocumentDepose("jules@exemple.fr");
-        String tresLong = CORPS.repeat(200);
+    void keeps_a_block_far_longer_than_255_characters() {
+        Document document = anUploadedDocument("jules@exemple.fr");
+        String veryLong = BODY.repeat(200);
         textExtractionRepository.save(
-                TextExtraction.of(document.getId(), ExtractedText.untitled(tresLong), Instant.now()));
+                TextExtraction.of(document.getId(), ExtractedText.untitled(veryLong), Instant.now()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
-                .satisfies(relu ->
-                        assertThat(relu.getBlocks().getFirst().getText()).isEqualTo(tresLong));
+                .satisfies(reloaded ->
+                        assertThat(reloaded.getBlocks().getFirst().getText()).isEqualTo(veryLong));
     }
 
     @Test
-    void efface_le_texte_d_un_document_et_ses_blocs_avec() {
-        Document document = unDocumentDepose("karim@exemple.fr");
-        textExtractionRepository.save(
-                TextExtraction.of(document.getId(), ExtractedText.untitled(CORPS), Instant.now()));
+    void deletes_the_text_of_a_document_and_its_blocks_with_it() {
+        Document document = anUploadedDocument("karim@exemple.fr");
+        textExtractionRepository.save(TextExtraction.of(document.getId(), ExtractedText.untitled(BODY), Instant.now()));
 
         textExtractionRepository.deleteByDocumentId(document.getId());
 
@@ -101,32 +99,31 @@ class JpaTextExtractionRepositoryAdapterTest {
     }
 
     @Test
-    void reste_muet_quand_aucun_texte_n_a_ete_extrait() {
+    void stays_silent_when_no_text_has_been_extracted() {
         assertThat(textExtractionRepository.findByDocumentId(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    void un_second_texte_peut_remplacer_le_premier_apres_effacement() {
-        Document document = unDocumentDepose("lea@exemple.fr");
-        textExtractionRepository.save(
-                TextExtraction.of(document.getId(), ExtractedText.untitled(CORPS), Instant.now()));
+    void a_second_text_can_replace_the_first_after_deletion() {
+        Document document = anUploadedDocument("lea@exemple.fr");
+        textExtractionRepository.save(TextExtraction.of(document.getId(), ExtractedText.untitled(BODY), Instant.now()));
 
         textExtractionRepository.deleteByDocumentId(document.getId());
         textExtractionRepository.save(TextExtraction.of(
-                document.getId(), ExtractedText.untitled(CORPS + " Deuxième version."), Instant.now()));
+                document.getId(), ExtractedText.untitled(BODY + " Deuxième version."), Instant.now()));
 
         assertThat(textExtractionRepository.findByDocumentId(document.getId()))
                 .get()
-                .satisfies(relu ->
-                        assertThat(relu.getBlocks().getFirst().getText()).endsWith("Deuxième version."));
+                .satisfies(reloaded ->
+                        assertThat(reloaded.getBlocks().getFirst().getText()).endsWith("Deuxième version."));
     }
 
-    private Document unDocumentDepose(String email) {
-        UUID proprietaire = userRepository
+    private Document anUploadedDocument(String email) {
+        UUID ownerId = userRepository
                 .save(User.register(new Email(email), "empreinte"))
                 .getId();
-        byte[] octets = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
         return documentRepository.save(
-                Document.upload(proprietaire, "notes.md", DocumentFormat.MARKDOWN, Checksum.of(octets), octets.length));
+                Document.upload(ownerId, "notes.md", DocumentFormat.MARKDOWN, Checksum.of(bytes), bytes.length));
     }
 }

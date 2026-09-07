@@ -60,24 +60,24 @@ public class IndexDocumentTextHandler implements CommandHandler<IndexDocumentTex
                 .orElseThrow(() -> new IllegalStateException(
                         "Le document " + document.getId() + " est annoncé extrait mais ne porte aucun texte"));
 
-        List<Chunk> extraits = chunker.chunk(extraction.text());
-        // Le port rend autant de vecteurs que de textes et dans le même ordre : c'est ce qui
-        // permet de les apparier par l'indice.
-        List<Embedding> vecteurs = embeddingPort.embed(extraits.stream()
-                .map(extrait -> extrait.contextualised(document.getFilename()))
+        List<Chunk> chunks = chunker.chunk(extraction.text());
+        // The port returns as many vectors as texts and in the same order: that is what
+        // allows pairing them by index.
+        List<Embedding> embeddings = embeddingPort.embed(chunks.stream()
+                .map(chunk -> chunk.contextualised(document.getFilename()))
                 .toList());
 
-        Instant maintenant = clock.instant();
+        Instant now = clock.instant();
         textChunkRepository.deleteByDocumentId(document.getId());
-        textChunkRepository.saveAll(IntStream.range(0, extraits.size())
-                .mapToObj(position -> TextChunk.of(
-                        document.getId(), position, extraits.get(position), vecteurs.get(position), maintenant))
+        textChunkRepository.saveAll(IntStream.range(0, chunks.size())
+                .mapToObj(position ->
+                        TextChunk.of(document.getId(), position, chunks.get(position), embeddings.get(position), now))
                 .toList());
 
         document.markIndexed();
         documentRepository.save(document);
 
         domainEventPublisher.publish(
-                new DocumentTextIndexed(document.getId(), document.getOwnerId(), extraits.size(), maintenant));
+                new DocumentTextIndexed(document.getId(), document.getOwnerId(), chunks.size(), now));
     }
 }

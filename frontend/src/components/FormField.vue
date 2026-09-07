@@ -1,11 +1,11 @@
 <script setup>
 import Message from 'primevue/message'
 
-// Le champ ne rend que le libellé et le message d'erreur ; l'input lui-même vient par le
-// slot, parce que sa forme varie (InputText, Password…) et que ses attributs — `id` ou
-// `input-id`, `invalid`, `autocomplete` — restent à la charge de la vue. Le composant ne
-// devine pas comment son enfant s'identifie : `id` sert ici au `for` du label, et la vue
-// le repose sur l'input.
+// The field only renders the label and the error message; the input itself comes through the
+// slot, because its shape varies (InputText, Password…) and its attributes — `id` or
+// `input-id`, `invalid`, `autocomplete` — remain the view's responsibility. The component does
+// not guess how its child identifies itself: `id` is used here for the label's `for`, and the
+// view puts it back on the input.
 defineProps({
   id: { type: String, required: true },
   label: { type: String, required: true },

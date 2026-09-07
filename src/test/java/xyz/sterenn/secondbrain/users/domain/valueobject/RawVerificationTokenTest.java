@@ -10,39 +10,39 @@ import org.junit.jupiter.api.Test;
 class RawVerificationTokenTest {
 
     @Test
-    void genere_un_jeton_non_vide() {
+    void generates_a_non_blank_token() {
         assertThat(RawVerificationToken.generate().value()).isNotBlank();
     }
 
     @Test
-    void genere_un_jeton_utilisable_tel_quel_dans_une_url() {
+    void generates_a_token_usable_as_is_in_a_url() {
         assertThat(RawVerificationToken.generate().value()).matches("^[A-Za-z0-9_-]+$");
     }
 
     @Test
-    void genere_un_jeton_assez_long_pour_ne_pas_etre_devine() {
-        // 32 octets encodés en base64 sans padding donnent 43 caractères.
+    void generates_a_token_long_enough_not_to_be_guessed() {
+        // 32 bytes encoded in base64 without padding give 43 characters.
         assertThat(RawVerificationToken.generate().value()).hasSize(43);
     }
 
     @Test
-    void genere_un_jeton_different_a_chaque_appel() {
-        Set<String> jetons = new HashSet<>();
+    void generates_a_different_token_on_each_call() {
+        Set<String> tokens = new HashSet<>();
         for (int i = 0; i < 100; i++) {
-            jetons.add(RawVerificationToken.generate().value());
+            tokens.add(RawVerificationToken.generate().value());
         }
-        assertThat(jetons).hasSize(100);
+        assertThat(tokens).hasSize(100);
     }
 
     @Test
-    void refuse_un_jeton_vide() {
+    void rejects_a_blank_token() {
         assertThatThrownBy(() -> new RawVerificationToken("  ")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void ne_divulgue_pas_le_jeton_dans_sa_representation_textuelle() {
-        RawVerificationToken jeton = RawVerificationToken.generate();
+    void does_not_disclose_the_token_in_its_string_representation() {
+        RawVerificationToken token = RawVerificationToken.generate();
 
-        assertThat(jeton.toString()).doesNotContain(jeton.value());
+        assertThat(token.toString()).doesNotContain(token.value());
     }
 }

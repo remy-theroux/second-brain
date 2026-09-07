@@ -29,9 +29,9 @@ public class JpaTextChunkRepositoryAdapter implements TextChunkRepository {
     }
 
     /**
-     * Le handler efface puis écrit dans la même transaction, et
-     * {@code (document_id, chunk_position)} est {@code UNIQUE} : sans ce flush, Hibernate
-     * ordonnerait les insertions avant les suppressions au moment du vidage.
+     * The handler deletes then writes within the same transaction, and
+     * {@code (document_id, chunk_position)} is {@code UNIQUE}: without this flush, Hibernate
+     * would order the inserts before the deletes when flushing.
      */
     @Override
     public void deleteByDocumentId(UUID documentId) {
@@ -41,25 +41,25 @@ public class JpaTextChunkRepositoryAdapter implements TextChunkRepository {
 
     @Override
     public List<ChunkMatch> findNearest(UUID ownerId, Embedding question, int limit) {
-        return springDataTextChunkRepository.findNearest(ownerId, litteralPgvector(question), limit).stream()
-                .map(ligne -> new ChunkMatch(
-                        ligne.getDocumentId(),
-                        ligne.getFilename(),
-                        ligne.getChunkPosition(),
-                        new Chunk(ligne.getHeading(), ligne.getChunkText()),
-                        ligne.getSimilarity()))
+        return springDataTextChunkRepository.findNearest(ownerId, pgvectorLiteral(question), limit).stream()
+                .map(row -> new ChunkMatch(
+                        row.getDocumentId(),
+                        row.getFilename(),
+                        row.getChunkPosition(),
+                        new Chunk(row.getHeading(), row.getChunkText()),
+                        row.getSimilarity()))
                 .toList();
     }
 
-    private static String litteralPgvector(Embedding embedding) {
-        float[] valeurs = embedding.values();
-        StringBuilder litteral = new StringBuilder(valeurs.length * 12).append('[');
-        for (int dimension = 0; dimension < valeurs.length; dimension++) {
+    private static String pgvectorLiteral(Embedding embedding) {
+        float[] values = embedding.values();
+        StringBuilder literal = new StringBuilder(values.length * 12).append('[');
+        for (int dimension = 0; dimension < values.length; dimension++) {
             if (dimension > 0) {
-                litteral.append(',');
+                literal.append(',');
             }
-            litteral.append(valeurs[dimension]);
+            literal.append(values[dimension]);
         }
-        return litteral.append(']').toString();
+        return literal.append(']').toString();
     }
 }

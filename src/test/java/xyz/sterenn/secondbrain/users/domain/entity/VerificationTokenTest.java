@@ -12,67 +12,67 @@ import xyz.sterenn.secondbrain.users.domain.exception.ExpiredVerificationLinkExc
 
 class VerificationTokenTest {
 
-    private static final Instant EMISSION = Instant.parse("2026-08-06T10:00:00Z");
-    private static final UUID COMPTE = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final Instant ISSUED_AT = Instant.parse("2026-08-06T10:00:00Z");
+    private static final UUID ACCOUNT = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    private VerificationToken emis() {
-        return VerificationToken.issue(COMPTE, "empreinte", EMISSION);
+    private VerificationToken issued() {
+        return VerificationToken.issue(ACCOUNT, "empreinte", ISSUED_AT);
     }
 
     @Test
-    void nait_valide_et_non_consomme() {
-        VerificationToken jeton = emis();
+    void is_born_valid_and_unconsumed() {
+        VerificationToken token = issued();
 
-        assertThat(jeton.getUserId()).isEqualTo(COMPTE);
-        assertThat(jeton.getTokenHash()).isEqualTo("empreinte");
-        assertThat(jeton.isConsumed()).isFalse();
-        assertThat(jeton.isExpired(EMISSION)).isFalse();
+        assertThat(token.getUserId()).isEqualTo(ACCOUNT);
+        assertThat(token.getTokenHash()).isEqualTo("empreinte");
+        assertThat(token.isConsumed()).isFalse();
+        assertThat(token.isExpired(ISSUED_AT)).isFalse();
     }
 
     @Test
-    void expire_vingt_quatre_heures_apres_son_emission() {
-        VerificationToken jeton = emis();
+    void expires_twenty_four_hours_after_it_was_issued() {
+        VerificationToken token = issued();
 
-        assertThat(jeton.getExpiresAt()).isEqualTo(EMISSION.plus(VerificationToken.VALIDITY));
-        assertThat(jeton.isExpired(EMISSION.plus(Duration.ofHours(23)))).isFalse();
-        assertThat(jeton.isExpired(EMISSION.plus(Duration.ofHours(25)))).isTrue();
+        assertThat(token.getExpiresAt()).isEqualTo(ISSUED_AT.plus(VerificationToken.VALIDITY));
+        assertThat(token.isExpired(ISSUED_AT.plus(Duration.ofHours(23)))).isFalse();
+        assertThat(token.isExpired(ISSUED_AT.plus(Duration.ofHours(25)))).isTrue();
     }
 
     @Test
-    void marque_l_instant_de_consommation() {
-        VerificationToken jeton = emis();
-        Instant clic = EMISSION.plus(Duration.ofMinutes(5));
+    void marks_the_consumption_instant() {
+        VerificationToken token = issued();
+        Instant click = ISSUED_AT.plus(Duration.ofMinutes(5));
 
-        jeton.consume(clic);
+        token.consume(click);
 
-        assertThat(jeton.isConsumed()).isTrue();
-        assertThat(jeton.getConsumedAt()).isEqualTo(clic);
+        assertThat(token.isConsumed()).isTrue();
+        assertThat(token.getConsumedAt()).isEqualTo(click);
     }
 
     @Test
-    void refuse_une_seconde_consommation() {
-        VerificationToken jeton = emis();
-        jeton.consume(EMISSION.plus(Duration.ofMinutes(5)));
+    void rejects_a_second_consumption() {
+        VerificationToken token = issued();
+        token.consume(ISSUED_AT.plus(Duration.ofMinutes(5)));
 
-        assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofMinutes(10))))
+        assertThatThrownBy(() -> token.consume(ISSUED_AT.plus(Duration.ofMinutes(10))))
                 .isInstanceOf(AlreadyUsedVerificationLinkException.class);
     }
 
     @Test
-    void refuse_la_consommation_d_un_jeton_expire() {
-        VerificationToken jeton = emis();
+    void rejects_the_consumption_of_an_expired_token() {
+        VerificationToken token = issued();
 
-        assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofHours(25))))
+        assertThatThrownBy(() -> token.consume(ISSUED_AT.plus(Duration.ofHours(25))))
                 .isInstanceOf(ExpiredVerificationLinkException.class);
-        assertThat(jeton.isConsumed()).isFalse();
+        assertThat(token.isConsumed()).isFalse();
     }
 
     @Test
-    void signale_d_abord_le_double_usage_quand_le_jeton_est_aussi_expire() {
-        VerificationToken jeton = emis();
-        jeton.consume(EMISSION.plus(Duration.ofMinutes(5)));
+    void reports_the_double_use_first_when_the_token_is_also_expired() {
+        VerificationToken token = issued();
+        token.consume(ISSUED_AT.plus(Duration.ofMinutes(5)));
 
-        assertThatThrownBy(() -> jeton.consume(EMISSION.plus(Duration.ofHours(25))))
+        assertThatThrownBy(() -> token.consume(ISSUED_AT.plus(Duration.ofHours(25))))
                 .isInstanceOf(AlreadyUsedVerificationLinkException.class);
     }
 }

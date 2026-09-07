@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.AgentRun;
 
-/** Port sortant vers les traces d'exécution : elles s'écrivent, et se relisent par propriétaire. */
+/** Outbound port to the execution traces: they are written, and read back by owner. */
 public interface AgentRunRepository {
 
     AgentRun save(AgentRun agentRun);

@@ -1,6 +1,6 @@
 package xyz.sterenn.secondbrain.users.domain.port;
 
-/** Même contrat que {@link PasswordHasher}, pour les jetons de vérification : rien n'impose le même algorithme. */
+/** Same contract as {@link PasswordHasher}, for verification tokens: nothing mandates the same algorithm. */
 public interface TokenHasher {
 
     String hash(String rawToken);
