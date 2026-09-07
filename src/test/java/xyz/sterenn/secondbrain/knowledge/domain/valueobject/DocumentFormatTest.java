@@ -70,4 +70,21 @@ class DocumentFormatTest {
         assertThat(DocumentFormat.of(DocumentType.TEXTUAL))
                 .containsExactly(DocumentFormat.PDF, DocumentFormat.MARKDOWN, DocumentFormat.TEXT, DocumentFormat.DOCX);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        "PDF, application/pdf",
+        "MARKDOWN, text/markdown",
+        "TEXT, text/plain",
+        "DOCX, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    })
+    void announces_the_media_type_of_each_format(DocumentFormat format, String expected) {
+        assertThat(format.mediaType()).isEqualTo(expected);
+    }
+
+    @Test
+    void every_format_announces_a_media_type() {
+        assertThat(DocumentFormat.values())
+                .allSatisfy(format -> assertThat(format.mediaType()).isNotBlank());
+    }
 }
