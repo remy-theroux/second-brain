@@ -36,7 +36,7 @@ import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 @Transactional
 class RegisterUserControllerTest {
 
-    private static final String MOT_DE_PASSE_VALIDE = "chevalpile42";
+    private static final String VALID_PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -44,43 +44,43 @@ class RegisterUserControllerTest {
     @Autowired
     private QueryBus queryBus;
 
-    private static String corps(String email, String motDePasse) {
+    private static String body(String email, String password) {
         return """
             {"email": "%s", "password": "%s"}
-            """.formatted(email, motDePasse);
+            """.formatted(email, password);
     }
 
     @Test
-    void cree_le_compte_et_repond_201_en_cas_de_succes() throws Exception {
+    void creates_the_account_and_answers_201_on_success() throws Exception {
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corps("alice@example.com", MOT_DE_PASSE_VALIDE)))
+                        .content(body("alice@example.com", VALID_PASSWORD)))
                 .andExpect(status().isCreated());
 
-        Optional<UserView> vue = queryBus.ask(new FindUserByEmail("alice@example.com"));
-        assertThat(vue).isPresent();
-        assertThat(vue.get().verified()).isFalse();
+        Optional<UserView> view = queryBus.ask(new FindUserByEmail("alice@example.com"));
+        assertThat(view).isPresent();
+        assertThat(view.get().verified()).isFalse();
     }
 
     @Test
-    void refuse_un_email_deja_utilise_avec_une_erreur_sur_le_champ_email() throws Exception {
+    void rejects_an_already_used_email_with_an_error_on_the_email_field() throws Exception {
         mockMvc.perform(post("/api/registrations")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)));
+                .content(body("bob@example.com", VALID_PASSWORD)));
 
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corps("bob@example.com", MOT_DE_PASSE_VALIDE)))
+                        .content(body("bob@example.com", VALID_PASSWORD)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.email").exists())
                 .andExpect(jsonPath("$.errors.password").doesNotExist());
     }
 
     @Test
-    void refuse_un_mot_de_passe_faible_avec_une_erreur_sur_le_champ_password() throws Exception {
+    void rejects_a_weak_password_with_an_error_on_the_password_field() throws Exception {
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corps("carol@example.com", "court")))
+                        .content(body("carol@example.com", "court")))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.password").exists())
                 .andExpect(jsonPath("$.errors.email").doesNotExist());
@@ -89,33 +89,33 @@ class RegisterUserControllerTest {
     }
 
     @Test
-    void refuse_un_email_mal_forme_avec_une_erreur_sur_le_champ_email() throws Exception {
+    void rejects_a_malformed_email_with_an_error_on_the_email_field() throws Exception {
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corps("pas-un-email", MOT_DE_PASSE_VALIDE)))
+                        .content(body("pas-un-email", VALID_PASSWORD)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.email").exists());
     }
 
     @Test
-    void refuse_les_champs_vides_en_nommant_les_deux() throws Exception {
+    void rejects_blank_fields_naming_both() throws Exception {
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corps("", "")))
+                        .content(body("", "")))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors.email").exists())
                 .andExpect(jsonPath("$.errors.password").exists());
     }
 
-    // OVERRIDE isole le contexte : deux NotificationSender @Primary dans le même contexte
-    // entreraient en conflit. Et sans @Transactional, car le rollback du bus imbriqué dans
-    // une transaction de test ne serait que marqué, pas exécuté — d'où le @AfterEach.
+    // OVERRIDE isolates the context: two @Primary NotificationSender beans in the same
+    // context would conflict. And no @Transactional, because the bus rollback nested in a
+    // test transaction would only be marked, not executed — hence the @AfterEach.
     @Nested
     @NestedTestConfiguration(EnclosingConfiguration.OVERRIDE)
-    @Import({TestcontainersConfiguration.class, QuandLenvoiEchoue.EchecEnvoiConfiguration.class})
+    @Import({TestcontainersConfiguration.class, WhenSendingFails.SendingFailureConfiguration.class})
     @SpringBootTest
     @AutoConfigureMockMvc
-    class QuandLenvoiEchoue {
+    class WhenSendingFails {
 
         @Autowired
         private MockMvc mockMvc;
@@ -127,15 +127,15 @@ class RegisterUserControllerTest {
         private JdbcTemplate jdbcTemplate;
 
         @AfterEach
-        void nettoyer() {
+        void cleanUp() {
             jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", "erin@example.com");
         }
 
         @Test
-        void repond_503_sans_erreur_de_champ_et_annule_la_creation_du_compte() throws Exception {
+        void answers_503_without_a_field_error_and_rolls_back_the_account_creation() throws Exception {
             mockMvc.perform(post("/api/registrations")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(corps("erin@example.com", MOT_DE_PASSE_VALIDE)))
+                            .content(body("erin@example.com", VALID_PASSWORD)))
                     .andExpect(status().isServiceUnavailable())
                     .andExpect(jsonPath("$.message").isNotEmpty())
                     .andExpect(jsonPath("$.errors").doesNotExist());
@@ -144,7 +144,7 @@ class RegisterUserControllerTest {
         }
 
         @TestConfiguration(proxyBeanMethods = false)
-        static class EchecEnvoiConfiguration {
+        static class SendingFailureConfiguration {
 
             @Bean
             @Primary

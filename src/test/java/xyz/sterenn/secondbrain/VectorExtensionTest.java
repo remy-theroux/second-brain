@@ -17,7 +17,7 @@ class VectorExtensionTest {
     private JdbcClient jdbcClient;
 
     @Test
-    void la_base_active_l_extension_de_recherche_vectorielle() {
+    void the_database_enables_the_vector_search_extension() {
         Optional<String> version = jdbcClient
                 .sql("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
                 .query(String.class)
@@ -27,7 +27,7 @@ class VectorExtensionTest {
     }
 
     @Test
-    void la_base_calcule_la_distance_cosinus_entre_deux_vecteurs() {
+    void the_database_computes_the_cosine_distance_between_two_vectors() {
         Double distance = jdbcClient
                 .sql("SELECT '[1,0,0]'::vector <=> '[0,1,0]'::vector")
                 .query(Double.class)

@@ -14,61 +14,61 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 class PdfBoxTextExtractorTest {
 
-    private final PdfBoxTextExtractor extracteur = new PdfBoxTextExtractor();
+    private final PdfBoxTextExtractor extractor = new PdfBoxTextExtractor();
 
     @Test
-    void sait_lire_le_format_pdf() {
-        assertThat(extracteur.format()).isEqualTo(DocumentFormat.PDF);
+    void knows_how_to_read_the_pdf_format() {
+        assertThat(extractor.format()).isEqualTo(DocumentFormat.PDF);
     }
 
     @Test
-    void decoupe_un_pdf_a_sommaire_en_une_section_par_signet() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("signets.pdf"));
+    void splits_a_pdf_with_bookmarks_into_one_section_per_bookmark() {
+        ExtractedText text = extractor.extract(Fixtures.read("signets.pdf"));
 
-        assertThat(texte.blocks())
+        assertThat(text.blocks())
                 .extracting(TextBlock::getHeading)
                 .containsExactly("", "Premiere partie", "Seconde partie");
     }
 
     @Test
-    void garde_hors_section_la_page_de_garde_qui_precede_le_premier_signet() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("signets.pdf"));
+    void keeps_outside_any_section_the_cover_page_that_precedes_the_first_bookmark() {
+        ExtractedText text = extractor.extract(Fixtures.read("signets.pdf"));
 
-        assertThat(texte.blocks()).first().satisfies(bloc -> {
-            assertThat(bloc.getHeadingLevel()).isZero();
-            assertThat(bloc.getText()).contains("Page de garde");
+        assertThat(text.blocks()).first().satisfies(block -> {
+            assertThat(block.getHeadingLevel()).isZero();
+            assertThat(block.getText()).contains("Page de garde");
         });
     }
 
     @Test
-    void ne_rend_jamais_deux_fois_le_texte_d_une_meme_page() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("signets.pdf"));
+    void never_returns_the_text_of_the_same_page_twice() {
+        ExtractedText text = extractor.extract(Fixtures.read("signets.pdf"));
 
-        assertThat(texte.blocks().get(1).getText()).doesNotContain("Page de garde");
-        assertThat(texte.blocks().get(2).getText()).doesNotContain("premiere partie");
+        assertThat(text.blocks().get(1).getText()).doesNotContain("Page de garde");
+        assertThat(text.blocks().get(2).getText()).doesNotContain("premiere partie");
     }
 
     @Test
-    void devine_les_titres_d_un_pdf_sans_sommaire_a_la_taille_de_police() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("sans-signets.pdf"));
+    void guesses_the_headings_of_a_pdf_without_bookmarks_from_the_font_size() {
+        ExtractedText text = extractor.extract(Fixtures.read("sans-signets.pdf"));
 
-        assertThat(texte.blocks())
+        assertThat(text.blocks())
                 .extracting(TextBlock::getHeading)
                 .containsExactly("Rapport annuel", "Premiere partie", "Seconde partie");
-        assertThat(texte.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2, 2);
+        assertThat(text.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2, 2);
     }
 
     @Test
-    void refuse_un_pdf_numerise_sans_couche_texte() {
+    void rejects_a_scanned_pdf_without_a_text_layer() {
         assertThatExceptionOfType(UnextractableDocumentException.class)
-                .isThrownBy(() -> extracteur.extract(Fixtures.lire("numerise.pdf")))
+                .isThrownBy(() -> extractor.extract(Fixtures.read("numerise.pdf")))
                 .withMessageContaining("pas de texte exploitable");
     }
 
     @Test
-    void refuse_un_fichier_qui_n_est_pas_un_pdf() {
+    void rejects_a_file_that_is_not_a_pdf() {
         assertThatExceptionOfType(UnreadableDocumentException.class)
-                .isThrownBy(() -> extracteur.extract("Ceci n'est pas un PDF.".getBytes(UTF_8)))
+                .isThrownBy(() -> extractor.extract("Ceci n'est pas un PDF.".getBytes(UTF_8)))
                 .withMessageContaining("n'a pas pu être lu");
     }
 }

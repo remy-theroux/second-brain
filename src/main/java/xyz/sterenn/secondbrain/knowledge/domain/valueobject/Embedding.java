@@ -13,10 +13,10 @@ public final class Embedding {
     }
 
     public static Embedding of(float[] values) {
-        Objects.requireNonNull(values, "Le vecteur est obligatoire");
+        Objects.requireNonNull(values, "A vector is required");
         if (values.length != EmbeddingPolicy.DIMENSIONS) {
             throw new IllegalArgumentException(
-                    "Un vecteur porte " + EmbeddingPolicy.DIMENSIONS + " dimensions, reçu : " + values.length);
+                    "A vector carries " + EmbeddingPolicy.DIMENSIONS + " dimensions, got: " + values.length);
         }
         return new Embedding(values.clone());
     }
@@ -25,10 +25,10 @@ public final class Embedding {
         return values.clone();
     }
 
-    // Arrays.equals : l'equals qu'un record engendrerait comparerait les références du tableau.
+    // Arrays.equals: the equals a record would generate would compare array references.
     @Override
-    public boolean equals(Object autre) {
-        return autre instanceof Embedding vecteur && Arrays.equals(values, vecteur.values);
+    public boolean equals(Object other) {
+        return other instanceof Embedding vector && Arrays.equals(values, vector.values);
     }
 
     @Override

@@ -42,13 +42,13 @@ class JpaTextChunkRepositoryAdapterTest {
     private UserRepository userRepository;
 
     @Test
-    void conserve_les_extraits_dans_l_ordre_avec_leur_titre_et_leur_corps() {
-        Document document = unDocumentDepose("mona@exemple.fr");
+    void keeps_the_chunks_in_order_with_their_heading_and_their_body() {
+        Document document = anUploadedDocument("mona@exemple.fr");
 
         textChunkRepository.saveAll(List.of(
-                unExtrait(document, 0, "Introduction", "Le premier extrait."),
-                unExtrait(document, 1, "Introduction", "Le deuxième extrait."),
-                unExtrait(document, 2, "", "Le troisième, sans titre.")));
+                aChunk(document, 0, "Introduction", "Le premier extrait."),
+                aChunk(document, 1, "Introduction", "Le deuxième extrait."),
+                aChunk(document, 2, "", "Le troisième, sans titre.")));
 
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
                 .extracting(TextChunk::getPosition)
@@ -59,48 +59,48 @@ class JpaTextChunkRepositoryAdapterTest {
     }
 
     @Test
-    void rend_le_vecteur_tel_qu_il_a_ete_range() {
-        Document document = unDocumentDepose("nadir@exemple.fr");
-        Embedding vecteur = KnowledgeFixture.unVecteur(0.25f);
+    void returns_the_vector_as_it_was_stored() {
+        Document document = anUploadedDocument("nadir@exemple.fr");
+        Embedding vector = KnowledgeFixture.aVector(0.25f);
 
         textChunkRepository.saveAll(
-                List.of(TextChunk.of(document.getId(), 0, new Chunk("Titre", "Un corps."), vecteur, Instant.now())));
+                List.of(TextChunk.of(document.getId(), 0, new Chunk("Titre", "Un corps."), vector, Instant.now())));
 
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
                 .singleElement()
-                .satisfies(relu -> assertThat(relu.getEmbedding()).isEqualTo(vecteur));
+                .satisfies(reloaded -> assertThat(reloaded.getEmbedding()).isEqualTo(vector));
     }
 
     @Test
-    void rend_l_extrait_du_domaine_tel_qu_il_a_ete_range() {
-        Document document = unDocumentDepose("olga@exemple.fr");
-        Chunk extrait = new Chunk("Introduction", "Un corps bien à lui.");
+    void returns_the_domain_chunk_as_it_was_stored() {
+        Document document = anUploadedDocument("olga@exemple.fr");
+        Chunk chunk = new Chunk("Introduction", "Un corps bien à lui.");
 
         textChunkRepository.saveAll(
-                List.of(TextChunk.of(document.getId(), 0, extrait, KnowledgeFixture.unVecteur(0.5f), Instant.now())));
+                List.of(TextChunk.of(document.getId(), 0, chunk, KnowledgeFixture.aVector(0.5f), Instant.now())));
 
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
                 .singleElement()
-                .satisfies(relu -> assertThat(relu.chunk()).isEqualTo(extrait));
+                .satisfies(reloaded -> assertThat(reloaded.chunk()).isEqualTo(chunk));
     }
 
     @Test
-    void conserve_un_extrait_bien_plus_long_que_255_caracteres() {
-        Document document = unDocumentDepose("pierre@exemple.fr");
-        String tresLong = "Un corps qui déborde largement d'une colonne de 255 caractères. ".repeat(50);
+    void keeps_a_chunk_far_longer_than_255_characters() {
+        Document document = anUploadedDocument("pierre@exemple.fr");
+        String veryLong = "Un corps qui déborde largement d'une colonne de 255 caractères. ".repeat(50);
 
         textChunkRepository.saveAll(List.of(TextChunk.of(
-                document.getId(), 0, new Chunk("", tresLong), KnowledgeFixture.unVecteur(0.1f), Instant.now())));
+                document.getId(), 0, new Chunk("", veryLong), KnowledgeFixture.aVector(0.1f), Instant.now())));
 
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
                 .singleElement()
-                .satisfies(relu -> assertThat(relu.getText()).isEqualTo(tresLong.strip()));
+                .satisfies(reloaded -> assertThat(reloaded.getText()).isEqualTo(veryLong.strip()));
     }
 
     @Test
-    void efface_les_extraits_d_un_document() {
-        Document document = unDocumentDepose("quentin@exemple.fr");
-        textChunkRepository.saveAll(List.of(unExtrait(document, 0, "Titre", "Un corps.")));
+    void deletes_the_chunks_of_a_document() {
+        Document document = anUploadedDocument("quentin@exemple.fr");
+        textChunkRepository.saveAll(List.of(aChunk(document, 0, "Titre", "Un corps.")));
 
         textChunkRepository.deleteByDocumentId(document.getId());
 
@@ -108,51 +108,51 @@ class JpaTextChunkRepositoryAdapterTest {
     }
 
     @Test
-    void un_second_jeu_d_extraits_remplace_le_premier_apres_effacement() {
-        // AMQP livre au moins une fois, et (document_id, chunk_position) est UNIQUE : sans
-        // l'effacement préalable, la seconde écriture se heurterait à la contrainte.
-        Document document = unDocumentDepose("rosa@exemple.fr");
-        textChunkRepository.saveAll(List.of(unExtrait(document, 0, "Titre", "Première version.")));
+    void a_second_set_of_chunks_replaces_the_first_after_deletion() {
+        // AMQP delivers at least once, and (document_id, chunk_position) is UNIQUE: without the
+        // prior deletion, the second write would hit the constraint.
+        Document document = anUploadedDocument("rosa@exemple.fr");
+        textChunkRepository.saveAll(List.of(aChunk(document, 0, "Titre", "Première version.")));
 
         textChunkRepository.deleteByDocumentId(document.getId());
-        textChunkRepository.saveAll(List.of(unExtrait(document, 0, "Titre", "Deuxième version.")));
+        textChunkRepository.saveAll(List.of(aChunk(document, 0, "Titre", "Deuxième version.")));
 
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
                 .singleElement()
-                .satisfies(relu -> assertThat(relu.getText()).isEqualTo("Deuxième version."));
+                .satisfies(reloaded -> assertThat(reloaded.getText()).isEqualTo("Deuxième version."));
     }
 
     @Test
-    void reste_muet_quand_aucun_extrait_n_a_ete_range() {
+    void stays_silent_when_no_chunk_has_been_stored() {
         assertThat(textChunkRepository.findByDocumentId(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    void rend_les_extraits_du_plus_proche_au_plus_lointain() {
-        UUID alice = unCompte("sylvie@exemple.fr");
-        Document document = unDocumentDepose(alice, "rapport.md");
+    void returns_the_chunks_from_the_nearest_to_the_farthest() {
+        UUID alice = anAccount("sylvie@exemple.fr");
+        Document document = anUploadedDocument(alice, "rapport.md");
         textChunkRepository.saveAll(List.of(
-                unExtraitOriente(document, 0, "Le plus lointain.", 0.1f),
-                unExtraitOriente(document, 1, "Le plus proche.", 1f),
-                unExtraitOriente(document, 2, "L'intermédiaire.", 0.6f)));
+                anOrientedChunk(document, 0, "Le plus lointain.", 0.1f),
+                anOrientedChunk(document, 1, "Le plus proche.", 1f),
+                anOrientedChunk(document, 2, "L'intermédiaire.", 0.6f)));
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .extracting(match -> match.chunk().text())
                 .containsExactly("Le plus proche.", "L'intermédiaire.", "Le plus lointain.");
     }
 
     @Test
-    void rend_le_nom_du_document_la_position_et_le_titre_de_chaque_extrait() {
-        UUID alice = unCompte("thomas@exemple.fr");
-        Document document = unDocumentDepose(alice, "rapport-annuel.md");
+    void returns_the_document_name_the_position_and_the_heading_of_each_chunk() {
+        UUID alice = anAccount("thomas@exemple.fr");
+        Document document = anUploadedDocument(alice, "rapport-annuel.md");
         textChunkRepository.saveAll(List.of(TextChunk.of(
                 document.getId(),
                 3,
                 new Chunk("Introduction", "Le corps de l'extrait."),
-                KnowledgeFixture.unVecteurProche(1f),
+                KnowledgeFixture.aNearbyVector(1f),
                 Instant.now())));
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .singleElement()
                 .satisfies(match -> {
                     assertThat(match.documentId()).isEqualTo(document.getId());
@@ -163,75 +163,75 @@ class JpaTextChunkRepositoryAdapterTest {
     }
 
     @Test
-    void rend_une_similarite_de_un_pour_un_extrait_dont_le_vecteur_est_celui_de_la_question() {
-        UUID alice = unCompte("ursula@exemple.fr");
-        Document document = unDocumentDepose(alice, "notes.md");
-        textChunkRepository.saveAll(List.of(unExtraitOriente(document, 0, "Identique.", 1f)));
+    void returns_a_similarity_of_one_for_a_chunk_whose_vector_is_the_question_one() {
+        UUID alice = anAccount("ursula@exemple.fr");
+        Document document = anUploadedDocument(alice, "notes.md");
+        textChunkRepository.saveAll(List.of(anOrientedChunk(document, 0, "Identique.", 1f)));
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .singleElement()
                 .satisfies(match -> assertThat(match.similarity()).isCloseTo(1d, within(0.0001d)));
     }
 
     @Test
-    void ne_rend_pas_les_extraits_d_un_autre_compte() {
-        UUID alice = unCompte("valentine@exemple.fr");
-        UUID bob = unCompte("walid@exemple.fr");
-        Document leSien = unDocumentDepose(alice, "a-elle.md");
-        Document celuiDeBob = unDocumentDepose(bob, "a-lui.md");
-        textChunkRepository.saveAll(List.of(
-                unExtraitOriente(leSien, 0, "Le sien.", 0.5f), unExtraitOriente(celuiDeBob, 0, "Celui de Bob.", 1f)));
+    void does_not_return_the_chunks_of_another_account() {
+        UUID alice = anAccount("valentine@exemple.fr");
+        UUID bob = anAccount("walid@exemple.fr");
+        Document hers = anUploadedDocument(alice, "a-elle.md");
+        Document bobs = anUploadedDocument(bob, "a-lui.md");
+        textChunkRepository.saveAll(
+                List.of(anOrientedChunk(hers, 0, "Le sien.", 0.5f), anOrientedChunk(bobs, 0, "Celui de Bob.", 1f)));
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .extracting(match -> match.chunk().text())
                 .containsExactly("Le sien.");
     }
 
     @Test
-    void plafonne_le_nombre_d_extraits_rendus() {
-        UUID alice = unCompte("xavier@exemple.fr");
-        Document document = unDocumentDepose(alice, "long.md");
+    void caps_the_number_of_returned_chunks() {
+        UUID alice = anAccount("xavier@exemple.fr");
+        Document document = anUploadedDocument(alice, "long.md");
         textChunkRepository.saveAll(IntStream.range(0, 12)
-                .mapToObj(position -> unExtraitOriente(document, position, "Extrait " + position, 0.5f))
+                .mapToObj(position -> anOrientedChunk(document, position, "Extrait " + position, 0.5f))
                 .toList());
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .hasSize(8);
     }
 
     @Test
-    void reste_muet_quand_le_compte_ne_porte_aucun_extrait() {
-        UUID alice = unCompte("yasmine@exemple.fr");
+    void stays_silent_when_the_account_carries_no_chunk() {
+        UUID alice = anAccount("yasmine@exemple.fr");
 
-        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.uneQuestion(), 8))
+        assertThat(textChunkRepository.findNearest(alice, KnowledgeFixture.aQuestion(), 8))
                 .isEmpty();
     }
 
-    private static TextChunk unExtraitOriente(Document document, int position, String corps, float proximite) {
+    private static TextChunk anOrientedChunk(Document document, int position, String body, float proximity) {
         return TextChunk.of(
                 document.getId(),
                 position,
-                new Chunk("Titre", corps),
-                KnowledgeFixture.unVecteurProche(proximite),
+                new Chunk("Titre", body),
+                KnowledgeFixture.aNearbyVector(proximity),
                 Instant.now());
     }
 
-    private static TextChunk unExtrait(Document document, int position, String titre, String corps) {
+    private static TextChunk aChunk(Document document, int position, String heading, String body) {
         return TextChunk.of(
-                document.getId(), position, new Chunk(titre, corps), KnowledgeFixture.unVecteur(0.5f), Instant.now());
+                document.getId(), position, new Chunk(heading, body), KnowledgeFixture.aVector(0.5f), Instant.now());
     }
 
-    private UUID unCompte(String email) {
+    private UUID anAccount(String email) {
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
-    private Document unDocumentDepose(UUID proprietaire, String nom) {
-        byte[] octets = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
+    private Document anUploadedDocument(UUID ownerId, String filename) {
+        byte[] bytes = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
         return documentRepository.save(
-                Document.upload(proprietaire, nom, DocumentFormat.MARKDOWN, Checksum.of(octets), octets.length));
+                Document.upload(ownerId, filename, DocumentFormat.MARKDOWN, Checksum.of(bytes), bytes.length));
     }
 
-    private Document unDocumentDepose(String email) {
-        return unDocumentDepose(unCompte(email), "notes.md");
+    private Document anUploadedDocument(String email) {
+        return anUploadedDocument(anAccount(email), "notes.md");
     }
 }

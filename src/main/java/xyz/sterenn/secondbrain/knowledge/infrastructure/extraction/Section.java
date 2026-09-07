@@ -7,9 +7,9 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedTextBuilder;
 
 /**
- * Les sections brutes sortent du {@code try} des extracteurs : construire un type du domaine
- * dedans ferait passer {@link UnextractableDocumentException}, un refus métier, pour une
- * panne de lecture traduite en {@link UnreadableDocumentException}.
+ * Raw sections come out of the extractors' {@code try}: building a domain type inside it would
+ * make {@link UnextractableDocumentException}, a business refusal, look like a read failure
+ * translated into {@link UnreadableDocumentException}.
  */
 record Section(String heading, int level, String body) {
 
@@ -18,8 +18,8 @@ record Section(String heading, int level, String body) {
     }
 
     static ExtractedText assemble(List<Section> sections) {
-        ExtractedTextBuilder blocs = new ExtractedTextBuilder();
-        sections.forEach(section -> blocs.section(section.heading(), section.level(), section.body()));
-        return blocs.build();
+        ExtractedTextBuilder blocks = new ExtractedTextBuilder();
+        sections.forEach(section -> blocks.section(section.heading(), section.level(), section.body()));
+        return blocks.build();
     }
 }

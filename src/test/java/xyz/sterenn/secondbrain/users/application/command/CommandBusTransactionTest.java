@@ -19,9 +19,9 @@ import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 
-// Volontairement sans @Transactional : une transaction de test englobante masquerait le
-// rollback qu'on observe ici. D'où le nettoyage explicite en @AfterEach.
-@Import({TestcontainersConfiguration.class, CommandBusTransactionTest.HandlerDeTest.class})
+// Deliberately without @Transactional: an enclosing test transaction would hide the
+// rollback observed here. Hence the explicit cleanup in @AfterEach.
+@Import({TestcontainersConfiguration.class, CommandBusTransactionTest.TestHandler.class})
 @SpringBootTest
 class CommandBusTransactionTest {
 
@@ -35,44 +35,44 @@ class CommandBusTransactionTest {
     private JdbcTemplate jdbcTemplate;
 
     @AfterEach
-    void nettoyer() {
+    void cleanUp() {
         jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", "frank@example.com");
     }
 
     @Test
-    void annule_les_ecritures_quand_le_handler_echoue() {
-        assertThatThrownBy(() -> commandBus.dispatch(new EchouerApresEcriture("frank@example.com")))
+    void rolls_back_the_writes_when_the_handler_fails() {
+        assertThatThrownBy(() -> commandBus.dispatch(new FailAfterWrite("frank@example.com")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("échec volontaire");
 
         assertThat(userRepository.existsByEmail(new Email("frank@example.com"))).isFalse();
     }
 
-    record EchouerApresEcriture(String email) implements Command {}
+    record FailAfterWrite(String email) implements Command {}
 
-    // L'exception levée n'est pas checked : seule une RuntimeException déclenche un
-    // rollback avec les réglages Spring par défaut.
-    static class EchouerApresEcritureHandler implements CommandHandler<EchouerApresEcriture> {
+    // The exception thrown is unchecked: only a RuntimeException triggers a rollback
+    // with Spring's default settings.
+    static class FailAfterWriteHandler implements CommandHandler<FailAfterWrite> {
 
         private final UserRepository userRepository;
 
-        EchouerApresEcritureHandler(UserRepository userRepository) {
+        FailAfterWriteHandler(UserRepository userRepository) {
             this.userRepository = userRepository;
         }
 
         @Override
-        public void handle(EchouerApresEcriture command) {
+        public void handle(FailAfterWrite command) {
             userRepository.save(User.register(new Email(command.email()), "empreinte"));
             throw new IllegalStateException("échec volontaire");
         }
     }
 
     @TestConfiguration(proxyBeanMethods = false)
-    static class HandlerDeTest {
+    static class TestHandler {
 
         @Bean
-        EchouerApresEcritureHandler echouerApresEcritureHandler(UserRepository userRepository) {
-            return new EchouerApresEcritureHandler(userRepository);
+        FailAfterWriteHandler failAfterWriteHandler(UserRepository userRepository) {
+            return new FailAfterWriteHandler(userRepository);
         }
     }
 }

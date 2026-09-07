@@ -28,7 +28,7 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.Re
 @Transactional
 class IssueAccessTokenControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -40,19 +40,19 @@ class IssueAccessTokenControllerTest {
     private RecordingNotificationSender recordingNotificationSender;
 
     @BeforeEach
-    void vide_les_notifications_enregistrees() {
+    void clears_the_recorded_notifications() {
         recordingNotificationSender.clear();
     }
 
     @Test
-    void delivre_un_jeton_a_un_compte_verifie() throws Exception {
-        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+    void issues_a_token_to_a_verified_account() throws Exception {
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
 
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password")
                         .param("username", "alice@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.access_token").isString())
@@ -61,20 +61,20 @@ class IssueAccessTokenControllerTest {
     }
 
     @Test
-    void interdit_la_mise_en_cache_de_la_reponse() throws Exception {
-        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+    void forbids_caching_the_response() throws Exception {
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
 
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password")
                         .param("username", "alice@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(header().string("Cache-Control", Matchers.containsString("no-store")));
     }
 
     @Test
-    void refuse_un_mot_de_passe_incorrect_en_invalid_grant() throws Exception {
-        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
+    void rejects_an_incorrect_password_as_invalid_grant() throws Exception {
+        AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
 
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -87,55 +87,55 @@ class IssueAccessTokenControllerTest {
     }
 
     @Test
-    void refuse_un_email_inconnu_en_invalid_grant() throws Exception {
+    void rejects_an_unknown_email_as_invalid_grant() throws Exception {
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password")
                         .param("username", "inconnu@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_grant"));
     }
 
     @Test
-    void explique_qu_un_compte_n_est_pas_verifie() throws Exception {
-        AccountFixture.register(commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
+    void explains_that_an_account_is_not_verified() throws Exception {
+        AccountFixture.register(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
 
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password")
                         .param("username", "bob@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_grant"))
                 .andExpect(jsonPath("$.error_description", Matchers.containsString("n'est pas encore vérifié")));
     }
 
     @Test
-    void refuse_un_type_d_autorisation_inconnu() throws Exception {
+    void rejects_an_unknown_grant_type() throws Exception {
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "client_credentials")
                         .param("username", "alice@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("unsupported_grant_type"));
     }
 
     @Test
-    void refuse_une_requete_sans_type_d_autorisation() throws Exception {
-        // defaultValue = "" côté contrôleur : c'est notre erreur qui sort, pas le 400
-        // générique de Spring sur paramètre manquant.
+    void rejects_a_request_without_a_grant_type() throws Exception {
+        // defaultValue = "" on the controller side: our own error comes out, not Spring's
+        // generic 400 on a missing parameter.
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("username", "alice@exemple.fr")
-                        .param("password", MOT_DE_PASSE))
+                        .param("password", PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_request"));
     }
 
     @Test
-    void refuse_une_requete_sans_identifiants() throws Exception {
+    void rejects_a_request_without_credentials() throws Exception {
         mockMvc.perform(post("/api/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "password"))

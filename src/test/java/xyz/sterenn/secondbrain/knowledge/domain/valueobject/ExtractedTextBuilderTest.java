@@ -8,44 +8,44 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.UnextractableDocumentE
 
 class ExtractedTextBuilderTest {
 
-    private static final String ASSEZ_LONG = "Un texte assez long pour franchir le plancher des cinquante.";
+    private static final String LONG_ENOUGH = "Un texte assez long pour franchir le plancher des cinquante.";
 
     @Test
-    void assemble_les_sections_dans_l_ordre() {
-        ExtractedText texte = new ExtractedTextBuilder()
-                .section("Introduction", 1, ASSEZ_LONG)
-                .section("Détail", 2, ASSEZ_LONG)
+    void assembles_the_sections_in_order() {
+        ExtractedText text = new ExtractedTextBuilder()
+                .section("Introduction", 1, LONG_ENOUGH)
+                .section("Détail", 2, LONG_ENOUGH)
                 .build();
 
-        assertThat(texte.blocks()).extracting(TextBlock::getHeading).containsExactly("Introduction", "Détail");
-        assertThat(texte.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2);
+        assertThat(text.blocks()).extracting(TextBlock::getHeading).containsExactly("Introduction", "Détail");
+        assertThat(text.blocks()).extracting(TextBlock::getHeadingLevel).containsExactly(1, 2);
     }
 
     @Test
-    void ecarte_sans_bruit_une_section_dont_le_corps_est_vide() {
-        ExtractedText texte = new ExtractedTextBuilder()
+    void silently_discards_a_section_whose_body_is_empty() {
+        ExtractedText text = new ExtractedTextBuilder()
                 .section("Un titre suivi de rien", 1, "   \n  ")
-                .section("Le vrai contenu", 1, ASSEZ_LONG)
+                .section("Le vrai contenu", 1, LONG_ENOUGH)
                 .build();
 
-        assertThat(texte.blocks()).extracting(TextBlock::getHeading).containsExactly("Le vrai contenu");
+        assertThat(text.blocks()).extracting(TextBlock::getHeading).containsExactly("Le vrai contenu");
     }
 
     @Test
-    void un_document_sans_titre_donne_un_unique_bloc() {
-        ExtractedText texte = new ExtractedTextBuilder().untitled(ASSEZ_LONG).build();
+    void an_untitled_document_yields_a_single_block() {
+        ExtractedText text = new ExtractedTextBuilder().untitled(LONG_ENOUGH).build();
 
-        assertThat(texte.blocks()).singleElement().satisfies(bloc -> {
-            assertThat(bloc.getHeading()).isEmpty();
-            assertThat(bloc.getText()).isEqualTo(ASSEZ_LONG);
+        assertThat(text.blocks()).singleElement().satisfies(block -> {
+            assertThat(block.getHeading()).isEmpty();
+            assertThat(block.getText()).isEqualTo(LONG_ENOUGH);
         });
     }
 
     @Test
-    void refuse_de_construire_quand_toutes_les_sections_ont_ete_ecartees() {
-        ExtractedTextBuilder blocs =
+    void refuses_to_build_when_every_section_has_been_discarded() {
+        ExtractedTextBuilder builder =
                 new ExtractedTextBuilder().section("Titre seul", 1, "").untitled("  ");
 
-        assertThatExceptionOfType(UnextractableDocumentException.class).isThrownBy(blocs::build);
+        assertThatExceptionOfType(UnextractableDocumentException.class).isThrownBy(builder::build);
     }
 }

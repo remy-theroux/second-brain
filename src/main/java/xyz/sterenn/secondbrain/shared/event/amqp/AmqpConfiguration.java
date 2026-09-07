@@ -18,7 +18,7 @@ public class AmqpConfiguration {
 
     @Bean
     public TopicExchange domainEventsExchange() {
-        // durable, non auto-delete : l'exchange survit au redémarrage du broker.
+        // durable, not auto-delete: the exchange survives a broker restart.
         return new TopicExchange(EVENTS_EXCHANGE, true, false);
     }
 
@@ -27,9 +27,9 @@ public class AmqpConfiguration {
         List<Class<? extends DomainEvent>> types =
                 registrations.stream().flatMap(r -> r.types().stream()).toList();
 
-        // TYPE_ID et non INFERRED (le défaut) : en INFERRED, la réception déduit le type du
-        // paramètre du listener et ne consulte jamais l'en-tête __TypeId__ — un
-        // `on(DocumentUploaded)` désérialiserait n'importe quel corps en DocumentUploaded.
+        // TYPE_ID rather than INFERRED (the default): with INFERRED, reception infers the type
+        // from the listener parameter and never reads the __TypeId__ header — an
+        // `on(DocumentUploaded)` would deserialise any body into DocumentUploaded.
         DefaultJacksonJavaTypeMapper typeMapper = new DefaultJacksonJavaTypeMapper();
         typeMapper.setIdClassMapping(DomainEventNames.mappingOf(types));
         typeMapper.setTypePrecedence(JacksonJavaTypeMapper.TypePrecedence.TYPE_ID);

@@ -41,17 +41,16 @@ public class AuthenticateUserHandler implements QueryHandler<AuthenticateUser, A
         if (!passwordHasher.matches(query.rawPassword(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
         }
-        // Mot de passe avant vérification d'adresse : ne pas inverser, le refus « compte non
-        // vérifié » ne doit s'obtenir qu'après avoir donné le bon mot de passe.
+        // Password before address verification: do not swap them, the "unverified account"
+        // refusal must only be reachable once the right password has been given.
         if (!user.isVerified()) {
             throw new UnverifiedAccountException();
         }
 
-        Instant maintenant = clock.instant();
-        AccessToken accessToken =
-                accessTokenIssuer.issue(user.getId(), maintenant, AccessTokenPolicy.expiresAt(maintenant));
+        Instant now = clock.instant();
+        AccessToken accessToken = accessTokenIssuer.issue(user.getId(), now, AccessTokenPolicy.expiresAt(now));
 
-        return new AccessTokenView(accessToken.value(), accessToken.expiresIn(maintenant));
+        return new AccessTokenView(accessToken.value(), accessToken.expiresIn(now));
     }
 
     private Email parseEmail(String email) {

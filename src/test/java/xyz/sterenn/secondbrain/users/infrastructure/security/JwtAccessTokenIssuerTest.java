@@ -25,37 +25,37 @@ class JwtAccessTokenIssuerTest {
     private JwtDecoder jwtDecoder;
 
     @Test
-    void emet_un_jeton_decodable_portant_le_compte_en_sujet() {
-        UUID compte = UUID.randomUUID();
-        Instant maintenant = Instant.now();
+    void issues_a_decodable_token_carrying_the_account_as_subject() {
+        UUID accountId = UUID.randomUUID();
+        Instant now = Instant.now();
 
-        AccessToken jeton = accessTokenIssuer.issue(compte, maintenant, maintenant.plusSeconds(3600));
+        AccessToken token = accessTokenIssuer.issue(accountId, now, now.plusSeconds(3600));
 
-        Jwt decode = jwtDecoder.decode(jeton.value());
-        assertThat(decode.getSubject()).isEqualTo(compte.toString());
-        assertThat(decode.getIssuedAt()).isNotNull();
-        assertThat(decode.getExpiresAt()).isNotNull();
+        Jwt decoded = jwtDecoder.decode(token.value());
+        assertThat(decoded.getSubject()).isEqualTo(accountId.toString());
+        assertThat(decoded.getIssuedAt()).isNotNull();
+        assertThat(decoded.getExpiresAt()).isNotNull();
     }
 
     @Test
-    void reporte_l_expiration_demandee_sur_le_jeton_et_sur_la_valeur() {
-        UUID compte = UUID.randomUUID();
-        Instant maintenant = Instant.now();
-        Instant expiration = maintenant.plusSeconds(1800);
+    void carries_the_requested_expiration_over_to_the_token_and_to_the_value() {
+        UUID accountId = UUID.randomUUID();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(1800);
 
-        AccessToken jeton = accessTokenIssuer.issue(compte, maintenant, expiration);
+        AccessToken token = accessTokenIssuer.issue(accountId, now, expiresAt);
 
-        assertThat(jeton.expiresAt()).isEqualTo(expiration);
-        // Les revendications JWT sont datées à la seconde : on compare au même grain.
-        assertThat(jwtDecoder.decode(jeton.value()).getExpiresAt().getEpochSecond())
-                .isEqualTo(expiration.getEpochSecond());
+        assertThat(token.expiresAt()).isEqualTo(expiresAt);
+        // JWT claims are dated to the second: compare at the same granularity.
+        assertThat(jwtDecoder.decode(token.value()).getExpiresAt().getEpochSecond())
+                .isEqualTo(expiresAt.getEpochSecond());
     }
 
     @Test
-    void n_ecrit_aucune_revendication_sur_l_email() {
-        AccessToken jeton = accessTokenIssuer.issue(
+    void writes_no_claim_about_the_email() {
+        AccessToken token = accessTokenIssuer.issue(
                 UUID.randomUUID(), Instant.now(), Instant.now().plusSeconds(3600));
 
-        assertThat(jwtDecoder.decode(jeton.value()).getClaims()).doesNotContainKey("email");
+        assertThat(jwtDecoder.decode(token.value()).getClaims()).doesNotContainKey("email");
     }
 }

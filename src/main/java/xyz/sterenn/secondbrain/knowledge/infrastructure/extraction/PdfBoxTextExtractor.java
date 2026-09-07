@@ -17,7 +17,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
-/** Le sommaire d'abord, la taille de police en repli : voir ADR-0027. */
+/** The outline first, font size as fallback: see ADR-0027. */
 @Component
 public class PdfBoxTextExtractor implements DocumentTextExtractor {
 
@@ -30,42 +30,42 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
     public ExtractedText extract(byte[] content) {
         List<Section> sections;
         try (PDDocument pdf = Loader.loadPDF(content)) {
-            PDDocumentOutline sommaire = pdf.getDocumentCatalog().getDocumentOutline();
-            List<Bookmark> signets = sommaire == null ? List.of() : signets(pdf, sommaire, 1);
-            sections = signets.isEmpty()
-                    ? HeadingHeuristic.decouper(new HeadingFontStripper().lines(pdf))
-                    : parSignets(pdf, signets);
-        } catch (IOException illisible) {
-            throw new UnreadableDocumentException(illisible);
+            PDDocumentOutline outline = pdf.getDocumentCatalog().getDocumentOutline();
+            List<Bookmark> bookmarks = outline == null ? List.of() : bookmarks(pdf, outline, 1);
+            sections = bookmarks.isEmpty()
+                    ? HeadingHeuristic.split(new HeadingFontStripper().lines(pdf))
+                    : fromBookmarks(pdf, bookmarks);
+        } catch (IOException unreadable) {
+            throw new UnreadableDocumentException(unreadable);
         }
-        // Hors du try : un PDF numérisé s'ouvre parfaitement, son refus est métier.
+        // Outside the try: a scanned PDF opens perfectly, its refusal is a business one.
         return Section.assemble(sections);
     }
 
     private record Bookmark(String title, int level, int pageIndex) {}
 
-    private static List<Bookmark> signets(PDDocument pdf, PDOutlineNode noeud, int niveau) throws IOException {
-        List<Bookmark> trouves = new ArrayList<>();
-        for (PDOutlineItem item : noeud.children()) {
+    private static List<Bookmark> bookmarks(PDDocument pdf, PDOutlineNode node, int level) throws IOException {
+        List<Bookmark> found = new ArrayList<>();
+        for (PDOutlineItem item : node.children()) {
             PDPage page = item.findDestinationPage(pdf);
             if (page != null && item.getTitle() != null && !item.getTitle().isBlank()) {
-                trouves.add(new Bookmark(
+                found.add(new Bookmark(
                         item.getTitle(),
-                        Math.min(niveau, TextBlock.MAX_HEADING_LEVEL),
+                        Math.min(level, TextBlock.MAX_HEADING_LEVEL),
                         pdf.getPages().indexOf(page)));
             }
-            trouves.addAll(signets(pdf, item, niveau + 1));
+            found.addAll(bookmarks(pdf, item, level + 1));
         }
-        return trouves;
+        return found;
     }
 
-    private static List<Section> parSignets(PDDocument pdf, List<Bookmark> signets) throws IOException {
-        // PDFBox ne découpe qu'en plages de pages : deux signets sur la même page sont
-        // fusionnés sous le titre du premier, sinon cette page serait rendue deux fois.
-        List<Bookmark> parPage = new ArrayList<>();
-        for (Bookmark signet : signets) {
-            if (parPage.isEmpty() || parPage.getLast().pageIndex() != signet.pageIndex()) {
-                parPage.add(signet);
+    private static List<Section> fromBookmarks(PDDocument pdf, List<Bookmark> bookmarks) throws IOException {
+        // PDFBox only splits by page ranges: two bookmarks on the same page are merged under
+        // the title of the first, otherwise that page would be rendered twice.
+        List<Bookmark> byPage = new ArrayList<>();
+        for (Bookmark bookmark : bookmarks) {
+            if (byPage.isEmpty() || byPage.getLast().pageIndex() != bookmark.pageIndex()) {
+                byPage.add(bookmark);
             }
         }
 
@@ -74,24 +74,24 @@ public class PdfBoxTextExtractor implements DocumentTextExtractor {
         stripper.setLineSeparator("\n");
 
         List<Section> sections = new ArrayList<>();
-        if (parPage.getFirst().pageIndex() > 0) {
+        if (byPage.getFirst().pageIndex() > 0) {
             sections.add(
-                    Section.untitled(texte(stripper, pdf, 0, parPage.getFirst().pageIndex() - 1)));
+                    Section.untitled(text(stripper, pdf, 0, byPage.getFirst().pageIndex() - 1)));
         }
-        for (int i = 0; i < parPage.size(); i++) {
-            Bookmark signet = parPage.get(i);
-            int dernierePage = i + 1 < parPage.size() ? parPage.get(i + 1).pageIndex() - 1 : pdf.getNumberOfPages() - 1;
+        for (int i = 0; i < byPage.size(); i++) {
+            Bookmark bookmark = byPage.get(i);
+            int lastPage = i + 1 < byPage.size() ? byPage.get(i + 1).pageIndex() - 1 : pdf.getNumberOfPages() - 1;
             sections.add(new Section(
-                    signet.title(), signet.level(), texte(stripper, pdf, signet.pageIndex(), dernierePage)));
+                    bookmark.title(), bookmark.level(), text(stripper, pdf, bookmark.pageIndex(), lastPage)));
         }
         return sections;
     }
 
-    /** Bornes inclusives en index de page ; {@link PDFTextStripper} les compte à partir de 1. */
-    private static String texte(PDFTextStripper stripper, PDDocument pdf, int premierePage, int dernierePage)
+    /** Inclusive page-index bounds; {@link PDFTextStripper} counts them from 1. */
+    private static String text(PDFTextStripper stripper, PDDocument pdf, int firstPage, int lastPage)
             throws IOException {
-        stripper.setStartPage(premierePage + 1);
-        stripper.setEndPage(dernierePage + 1);
+        stripper.setStartPage(firstPage + 1);
+        stripper.setEndPage(lastPage + 1);
         return stripper.getText(pdf);
     }
 }

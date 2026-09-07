@@ -32,10 +32,10 @@ public class SearchChunksController {
             @RequestParam(name = "q", defaultValue = "") String question, @AuthenticationPrincipal Jwt jwt) {
         try {
             return ResponseEntity.ok(queryBus.ask(new SearchChunks(question, JwtSubject.accountId(jwt))));
-        } catch (InvalidQuestionException questionIllisible) {
+        } catch (InvalidQuestionException unreadableQuestion) {
             return ResponseEntity.unprocessableEntity()
-                    .body(new ValidationErrorResponse(Map.of("q", questionIllisible.getMessage())));
-        } catch (EmbeddingUnavailableException vectorisationInjoignable) {
+                    .body(new ValidationErrorResponse(Map.of("q", unreadableQuestion.getMessage())));
+        } catch (EmbeddingUnavailableException unreachableEmbedding) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new ErrorResponse("La recherche est momentanément indisponible : le service de "
                             + "vectorisation n'a pas répondu. Réessayez dans quelques instants."));
@@ -43,7 +43,7 @@ public class SearchChunksController {
     }
 
     @ExceptionHandler(JwtSubject.UnreadableSubjectException.class)
-    public ResponseEntity<Object> sujetIllisible() {
+    public ResponseEntity<Object> unreadableSubject() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 }

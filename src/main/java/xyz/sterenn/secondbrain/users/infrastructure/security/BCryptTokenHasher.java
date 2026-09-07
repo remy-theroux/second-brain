@@ -5,8 +5,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.port.TokenHasher;
 
-// Le salt est tiré à chaque hachage : deux empreintes du même jeton diffèrent, et la
-// comparaison passe forcément par matches.
+// The salt is drawn on every hash: two digests of the same token differ, so comparison
+// necessarily goes through matches.
 @Component
 public class BCryptTokenHasher implements TokenHasher {
 

@@ -27,8 +27,8 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     public User save(User user) {
         boolean insertion = user.getId() == null;
         try {
-            // Sans flush explicite, la violation d'unicité ne surviendrait qu'au commit,
-            // hors de portée de ce try/catch.
+            // Without an explicit flush, the uniqueness violation would only surface at commit,
+            // out of reach of this try/catch.
             return springDataUserRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             if (!insertion) {

@@ -7,9 +7,9 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TokenCounter;
 
 /**
- * Le registre paresseux ne charge que l'encodage demandé, là où le registre par défaut les
- * charge tous. L'{@link Encoding}, immuable et sûr en accès concurrent, est construit une
- * fois : le reconstruire relirait les tables BPE à chaque appel.
+ * The lazy registry loads only the requested encoding, where the default registry loads them
+ * all. The {@link Encoding}, immutable and thread-safe, is built once: rebuilding it would
+ * re-read the BPE tables on every call.
  */
 @Component
 class JtokkitTokenCounter implements TokenCounter {

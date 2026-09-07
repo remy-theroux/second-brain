@@ -8,25 +8,25 @@ import RegisterView from '@/views/RegisterView.vue'
 import DesignSystemView from '@/views/DesignSystemView.vue'
 
 export const routes = [
-  // La racine ne porte rien : elle mène à l'espace connecté, qui renverra vers le login
-  // si le jeton n'est plus valable. Il n'existe plus de page publique d'accueil.
+  // The root carries nothing: it leads to the signed-in space, which will send back to the
+  // login if the token is no longer valid. There is no public home page any more.
   { path: '/', redirect: { name: 'home' } },
   { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
   { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
   { path: '/home', name: 'home', component: HomeView, meta: { requiresAuth: true } },
   { path: '/documents', name: 'documents', component: DocumentsView, meta: { requiresAuth: true } },
-  // Le détail est adressable : un texte extrait se relit, se partage par son URL et
-  // survit à un F5. Une modale sur la liste n'aurait rien de tout ça.
+  // The detail is addressable: an extracted text can be read again, shared by its URL and
+  // survives an F5. A modal over the list would have offered none of that.
   {
     path: '/documents/:id',
     name: 'document',
     component: DocumentDetailView,
     meta: { requiresAuth: true },
   },
-  // Catalogue des tokens et des composants partagés, pour le passage humain dans un
-  // navigateur. Développement seulement : le spread conditionnel retire la route ET la vue
-  // du bundle de production, plutôt qu'un garde qui laisserait le code embarqué. Ni
-  // `guestOnly` ni `requiresAuth` : la page se regarde connecté ou non.
+  // Catalogue of the tokens and shared components, for the human pass in a browser.
+  // Development only: the conditional spread removes the route AND the view from the
+  // production bundle, rather than a guard that would leave the code shipped. Neither
+  // `guestOnly` nor `requiresAuth`: the page is looked at signed in or not.
   ...(import.meta.env.DEV
     ? [
         {
@@ -40,9 +40,9 @@ export const routes = [
 ]
 
 /**
- * Garde d'authentification, exportée pour être testable hors du routeur applicatif.
- * Elle ne fait que lire l'état local : le serveur reste seul juge, et son refus est
- * traité au premier appel authentifié.
+ * Authentication guard, exported to be testable outside the application router.
+ * It only reads the local state: the server remains the sole judge, and its refusal is
+ * handled on the first authenticated call.
  */
 export function authenticationGuard(to) {
   const auth = useAuthStore()
@@ -50,8 +50,8 @@ export function authenticationGuard(to) {
   if (to.meta.requiresAuth && !auth.isAuthenticated()) {
     return { name: 'login' }
   }
-  // `guestOnly` plutôt qu'une comparaison sur le nom de la route : une page réservée aux
-  // visiteurs anonymes se déclare, elle ne s'énumère pas dans le garde.
+  // `guestOnly` rather than a comparison on the route name: a page reserved for anonymous
+  // visitors declares itself, it is not enumerated in the guard.
   if (to.meta.guestOnly && auth.isAuthenticated()) {
     return { name: 'home' }
   }

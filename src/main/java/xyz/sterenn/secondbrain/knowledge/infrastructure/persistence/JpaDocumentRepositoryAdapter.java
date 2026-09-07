@@ -20,9 +20,9 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     }
 
     /**
-     * {@code saveAndFlush} : sans flush explicite, la violation d'unicité ne surviendrait
-     * qu'au commit, hors de portée du {@code catch}. L'identifiant du doublon est alors
-     * inconnu, d'où le {@code null}.
+     * {@code saveAndFlush}: without an explicit flush, the uniqueness violation would only
+     * happen at commit, out of reach of the {@code catch}. The duplicate's id is then unknown,
+     * hence the {@code null}.
      */
     @Override
     public Document save(Document document) {
@@ -51,8 +51,8 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     @Override
     public void delete(Document document) {
         springDataDocumentRepository.delete(document);
-        // Sans flush, la ligne partirait au commit, donc après l'effacement de l'original
-        // qu'elle désigne.
+        // Without a flush, the row would go at commit, hence after the original it points to
+        // has been deleted.
         springDataDocumentRepository.flush();
     }
 }

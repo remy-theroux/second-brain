@@ -48,27 +48,27 @@ public class VerificationToken {
         this.expiresAt = expiresAt;
     }
 
-    public static VerificationToken issue(UUID userId, String tokenHash, Instant maintenant) {
-        return new VerificationToken(userId, tokenHash, maintenant.plus(VALIDITY));
+    public static VerificationToken issue(UUID userId, String tokenHash, Instant now) {
+        return new VerificationToken(userId, tokenHash, now.plus(VALIDITY));
     }
 
-    public boolean isExpired(Instant maintenant) {
-        return maintenant.isAfter(expiresAt);
+    public boolean isExpired(Instant now) {
+        return now.isAfter(expiresAt);
     }
 
     public boolean isConsumed() {
         return consumedAt != null;
     }
 
-    /** L'usage unique ne tient qu'à ce lire-puis-écrire, sans verrou en base : voir ADR-0008. */
-    public void consume(Instant maintenant) {
+    /** Single use rests on this read-then-write alone, with no database lock: see ADR-0008. */
+    public void consume(Instant now) {
         if (isConsumed()) {
             throw new AlreadyUsedVerificationLinkException();
         }
-        if (isExpired(maintenant)) {
+        if (isExpired(now)) {
             throw new ExpiredVerificationLinkException();
         }
-        this.consumedAt = maintenant;
+        this.consumedAt = now;
     }
 
     public UUID getId() {

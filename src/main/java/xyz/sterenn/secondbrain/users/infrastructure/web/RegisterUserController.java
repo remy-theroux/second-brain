@@ -28,14 +28,14 @@ public class RegisterUserController {
         this.commandBus = commandBus;
     }
 
-    // Déclarer le BindingResult en paramètre empêche Spring de lever
-    // MethodArgumentNotValidException : la traduction des refus reste dans ce contrôleur,
-    // sans @RestControllerAdvice global.
+    // Declaring the BindingResult as a parameter prevents Spring from throwing
+    // MethodArgumentNotValidException: refusals are translated in this controller, with no
+    // global @RestControllerAdvice.
     @PostMapping("/api/registrations")
     public ResponseEntity<Object> register(
             @Valid @RequestBody RegistrationRequest registrationRequest, BindingResult bindingResult) {
         if (bindingResult.hasErrors()) {
-            return unprocessable(champsFautifs(bindingResult));
+            return unprocessable(fieldErrors(bindingResult));
         }
 
         try {
@@ -45,7 +45,7 @@ public class RegisterUserController {
         } catch (WeakPasswordException e) {
             return unprocessable(Map.of("password", e.getMessage()));
         } catch (MailException e) {
-            // Le rollback a déjà eu lieu côté SpringCommandBus.
+            // The rollback has already happened in SpringCommandBus.
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new ErrorResponse(
                             "Votre compte n'a pas pu être créé : l'email de vérification n'a pas pu être "
@@ -59,12 +59,12 @@ public class RegisterUserController {
         return ResponseEntity.unprocessableEntity().body(new ValidationErrorResponse(errors));
     }
 
-    // LinkedHashMap et non Map.of : l'ordre des champs rend la réponse stable d'une exécution
-    // à l'autre.
-    private static Map<String, String> champsFautifs(BindingResult bindingResult) {
+    // LinkedHashMap and not Map.of: field ordering makes the response stable from one run to
+    // the next.
+    private static Map<String, String> fieldErrors(BindingResult bindingResult) {
         Map<String, String> errors = new LinkedHashMap<>();
-        for (FieldError erreur : bindingResult.getFieldErrors()) {
-            errors.putIfAbsent(erreur.getField(), erreur.getDefaultMessage());
+        for (FieldError fieldError : bindingResult.getFieldErrors()) {
+            errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
         return errors;
     }

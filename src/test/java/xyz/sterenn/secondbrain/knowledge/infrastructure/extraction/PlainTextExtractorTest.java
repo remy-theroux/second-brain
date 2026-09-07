@@ -14,42 +14,42 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 
 class PlainTextExtractorTest {
 
-    private final PlainTextExtractor extracteur = new PlainTextExtractor();
+    private final PlainTextExtractor extractor = new PlainTextExtractor();
 
     @Test
-    void sait_lire_le_format_texte() {
-        assertThat(extracteur.format()).isEqualTo(DocumentFormat.TEXT);
+    void knows_how_to_read_the_text_format() {
+        assertThat(extractor.format()).isEqualTo(DocumentFormat.TEXT);
     }
 
     @Test
-    void rend_un_unique_bloc_sans_titre() {
-        ExtractedText texte = extracteur.extract(Fixtures.lire("brut.txt"));
+    void returns_a_single_block_without_a_heading() {
+        ExtractedText text = extractor.extract(Fixtures.read("brut.txt"));
 
-        assertThat(texte.blocks()).singleElement().satisfies(bloc -> {
-            assertThat(bloc.getHeading()).isEmpty();
-            assertThat(bloc.getHeadingLevel()).isZero();
-            assertThat(bloc.getText()).contains("Notes prises pendant la réunion");
+        assertThat(text.blocks()).singleElement().satisfies(block -> {
+            assertThat(block.getHeading()).isEmpty();
+            assertThat(block.getHeadingLevel()).isZero();
+            assertThat(block.getText()).contains("Notes prises pendant la réunion");
         });
     }
 
     @Test
-    void conserve_la_frontiere_entre_les_paragraphes() {
-        assertThat(extracteur.extract(Fixtures.lire("brut.txt")).blocks())
+    void preserves_the_boundary_between_paragraphs() {
+        assertThat(extractor.extract(Fixtures.read("brut.txt")).blocks())
                 .first()
                 .extracting(TextBlock::getText, org.assertj.core.api.InstanceOfAssertFactories.STRING)
                 .contains("\n\n");
     }
 
     @Test
-    void lit_un_fichier_encode_en_iso_8859_1_plutot_que_d_echouer() {
+    void reads_an_iso_8859_1_encoded_file_rather_than_failing() {
         byte[] latin1 = "Une réunion très intéressante, tenue à Bruxelles en février.".getBytes(ISO_8859_1);
 
-        assertThat(extracteur.extract(latin1).blocks().getFirst().getText()).contains("très intéressante");
+        assertThat(extractor.extract(latin1).blocks().getFirst().getText()).contains("très intéressante");
     }
 
     @Test
-    void refuse_un_fichier_qui_ne_dit_rien() {
+    void rejects_a_file_that_says_nothing() {
         assertThatExceptionOfType(UnextractableDocumentException.class)
-                .isThrownBy(() -> extracteur.extract("   \n\n  ".getBytes(UTF_8)));
+                .isThrownBy(() -> extractor.extract("   \n\n  ".getBytes(UTF_8)));
     }
 }

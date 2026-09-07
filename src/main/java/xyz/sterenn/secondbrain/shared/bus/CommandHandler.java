@@ -1,8 +1,8 @@
 package xyz.sterenn.secondbrain.shared.bus;
 
 /**
- * <strong>Ne jamais annoter un handler avec {@code @Transactional}</strong> : la proxification
- * qui en résulte empêche la résolution de son type générique au démarrage.
+ * <strong>Never annotate a handler with {@code @Transactional}</strong>: the resulting proxying
+ * prevents its generic type from being resolved at startup.
  */
 public interface CommandHandler<C extends Command> {
 

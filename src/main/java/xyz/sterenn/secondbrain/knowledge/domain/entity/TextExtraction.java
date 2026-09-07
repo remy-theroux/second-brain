@@ -28,13 +28,13 @@ public class TextExtraction {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    // unique : c'est cette contrainte qui impose au handler d'effacer avant d'écrire, une
-    // redélivrance AMQP étant toujours possible.
+    // unique: this constraint is what forces the handler to delete before writing, an AMQP
+    // redelivery always being possible.
     @Column(name = "document_id", nullable = false, unique = true, columnDefinition = "uuid")
     private UUID documentId;
 
-    // EAGER : open-in-view est à false, une collection paresseuse ne ferait que déplacer
-    // l'échec hors de la transaction du bus.
+    // EAGER: open-in-view is false, a lazy collection would only move the failure outside the
+    // bus transaction.
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "knowledge_text_blocks",
@@ -54,9 +54,9 @@ public class TextExtraction {
     }
 
     public static TextExtraction of(UUID documentId, ExtractedText text, Instant extractedAt) {
-        Objects.requireNonNull(documentId, "Le document dont ce texte est extrait est obligatoire");
-        Objects.requireNonNull(text, "Le texte extrait est obligatoire");
-        Objects.requireNonNull(extractedAt, "L'instant de l'extraction est obligatoire");
+        Objects.requireNonNull(documentId, "The document this text is extracted from is required");
+        Objects.requireNonNull(text, "The extracted text is required");
+        Objects.requireNonNull(extractedAt, "The extraction instant is required");
         return new TextExtraction(documentId, new ArrayList<>(text.blocks()), extractedAt);
     }
 

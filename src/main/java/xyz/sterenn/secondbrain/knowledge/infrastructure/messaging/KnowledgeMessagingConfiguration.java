@@ -26,8 +26,8 @@ public class KnowledgeMessagingConfiguration {
     }
 
     /**
-     * Déclarée dans les deux rôles, worker compris : l'API démarrée seule publierait sinon
-     * dans un exchange sans queue liée, et le message serait perdu sans bruit.
+     * Declared in both roles, worker included: the API started alone would otherwise publish to
+     * an exchange with no bound queue, and the message would be lost silently.
      */
     @Bean
     public Queue knowledgeEventsQueue() {

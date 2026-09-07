@@ -36,53 +36,54 @@ class JpaDocumentRepositoryAdapterTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private UUID compteExistant(String email) {
+    private UUID existingAccount(String email) {
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
-    private static Document document(UUID proprietaire, String nom, String contenu) {
-        byte[] octets = contenu.getBytes(StandardCharsets.UTF_8);
-        return Document.upload(proprietaire, nom, DocumentFormat.fromFilename(nom), Checksum.of(octets), octets.length);
+    private static Document document(UUID ownerId, String filename, String content) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        return Document.upload(
+                ownerId, filename, DocumentFormat.fromFilename(filename), Checksum.of(bytes), bytes.length);
     }
 
     @Test
-    void persiste_un_document_en_attente_de_traitement() {
-        UUID proprietaire = compteExistant("alice@exemple.fr");
+    void persists_a_document_awaiting_processing() {
+        UUID ownerId = existingAccount("alice@exemple.fr");
 
-        Document enregistre = documentRepository.save(document(proprietaire, "rapport.pdf", "contenu"));
+        Document saved = documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
 
-        assertThat(enregistre.getId()).isNotNull();
-        assertThat(enregistre.getStatus()).isEqualTo(DocumentStatus.PENDING);
-        assertThat(enregistre.getCreatedAt()).isNotNull();
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        assertThat(saved.getCreatedAt()).isNotNull();
     }
 
     @Test
-    void projette_l_empreinte_sur_une_colonne_texte() {
-        UUID proprietaire = compteExistant("bob@exemple.fr");
-        Document enregistre = documentRepository.save(document(proprietaire, "notes.md", "contenu"));
+    void projects_the_checksum_onto_a_text_column() {
+        UUID ownerId = existingAccount("bob@exemple.fr");
+        Document saved = documentRepository.save(document(ownerId, "notes.md", "contenu"));
 
-        String colonne = jdbcTemplate.queryForObject(
-                "SELECT checksum FROM knowledge_documents WHERE id = ?", String.class, enregistre.getId());
+        String column = jdbcTemplate.queryForObject(
+                "SELECT checksum FROM knowledge_documents WHERE id = ?", String.class, saved.getId());
 
-        assertThat(colonne)
+        assertThat(column)
                 .isEqualTo(
                         Checksum.of("contenu".getBytes(StandardCharsets.UTF_8)).value());
     }
 
     @Test
-    void retrouve_un_document_par_proprietaire_et_empreinte() {
-        UUID proprietaire = compteExistant("carole@exemple.fr");
-        documentRepository.save(document(proprietaire, "rapport.pdf", "contenu"));
+    void finds_a_document_by_owner_and_checksum() {
+        UUID ownerId = existingAccount("carole@exemple.fr");
+        documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
 
         assertThat(documentRepository.findByOwnerIdAndChecksum(
-                        proprietaire, Checksum.of("contenu".getBytes(StandardCharsets.UTF_8))))
+                        ownerId, Checksum.of("contenu".getBytes(StandardCharsets.UTF_8))))
                 .isPresent();
     }
 
     @Test
-    void ne_retrouve_pas_le_document_d_un_autre_compte_par_son_empreinte() {
-        UUID alice = compteExistant("alice2@exemple.fr");
-        UUID bob = compteExistant("bob2@exemple.fr");
+    void does_not_find_the_document_of_another_account_by_its_checksum() {
+        UUID alice = existingAccount("alice2@exemple.fr");
+        UUID bob = existingAccount("bob2@exemple.fr");
         documentRepository.save(document(alice, "rapport.pdf", "contenu"));
 
         assertThat(documentRepository.findByOwnerIdAndChecksum(
@@ -91,9 +92,9 @@ class JpaDocumentRepositoryAdapterTest {
     }
 
     @Test
-    void laisse_deux_comptes_deposer_le_meme_contenu() {
-        UUID alice = compteExistant("alice3@exemple.fr");
-        UUID bob = compteExistant("bob3@exemple.fr");
+    void lets_two_accounts_upload_the_same_content() {
+        UUID alice = existingAccount("alice3@exemple.fr");
+        UUID bob = existingAccount("bob3@exemple.fr");
 
         documentRepository.save(document(alice, "rapport.pdf", "contenu"));
 
@@ -104,29 +105,29 @@ class JpaDocumentRepositoryAdapterTest {
     }
 
     @Test
-    void refuse_deux_fois_le_meme_contenu_pour_un_meme_compte() {
-        UUID proprietaire = compteExistant("david@exemple.fr");
-        documentRepository.save(document(proprietaire, "rapport.pdf", "contenu"));
+    void rejects_the_same_content_twice_for_the_same_account() {
+        UUID ownerId = existingAccount("david@exemple.fr");
+        documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
 
-        assertThatThrownBy(() -> documentRepository.save(document(proprietaire, "copie.pdf", "contenu")))
+        assertThatThrownBy(() -> documentRepository.save(document(ownerId, "copie.pdf", "contenu")))
                 .isInstanceOf(DuplicateDocumentException.class);
     }
 
     @Test
-    void rend_les_documents_d_un_compte_du_plus_recent_au_plus_ancien() {
-        UUID proprietaire = compteExistant("eve@exemple.fr");
-        documentRepository.save(document(proprietaire, "ancien.pdf", "premier"));
-        documentRepository.save(document(proprietaire, "recent.pdf", "second"));
+    void returns_the_documents_of_an_account_from_the_most_recent_to_the_oldest() {
+        UUID ownerId = existingAccount("eve@exemple.fr");
+        documentRepository.save(document(ownerId, "ancien.pdf", "premier"));
+        documentRepository.save(document(ownerId, "recent.pdf", "second"));
 
-        assertThat(documentRepository.findAllByOwnerId(proprietaire))
+        assertThat(documentRepository.findAllByOwnerId(ownerId))
                 .extracting(Document::getFilename)
                 .containsExactly("recent.pdf", "ancien.pdf");
     }
 
     @Test
-    void ne_rend_que_les_documents_du_compte_demande() {
-        UUID alice = compteExistant("alice4@exemple.fr");
-        UUID bob = compteExistant("bob4@exemple.fr");
+    void returns_only_the_documents_of_the_requested_account() {
+        UUID alice = existingAccount("alice4@exemple.fr");
+        UUID bob = existingAccount("bob4@exemple.fr");
         documentRepository.save(document(alice, "chez-alice.pdf", "premier"));
         documentRepository.save(document(bob, "chez-bob.pdf", "second"));
 
@@ -136,9 +137,9 @@ class JpaDocumentRepositoryAdapterTest {
     }
 
     @Test
-    void ne_retrouve_pas_par_identifiant_le_document_d_un_autre_compte() {
-        UUID alice = compteExistant("alice5@exemple.fr");
-        UUID bob = compteExistant("bob5@exemple.fr");
+    void does_not_find_by_id_the_document_of_another_account() {
+        UUID alice = existingAccount("alice5@exemple.fr");
+        UUID bob = existingAccount("bob5@exemple.fr");
         UUID document = documentRepository
                 .save(document(alice, "rapport.pdf", "contenu"))
                 .getId();
@@ -147,28 +148,29 @@ class JpaDocumentRepositoryAdapterTest {
     }
 
     @Test
-    void efface_un_document() {
-        UUID proprietaire = compteExistant("frank@exemple.fr");
-        Document enregistre = documentRepository.save(document(proprietaire, "rapport.pdf", "contenu"));
+    void deletes_a_document() {
+        UUID ownerId = existingAccount("frank@exemple.fr");
+        Document saved = documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
 
-        documentRepository.delete(enregistre);
+        documentRepository.delete(saved);
 
-        assertThat(documentRepository.findAllByOwnerId(proprietaire)).isEmpty();
+        assertThat(documentRepository.findAllByOwnerId(ownerId)).isEmpty();
     }
 
     @Test
-    void conserve_le_statut_d_echec_et_son_motif() {
-        UUID proprietaire = compteExistant("denis@exemple.fr");
-        Document enregistre = documentRepository.save(document(proprietaire, "scan.pdf", "contenu"));
+    void keeps_the_failure_status_and_its_reason() {
+        UUID ownerId = existingAccount("denis@exemple.fr");
+        Document saved = documentRepository.save(document(ownerId, "scan.pdf", "contenu"));
 
-        enregistre.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
-        documentRepository.save(enregistre);
+        saved.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
+        documentRepository.save(saved);
 
-        assertThat(documentRepository.findByIdAndOwnerId(enregistre.getId(), proprietaire))
+        assertThat(documentRepository.findByIdAndOwnerId(saved.getId(), ownerId))
                 .get()
-                .satisfies(relu -> {
-                    assertThat(relu.getStatus()).isEqualTo(DocumentStatus.FAILED);
-                    assertThat(relu.getErrorMessage()).isEqualTo("Ce document ne contient pas de texte exploitable.");
+                .satisfies(reloaded -> {
+                    assertThat(reloaded.getStatus()).isEqualTo(DocumentStatus.FAILED);
+                    assertThat(reloaded.getErrorMessage())
+                            .isEqualTo("Ce document ne contient pas de texte exploitable.");
                 });
     }
 }

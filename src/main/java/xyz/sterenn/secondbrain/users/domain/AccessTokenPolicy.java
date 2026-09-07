@@ -9,7 +9,7 @@ public final class AccessTokenPolicy {
 
     private AccessTokenPolicy() {}
 
-    public static Instant expiresAt(Instant maintenant) {
-        return maintenant.plus(LIFETIME);
+    public static Instant expiresAt(Instant now) {
+        return now.plus(LIFETIME);
     }
 }

@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class BusConfiguration {
 
-    // ObjectProvider et non List injectée : une liste requise vide ferait échouer le
-    // démarrage du contexte tant qu'aucun handler n'existe.
+    // ObjectProvider rather than an injected List: an empty required list would fail
+    // context startup as long as no handler exists.
     @Bean
     public CommandBus commandBus(ObjectProvider<CommandHandler<?>> handlers) {
         return new SpringCommandBus(handlers.stream().toList());

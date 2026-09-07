@@ -54,8 +54,10 @@ ci-dessus.
   laisse son trou.
 - Nom de fichier : `<numéro>-<titre-en-kebab-sans-accent>.md`, comme les slugs de
   `docs/superpowers/plans/`.
-- Les clés du front matter restent en anglais, les valeurs sont en français — comme le
-  reste du projet, où seuls les identifiants de production sont anglais.
+- **Un ADR s'écrit intégralement en français**, valeurs du front matter comprises ; seules
+  ses clés sont en anglais. La règle d'anglais s'arrête au code : les ADR, les specs et les
+  plans sont des documents de travail et ne se traduisent jamais (voir la section
+  « Langue » de `CLAUDE.md`).
 - **« Condition de réouverture » se remplit toujours.** « Jamais » est une réponse valable
   à condition d'être écrite. Une décision sans condition de sortie devient un dogme.
 - **Un ADR ne recopie pas une spec.** `docs/superpowers/specs/` porte l'étude, l'ADR porte

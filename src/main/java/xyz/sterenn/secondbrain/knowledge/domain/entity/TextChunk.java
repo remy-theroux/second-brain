@@ -29,15 +29,15 @@ public class TextChunk {
     @Column(name = "document_id", nullable = false, columnDefinition = "uuid")
     private UUID documentId;
 
-    // `position` est un mot-clé SQL qu'Hibernate écrirait sans guillemets.
+    // `position` is a SQL keyword that Hibernate would write unquoted.
     @Column(name = "chunk_position", nullable = false)
     private int position;
 
     @Column(nullable = false, length = TextBlock.MAX_HEADING_LENGTH)
     private String heading;
 
-    // columnDefinition explicite : sans lui, Hibernate attendrait un varchar(255) et
-    // `ddl-auto: validate` refuserait de démarrer contre une colonne `text`.
+    // Explicit columnDefinition: without it, Hibernate would expect a varchar(255) and
+    // `ddl-auto: validate` would refuse to start against a `text` column.
     @Column(nullable = false, columnDefinition = "text")
     private String text;
 
@@ -62,12 +62,12 @@ public class TextChunk {
     }
 
     public static TextChunk of(UUID documentId, int position, Chunk chunk, Embedding embedding, Instant createdAt) {
-        Objects.requireNonNull(documentId, "Le document dont cet extrait provient est obligatoire");
-        Objects.requireNonNull(chunk, "L'extrait est obligatoire");
-        Objects.requireNonNull(embedding, "Le vecteur de l'extrait est obligatoire");
-        Objects.requireNonNull(createdAt, "L'instant du découpage est obligatoire");
+        Objects.requireNonNull(documentId, "The document this chunk comes from is required");
+        Objects.requireNonNull(chunk, "A chunk is required");
+        Objects.requireNonNull(embedding, "The chunk vector is required");
+        Objects.requireNonNull(createdAt, "The chunking instant is required");
         if (position < 0) {
-            throw new IllegalArgumentException("La position d'un extrait part de zéro, reçue : " + position);
+            throw new IllegalArgumentException("A chunk position starts at zero, got: " + position);
         }
         return new TextChunk(documentId, position, chunk.heading(), chunk.text(), embedding.values(), createdAt);
     }

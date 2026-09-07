@@ -8,30 +8,30 @@ import org.junit.jupiter.api.Test;
 
 class SpringQueryBusTest {
 
-    record CompterLettres(String mot) implements Query<Integer> {}
+    record CountLetters(String word) implements Query<Integer> {}
 
-    static class CompterLettresHandler implements QueryHandler<CompterLettres, Integer> {
+    static class CountLettersHandler implements QueryHandler<CountLetters, Integer> {
         @Override
-        public Integer handle(CompterLettres query) {
-            return query.mot().length();
+        public Integer handle(CountLetters query) {
+            return query.word().length();
         }
     }
 
     @Test
-    void route_la_query_et_renvoie_son_resultat() {
-        QueryBus bus = new SpringQueryBus(List.of(new CompterLettresHandler()));
+    void routes_the_query_and_returns_its_result() {
+        QueryBus bus = new SpringQueryBus(List.of(new CountLettersHandler()));
 
-        int resultat = bus.ask(new CompterLettres("bonjour"));
+        int result = bus.ask(new CountLetters("bonjour"));
 
-        assertThat(resultat).isEqualTo(7);
+        assertThat(result).isEqualTo(7);
     }
 
     @Test
-    void echoue_si_aucun_handler_ne_traite_la_query() {
+    void fails_when_no_handler_handles_the_query() {
         QueryBus bus = new SpringQueryBus(List.of());
 
-        assertThatThrownBy(() -> bus.ask(new CompterLettres("bonjour")))
+        assertThatThrownBy(() -> bus.ask(new CountLetters("bonjour")))
                 .isInstanceOf(HandlerNotFoundException.class)
-                .hasMessageContaining("CompterLettres");
+                .hasMessageContaining("CountLetters");
     }
 }

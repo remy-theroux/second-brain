@@ -1,8 +1,8 @@
 package xyz.sterenn.secondbrain.knowledge.domain.port;
 
 /**
- * Port sortant vers la toise qui mesure un texte en tokens : elle ne lève jamais, et rend
- * {@code 0} pour un texte absent ou vide.
+ * Outbound port to the yardstick that measures a text in tokens: it never throws, and returns
+ * {@code 0} for a missing or empty text.
  */
 public interface TokenCounter {
 

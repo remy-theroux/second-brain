@@ -13,9 +13,9 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.EmbeddingPort;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Embedding;
 
 /**
- * Le bean est partagé par tout le contexte Spring et le rollback de la transaction de test ne le
- * vide pas : appeler {@link RecordingEmbeddingPort#clear()} en {@code @BeforeEach}
- * <strong>et</strong> en {@code @AfterEach}, faute de quoi le drapeau de panne se transmet.
+ * The bean is shared by the whole Spring context and the rollback of the test transaction does not
+ * clear it: call {@link RecordingEmbeddingPort#clear()} in {@code @BeforeEach} <strong>and</strong>
+ * in {@code @AfterEach}, otherwise the failure flag carries over.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class RecordingEmbeddingPortConfiguration {
@@ -28,46 +28,46 @@ public class RecordingEmbeddingPortConfiguration {
 
     public static class RecordingEmbeddingPort implements EmbeddingPort {
 
-        private final List<String> recus = new CopyOnWriteArrayList<>();
-        private final AtomicBoolean enPanne = new AtomicBoolean(false);
-        private final AtomicReference<Embedding> reponseImposee = new AtomicReference<>();
+        private final List<String> received = new CopyOnWriteArrayList<>();
+        private final AtomicBoolean failing = new AtomicBoolean(false);
+        private final AtomicReference<Embedding> forcedAnswer = new AtomicReference<>();
 
         @Override
         public List<Embedding> embed(List<String> texts) {
-            if (enPanne.get()) {
+            if (failing.get()) {
                 throw new EmbeddingUnavailableException(
                         "Le service de vectorisation n'a pas répondu : ce document n'a pas pu être indexé.");
             }
-            List<Embedding> vecteurs = new ArrayList<>();
-            for (String texte : texts) {
-                Embedding impose = reponseImposee.get();
-                vecteurs.add(impose != null ? impose : vecteurDuRang(recus.size()));
-                recus.add(texte);
+            List<Embedding> vectors = new ArrayList<>();
+            for (String text : texts) {
+                Embedding forced = forcedAnswer.get();
+                vectors.add(forced != null ? forced : vectorAtRank(received.size()));
+                received.add(text);
             }
-            return vecteurs;
+            return vectors;
         }
 
-        /** Un vecteur distinct par rang : un appariement décalé d'un cran se voit dans l'assertion. */
-        public static Embedding vecteurDuRang(int rang) {
-            return KnowledgeFixture.unVecteur(0.01f * (rang + 1));
+        /** A distinct vector per rank: a pairing off by one shows up in the assertion. */
+        public static Embedding vectorAtRank(int rank) {
+            return KnowledgeFixture.aVector(0.01f * (rank + 1));
         }
 
-        public List<String> textesRecus() {
-            return List.copyOf(recus);
+        public List<String> receivedTexts() {
+            return List.copyOf(received);
         }
 
-        public void tombeEnPanne() {
-            enPanne.set(true);
+        public void willFail() {
+            failing.set(true);
         }
 
-        public void repondra(Embedding vecteur) {
-            reponseImposee.set(vecteur);
+        public void willAnswer(Embedding vector) {
+            forcedAnswer.set(vector);
         }
 
         public void clear() {
-            recus.clear();
-            enPanne.set(false);
-            reponseImposee.set(null);
+            received.clear();
+            failing.set(false);
+            forcedAnswer.set(null);
         }
     }
 }

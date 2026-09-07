@@ -1,7 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.extraction;
 
 /**
- * La police retenue est la plus grande de la ligne, jamais la moyenne : une lettrine ou un
- * appel de note en petit ne doit pas faire passer un titre pour du corps.
+ * The font size kept is the largest on the line, never the average: a drop cap or a small
+ * footnote marker must not make a heading look like body text.
  */
 record TextLine(String text, float fontSize) {}

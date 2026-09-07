@@ -6,7 +6,7 @@ import xyz.sterenn.secondbrain.users.domain.exception.InvalidEmailException;
 
 public record Email(String value) {
 
-    /** 64 (partie locale) + 1 (@) + 255 (domaine), maximum de la RFC 5321. */
+    /** 64 (local part) + 1 (@) + 255 (domain), RFC 5321 maximum. */
     public static final int MAX_LENGTH = 320;
 
     private static final Pattern FORMAT = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");

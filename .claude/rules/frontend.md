@@ -117,8 +117,10 @@ Deux familles de variables CSS, et la frontière ne se négocie pas :
 
 ## Langue
 
-Mêmes règles que le back : **libellés, messages et textes de test en français**, noms de
-fonctions, de variables et de fichiers de production en **anglais**.
+Mêmes règles que le back : **le code est en anglais, ce que lit l'utilisateur est en
+français.** Donc noms de fonctions, de variables et de fichiers, **commentaires** et
+**libellés des `describe`/`it`** en anglais ; libellés d'écran, textes et messages affichés
+en français.
 
 Les messages d'erreur affichés viennent du serveur et sont affichables tels quels — ne pas
 les réécrire côté front. Ça vaut pour `error_description` de `/api/token` comme pour les

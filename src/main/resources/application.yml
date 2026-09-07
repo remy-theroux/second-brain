@@ -4,15 +4,15 @@ spring:
 
   servlet:
     multipart:
-      # Le ticket fixe le plafond ; `max-request-size` doit suivre, sinon c'est lui qui
-      # tranche le premier et le refus ne parle plus du fichier.
+      # The ticket sets the ceiling; `max-request-size` must follow, otherwise it is the one
+      # that decides first and the refusal no longer speaks about the file.
       max-file-size: 20MB
       max-request-size: 20MB
-      # Repousse la résolution du multipart au moment où le contrôleur lit son argument,
-      # donc APRÈS le choix du handler. Sans ça, MaxUploadSizeExceededException est levée
-      # par DispatcherServlet.checkMultipart alors qu'aucun contrôleur n'est encore
-      # désigné : seul un @RestControllerAdvice global la capterait, et ce projet garde la
-      # traduction des refus auprès de la route concernée.
+      # Defers the multipart resolution to the moment the controller reads its argument,
+      # hence AFTER the handler is chosen. Without this, MaxUploadSizeExceededException is raised
+      # by DispatcherServlet.checkMultipart while no controller has been designated
+      # yet: only a global @RestControllerAdvice would catch it, and this project keeps the
+      # translation of refusals next to the route concerned.
       resolve-lazily: true
 
   datasource:
@@ -22,8 +22,8 @@ spring:
 
   jpa:
     hibernate:
-      # Flyway est maître du schéma ; Hibernate se contente de valider la
-      # correspondance entités <-> tables au démarrage.
+      # Flyway is the master of the schema; Hibernate merely validates the
+      # entities <-> tables correspondence at startup.
       ddl-auto: validate
     open-in-view: false
     properties:
@@ -44,64 +44,64 @@ spring:
           auth: false
           starttls:
             enable: false
-          # Jakarta Mail n'a par défaut aucun timeout : sans ces trois valeurs, un relais
-          # qui accepte le TCP puis ne répond plus bloque le thread indéfiniment.
-          # `RegisterUserHandler` envoie depuis l'intérieur de la transaction ouverte par
-          # `SpringCommandBus`, connexion PostgreSQL déjà tenue : un pool Hikari de 10
-          # connexions se fige en dix inscriptions bloquées. Ces timeouts ne sont donc pas
-          # optionnels ici.
+          # Jakarta Mail has no timeout by default: without these three values, a relay
+          # that accepts the TCP then stops answering blocks the thread indefinitely.
+          # `RegisterUserHandler` sends from inside the transaction opened by
+          # `SpringCommandBus`, with a PostgreSQL connection already held: a Hikari pool of 10
+          # connections freezes on ten blocked registrations. These timeouts are therefore not
+          # optional here.
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
 
   http:
     clients:
-      # Seul RestClient du projet (OllamaEmbeddingAdapter), donc un réglage global plutôt
-      # qu'un client nommé. Même statut que les timeouts Jakarta Mail et le
-      # connection-timeout RabbitMQ ci-dessous : sans lui, un Ollama qui accepte la
-      # connexion TCP puis ne répond plus fige le thread du worker pour toujours — le
-      # seul thread qui consomme domain.knowledge.events — sans log, sans FAILED, sans
-      # retentative, puisque rien ne lève d'exception. connect-timeout court : soit
-      # Ollama écoute, soit non. read-timeout volontairement généreux, choisi pour
-      # détecter un service figé et non pour borner un traitement normal : un lot de 32
-      # extraits par bge-m3 sur CPU peut légitimement prendre près d'une minute.
+      # The only RestClient of the project (OllamaEmbeddingAdapter), hence a global setting rather
+      # than a named client. Same status as the Jakarta Mail timeouts and the RabbitMQ
+      # connection-timeout below: without it, an Ollama that accepts the
+      # TCP connection then stops answering freezes the worker thread forever — the
+      # only thread that consumes domain.knowledge.events — without a log, without FAILED, without
+      # a retry, since nothing raises an exception. Short connect-timeout: either
+      # Ollama is listening, or it is not. read-timeout deliberately generous, chosen to
+      # detect a frozen service and not to bound a normal processing: a batch of 32
+      # chunks through bge-m3 on CPU can legitimately take close to a minute.
       connect-timeout: 5s
       read-timeout: 120s
 
   rabbitmq:
-    # Même statut que la datasource : le défaut sert le développement hors conteneur,
-    # compose.yaml pose les vrais. guest/guest sont les identifiants par défaut de l'image
-    # officielle — qui les accepte depuis tout le réseau, pas seulement en loopback — et ils
-    # n'existent plus dès que le broker est créé avec les siens, ce que compose.yaml fait :
-    # un déploiement pose les quatre variables, sans quoi rien ne se connecte.
+    # Same status as the datasource: the default serves development outside a container,
+    # compose.yaml sets the real ones. guest/guest are the default credentials of the
+    # official image — which accepts them from the whole network, not only on loopback — and they
+    # no longer exist as soon as the broker is created with its own, which compose.yaml does:
+    # a deployment sets the four variables, without which nothing connects.
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
-    # Le client RabbitMQ attend 60 s avant d'abandonner une connexion morte, et la
-    # publication tourne dans afterCommit — AVANT que la connexion JDBC soit rendue au pool.
-    # Dix dépôts contre un broker injoignable figeraient le pool Hikari une minute entière,
-    # exactement la panne que les timeouts du bloc mail ci-dessus évitent déjà.
+    # The RabbitMQ client waits 60 s before giving up on a dead connection, and the
+    # publication runs inside afterCommit — BEFORE the JDBC connection is returned to the pool.
+    # Ten uploads against an unreachable broker would freeze the Hikari pool for a whole minute,
+    # exactly the failure that the timeouts of the mail block above already avoid.
     connection-timeout: 5s
     template:
       retry:
-        # Explicite parce qu'ADR-0023 en dépend : pas de nouvel essai,
-        # un événement que le broker n'a pas reçu est perdu, et c'est assumé.
+        # Explicit because ADR-0023 depends on it: no retry,
+        # an event the broker did not receive is lost, and that is accepted.
         enabled: false
     listener:
       simple:
-        # Un message dont le traitement lève une exception est rejeté SANS remise en file.
-        # Le défaut (true) le remettrait en tête de file et le retraiterait sans fin : un
-        # PDF qui fait planter l'extracteur bloquerait le worker pour toujours. Pas de
-        # dead-letter queue ni de retry (spec, décision 7) : un échec doit finir en FAILED
-        # sur le document, pas être rejoué.
+        # A message whose processing raises an exception is rejected WITHOUT being requeued.
+        # The default (true) would put it back at the head of the queue and reprocess it endlessly: a
+        # PDF that crashes the extractor would block the worker forever. No
+        # dead-letter queue and no retry (spec, decision 7): a failure must end up as FAILED
+        # on the document, not be replayed.
         default-requeue-rejected: false
-        # Explicite plutôt qu'implicite : l'idempotence de KnowledgeEventListener repose sur
-        # un seul consommateur à la fois. Ses handlers effacent puis réécrivent derrière des
-        # contraintes UNIQUE — correct pour une redélivrance séquentielle, mais deux
-        # livraisons simultanées du même événement effaceraient et écriraient toutes les
-        # deux, et se heurteraient l'une l'autre sur ces contraintes au lieu de se remplacer
-        # proprement.
+        # Explicit rather than implicit: the idempotence of KnowledgeEventListener rests on
+        # a single consumer at a time. Its handlers delete then rewrite behind
+        # UNIQUE constraints — correct for a sequential redelivery, but two
+        # simultaneous deliveries of the same event would both delete and write,
+        # and would collide with one another on those constraints instead of replacing each other
+        # cleanly.
         concurrency: 1
 
 management:
@@ -116,61 +116,68 @@ management:
       show-details: when-authorized
   health:
     rabbit:
-      # Le broker n'entre pas dans /actuator/health : redémarrer l'API ne répare pas un
-      # broker, et l'API sert tout le reste sans lui. Une panne se voit dans les logs
-      # (ERROR à chaque publication perdue) et dans les documents qui restent PENDING —
-      # voir ADR-0023.
+      # The broker does not enter /actuator/health: restarting the API does not repair a
+      # broker, and the API serves everything else without it. A failure shows up in the logs
+      # (ERROR on each lost publication) and in the documents that stay PENDING —
+      # see ADR-0023.
       enabled: false
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
-# Propriétés applicatives. `base-url` est l'URL publique telle que l'utilisateur la voit
-# dans son navigateur : c'est elle qui est écrite dans les liens des notifications.
+# Application properties. `base-url` is the public URL as the user sees it
+# in their browser: it is the one written into the notification links.
 secondbrain:
   base-url: ${SECONDBRAIN_BASE_URL:http://localhost:8080}
   storage:
-    # Où sont conservés les fichiers d'origine, un objet par document, la clé étant son
-    # identifiant. Les quatre premières propriétés n'ont VOLONTAIREMENT aucun défaut, même
-    # statut que `jwt.secret` juste en dessous et à l'inverse de `base-url` ci-dessus, dont
-    # le défaut ment en production (ADR-0009) : ici un défaut ne mentirait pas, il perdrait
-    # les documents en silence — le premier dépôt écrirait dans un bucket qui n'est pas le
-    # bon, et personne ne s'en apercevrait avant la première relecture d'un original.
-    # compose.yaml fournit les valeurs de développement ; tout déploiement hors Compose doit
-    # les poser, sans quoi l'application refuse de démarrer.
+    # Where the original files are kept, one object per document, the key being its
+    # identifier. The first four properties DELIBERATELY have no default, the same
+    # status as `jwt.secret` just below and the opposite of `base-url` above, whose
+    # default lies in production (ADR-0009): here a default would not lie, it would lose
+    # the documents silently — the first upload would write into a bucket that is not the
+    # right one, and nobody would notice before the first re-read of an original.
+    # compose.yaml provides the development values; any deployment outside Compose must
+    # set them, without which the application refuses to start.
     #
-    # Limite assumée : `endpoint` étant obligatoire, on ne peut pas viser AWS S3 natif, qui
-    # se passe d'endpointOverride. C'est cohérent avec le fait que la production n'est pas
-    # traitée par ce ticket ; le rendre facultatif sera une ligne, le jour où ça se pose.
+    # Accepted limitation: `endpoint` being mandatory, native AWS S3 cannot be targeted, as it
+    # does without endpointOverride. That is consistent with production not being
+    # covered by this ticket; making it optional will be a one-liner, the day it comes up.
     s3:
       endpoint: ${SECONDBRAIN_S3_ENDPOINT}
       bucket: ${SECONDBRAIN_S3_BUCKET}
       access-key: ${SECONDBRAIN_S3_ACCESS_KEY}
       secret-key: ${SECONDBRAIN_S3_SECRET_KEY}
-      # Un défaut, parce que cette valeur ne désigne rien : SigV4 exige le nom d'une région
-      # dans la signature même quand le service n'en a qu'une. Elle doit rester égale au
-      # `s3_region` de docker/garage.toml — Garage rejette une signature calculée pour une
-      # autre région que la sienne.
+      # A default, because this value designates nothing: SigV4 requires a region name
+      # in the signature even when the service only has one. It must stay equal to the
+      # `s3_region` of docker/garage.toml — Garage rejects a signature computed for a
+      # region other than its own.
       region: ${SECONDBRAIN_S3_REGION:garage}
-      # L'adressage par chemin (`hôte/bucket/clé`) est le seul qui fonctionne sans un DNS
-      # générique `*.bucket.hôte`, qu'aucun poste de développement n'a. S3 lui-même l'accepte
-      # encore, donc ce défaut ne ferme rien.
+      # Path-style addressing (`host/bucket/key`) is the only one that works without a
+      # wildcard DNS `*.bucket.host`, which no development machine has. S3 itself still accepts
+      # it, so this default closes nothing.
       path-style: ${SECONDBRAIN_S3_PATH_STYLE:true}
   embedding:
-    # Où joindre le service de vectorisation. Comme la datasource, le défaut sert le
-    # développement hors conteneur — 11434 est le port d'Ollama. En production, la variable
-    # visera l'Ollama déjà en place plutôt qu'un second, embarqué pour rien.
+    # Where to reach the vectorisation service. Like the datasource, the default serves
+    # development outside a container — 11434 is Ollama's port. In production, the variable
+    # will target the Ollama already in place rather than a second one, shipped for nothing.
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-    # Le modèle, et lui seul, est configurable. Sa DIMENSION ne l'est pas : elle vit dans
-    # EmbeddingPolicy, parce qu'elle est le contrat entre le modèle, la colonne et l'index.
-    # Changer de modèle est une migration et une réindexation, pas une variable.
+    # The model, and it alone, is configurable. Its DIMENSION is not: it lives in
+    # EmbeddingPolicy, because it is the contract between the model, the column and the index.
+    # Changing model is a migration and a reindexing, not a variable.
     model: ${SECONDBRAIN_EMBEDDING_MODEL:bge-m3}
+  llm:
+    # Where to reach the generation service. Same Ollama as the embedding, and the same status
+    # of default: it serves development outside a container.
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # The model, and it alone, is configurable. Its TEMPERATURE is not: it lives in
+    # DocumentAgent, because it is part of the way the agent answers.
+    model: ${SECONDBRAIN_LLM_MODEL:qwen3:4b}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   jwt:
-    # Volontairement sans valeur par défaut : un secret de signature par défaut serait
-    # un secret public. Sans SECONDBRAIN_JWT_SECRET, l'application refuse de démarrer —
-    # à l'inverse de base-url ci-dessus, dont le défaut ment en production (ADR-0009).
-    # 32 octets minimum : HS256 exige une clé de 256 bits.
+    # Deliberately without a default value: a default signing secret would be
+    # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —
+    # unlike base-url above, whose default lies in production (ADR-0009).
+    # 32 bytes minimum: HS256 requires a 256-bit key.
     secret: ${SECONDBRAIN_JWT_SECRET}

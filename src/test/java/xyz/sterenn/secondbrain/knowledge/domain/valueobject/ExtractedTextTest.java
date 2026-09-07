@@ -11,47 +11,47 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.UnextractableDocumentE
 
 class ExtractedTextTest {
 
-    private static final String ASSEZ_LONG = "Un texte assez long pour franchir le plancher des cinquante.";
+    private static final String LONG_ENOUGH = "Un texte assez long pour franchir le plancher des cinquante.";
 
     @Test
-    void garde_ses_blocs_dans_l_ordre_ou_ils_arrivent() {
-        TextBlock premier = TextBlock.of("Un", 1, ASSEZ_LONG);
-        TextBlock second = TextBlock.of("Deux", 1, ASSEZ_LONG);
+    void keeps_its_blocks_in_the_order_they_arrive() {
+        TextBlock first = TextBlock.of("Un", 1, LONG_ENOUGH);
+        TextBlock second = TextBlock.of("Deux", 1, LONG_ENOUGH);
 
-        assertThat(new ExtractedText(List.of(premier, second)).blocks()).containsExactly(premier, second);
+        assertThat(new ExtractedText(List.of(first, second)).blocks()).containsExactly(first, second);
     }
 
     @Test
-    void refuse_un_document_sans_aucun_bloc() {
+    void rejects_a_document_without_any_block() {
         assertThatExceptionOfType(UnextractableDocumentException.class)
                 .isThrownBy(() -> new ExtractedText(List.of()))
                 .withMessageContaining("pas de texte exploitable");
     }
 
     @Test
-    void refuse_un_document_sous_le_plancher_de_caracteres() {
-        String troisBribes = "3 Page 1";
-        assertThat(troisBribes.length()).isLessThan(ExtractionPolicy.MINIMUM_USEFUL_CHARACTERS);
+    void rejects_a_document_below_the_character_floor() {
+        String threeScraps = "3 Page 1";
+        assertThat(threeScraps.length()).isLessThan(ExtractionPolicy.MINIMUM_USEFUL_CHARACTERS);
 
         assertThatExceptionOfType(UnextractableDocumentException.class)
-                .isThrownBy(() -> ExtractedText.untitled(troisBribes));
+                .isThrownBy(() -> ExtractedText.untitled(threeScraps));
     }
 
     @Test
-    void additionne_les_caracteres_de_tous_ses_blocs_sans_compter_les_titres() {
-        ExtractedText texte = new ExtractedText(
-                List.of(TextBlock.of("Un titre qui ne compte pas", 1, ASSEZ_LONG), TextBlock.untitled(ASSEZ_LONG)));
+    void sums_the_characters_of_all_its_blocks_without_counting_the_headings() {
+        ExtractedText text = new ExtractedText(
+                List.of(TextBlock.of("Un titre qui ne compte pas", 1, LONG_ENOUGH), TextBlock.untitled(LONG_ENOUGH)));
 
-        assertThat(texte.characterCount()).isEqualTo(ASSEZ_LONG.length() * 2);
+        assertThat(text.characterCount()).isEqualTo(LONG_ENOUGH.length() * 2);
     }
 
     @Test
-    void ne_se_laisse_pas_modifier_par_la_liste_qu_on_lui_a_donnee() {
-        List<TextBlock> mutable = new ArrayList<>(List.of(TextBlock.untitled(ASSEZ_LONG)));
-        ExtractedText texte = new ExtractedText(mutable);
+    void is_not_modified_by_the_list_it_was_given() {
+        List<TextBlock> mutable = new ArrayList<>(List.of(TextBlock.untitled(LONG_ENOUGH)));
+        ExtractedText text = new ExtractedText(mutable);
 
         mutable.clear();
 
-        assertThat(texte.blocks()).hasSize(1);
+        assertThat(text.blocks()).hasSize(1);
     }
 }

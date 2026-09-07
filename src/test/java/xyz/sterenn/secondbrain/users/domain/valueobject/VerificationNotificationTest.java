@@ -7,34 +7,34 @@ import org.junit.jupiter.api.Test;
 
 class VerificationNotificationTest {
 
-    private static final UUID COMPTE = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID ACCOUNT = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @Test
-    void porte_le_destinataire_le_compte_et_le_jeton() {
-        RawVerificationToken jeton = RawVerificationToken.generate();
+    void carries_the_recipient_the_account_and_the_token() {
+        RawVerificationToken token = RawVerificationToken.generate();
 
         VerificationNotification notification =
-                new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
+                new VerificationNotification(new Email("alice@example.com"), ACCOUNT, token);
 
         assertThat(notification.recipient()).isEqualTo(new Email("alice@example.com"));
-        assertThat(notification.accountId()).isEqualTo(COMPTE);
-        assertThat(notification.rawToken()).isEqualTo(jeton);
+        assertThat(notification.accountId()).isEqualTo(ACCOUNT);
+        assertThat(notification.rawToken()).isEqualTo(token);
     }
 
     @Test
-    void ne_divulgue_pas_le_jeton_dans_sa_representation_textuelle() {
-        RawVerificationToken jeton = RawVerificationToken.generate();
+    void does_not_disclose_the_token_in_its_string_representation() {
+        RawVerificationToken token = RawVerificationToken.generate();
 
         VerificationNotification notification =
-                new VerificationNotification(new Email("alice@example.com"), COMPTE, jeton);
+                new VerificationNotification(new Email("alice@example.com"), ACCOUNT, token);
 
-        assertThat(notification.toString()).doesNotContain(jeton.value());
+        assertThat(notification.toString()).doesNotContain(token.value());
     }
 
     @Test
-    void est_bien_une_notification() {
+    void is_indeed_a_notification() {
         Notification notification =
-                new VerificationNotification(new Email("alice@example.com"), COMPTE, RawVerificationToken.generate());
+                new VerificationNotification(new Email("alice@example.com"), ACCOUNT, RawVerificationToken.generate());
 
         assertThat(notification.recipient()).isEqualTo(new Email("alice@example.com"));
     }

@@ -22,27 +22,27 @@ class SecurityConfigTest {
     private MockMvc mockMvc;
 
     @Test
-    void n_exige_aucune_authentification_sur_les_routes_publiques() throws Exception {
+    void requires_no_authentication_on_public_routes() throws Exception {
         mockMvc.perform(get("/une-url-inexistante")).andExpect(status().isNotFound());
     }
 
     @Test
-    void la_documentation_openapi_reste_accessible() throws Exception {
+    void keeps_the_openapi_documentation_reachable() throws Exception {
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
     }
 
     @Test
-    void refuse_par_defaut_une_route_inconnue_sous_api() throws Exception {
+    void rejects_an_unknown_route_under_api_by_default() throws Exception {
         mockMvc.perform(get("/api/une-route-inconnue")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void protege_la_route_de_profil() throws Exception {
+    void protects_the_profile_route() throws Exception {
         mockMvc.perform(get("/api/profile")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void laisse_la_creation_de_compte_ouverte() throws Exception {
+    void leaves_account_creation_open() throws Exception {
         mockMvc.perform(post("/api/registrations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -50,7 +50,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    void laisse_la_delivrance_de_jeton_ouverte() throws Exception {
+    void leaves_token_issuance_open() throws Exception {
         mockMvc.perform(post("/api/token").contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(status().isBadRequest());
     }

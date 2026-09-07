@@ -30,7 +30,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification
 @Transactional
 class RegisterUserHandlerTest {
 
-    private static final String MOT_DE_PASSE_VALIDE = "chevalpile42";
+    private static final String VALID_PASSWORD = "chevalpile42";
 
     @Autowired
     private CommandBus commandBus;
@@ -51,41 +51,41 @@ class RegisterUserHandlerTest {
     private RecordingNotificationSender notifications;
 
     @BeforeEach
-    void vide_les_notifications() {
+    void clears_the_notifications() {
         notifications.clear();
     }
 
     @Test
-    void cree_un_compte_non_verifie_avec_un_mot_de_passe_hache() {
-        commandBus.dispatch(new RegisterUser("alice@example.com", MOT_DE_PASSE_VALIDE));
+    void creates_an_unverified_account_with_a_hashed_password() {
+        commandBus.dispatch(new RegisterUser("alice@example.com", VALID_PASSWORD));
 
         User created =
                 userRepository.findByEmail(new Email("alice@example.com")).orElseThrow();
         assertThat(created.getId()).isNotNull();
         assertThat(created.isVerified()).isFalse();
-        assertThat(created.getPasswordHash()).isNotEqualTo(MOT_DE_PASSE_VALIDE);
-        assertThat(passwordHasher.matches(MOT_DE_PASSE_VALIDE, created.getPasswordHash()))
+        assertThat(created.getPasswordHash()).isNotEqualTo(VALID_PASSWORD);
+        assertThat(passwordHasher.matches(VALID_PASSWORD, created.getPasswordHash()))
                 .isTrue();
     }
 
     @Test
-    void normalise_l_email_avant_de_le_stocker() {
-        commandBus.dispatch(new RegisterUser("  Bob@Example.COM  ", MOT_DE_PASSE_VALIDE));
+    void normalises_the_email_before_storing_it() {
+        commandBus.dispatch(new RegisterUser("  Bob@Example.COM  ", VALID_PASSWORD));
 
         assertThat(userRepository.existsByEmail(new Email("bob@example.com"))).isTrue();
     }
 
     @Test
-    void refuse_un_email_deja_utilise() {
-        commandBus.dispatch(new RegisterUser("carol@example.com", MOT_DE_PASSE_VALIDE));
+    void rejects_an_already_used_email() {
+        commandBus.dispatch(new RegisterUser("carol@example.com", VALID_PASSWORD));
 
-        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("CAROL@Example.com", MOT_DE_PASSE_VALIDE)))
+        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("CAROL@Example.com", VALID_PASSWORD)))
                 .isInstanceOf(EmailAlreadyUsedException.class)
                 .hasMessageContaining("carol@example.com");
     }
 
     @Test
-    void refuse_un_mot_de_passe_trop_faible_sans_creer_de_compte() {
+    void rejects_a_too_weak_password_without_creating_an_account() {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("dave@example.com", "court")))
                 .isInstanceOf(WeakPasswordException.class);
 
@@ -93,48 +93,48 @@ class RegisterUserHandlerTest {
     }
 
     @Test
-    void refuse_un_email_mal_forme() {
-        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("pas-un-email", MOT_DE_PASSE_VALIDE)))
+    void rejects_a_malformed_email() {
+        assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("pas-un-email", VALID_PASSWORD)))
                 .isInstanceOf(InvalidEmailException.class);
     }
 
     @Test
-    void valide_le_mot_de_passe_avant_l_unicite_de_l_email() {
-        commandBus.dispatch(new RegisterUser("erin@example.com", MOT_DE_PASSE_VALIDE));
+    void validates_the_password_before_the_email_uniqueness() {
+        commandBus.dispatch(new RegisterUser("erin@example.com", VALID_PASSWORD));
 
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("erin@example.com", "court")))
                 .isInstanceOf(WeakPasswordException.class);
     }
 
     @Test
-    void notifie_le_nouveau_compte_de_sa_verification() {
-        commandBus.dispatch(new RegisterUser("frank@example.com", MOT_DE_PASSE_VALIDE));
+    void notifies_the_new_account_of_its_verification() {
+        commandBus.dispatch(new RegisterUser("frank@example.com", VALID_PASSWORD));
 
-        VerificationNotification notification = notifications.derniere();
+        VerificationNotification notification = notifications.last();
         assertThat(notification.recipient()).isEqualTo(new Email("frank@example.com"));
         assertThat(notification.rawToken().value()).isNotBlank();
     }
 
     @Test
-    void emet_un_jeton_dont_seule_l_empreinte_est_stockee() {
-        commandBus.dispatch(new RegisterUser("grace@example.com", MOT_DE_PASSE_VALIDE));
+    void issues_a_token_of_which_only_the_hash_is_stored() {
+        commandBus.dispatch(new RegisterUser("grace@example.com", VALID_PASSWORD));
 
-        VerificationNotification notification = notifications.derniere();
-        VerificationToken jeton = verificationTokenRepository
+        VerificationNotification notification = notifications.last();
+        VerificationToken token = verificationTokenRepository
                 .findByUserId(notification.accountId())
                 .orElseThrow();
 
-        assertThat(jeton.getTokenHash()).doesNotContain(notification.rawToken().value());
-        assertThat(tokenHasher.matches(notification.rawToken().value(), jeton.getTokenHash()))
+        assertThat(token.getTokenHash()).doesNotContain(notification.rawToken().value());
+        assertThat(tokenHasher.matches(notification.rawToken().value(), token.getTokenHash()))
                 .isTrue();
-        assertThat(jeton.isConsumed()).isFalse();
+        assertThat(token.isConsumed()).isFalse();
     }
 
     @Test
-    void adresse_la_notification_au_compte_reellement_cree() {
-        commandBus.dispatch(new RegisterUser("heidi@example.com", MOT_DE_PASSE_VALIDE));
+    void addresses_the_notification_to_the_account_actually_created() {
+        commandBus.dispatch(new RegisterUser("heidi@example.com", VALID_PASSWORD));
 
-        VerificationNotification notification = notifications.derniere();
+        VerificationNotification notification = notifications.last();
         assertThat(userRepository
                         .findByEmail(new Email("heidi@example.com"))
                         .orElseThrow()
@@ -143,7 +143,7 @@ class RegisterUserHandlerTest {
     }
 
     @Test
-    void ne_notifie_pas_quand_l_inscription_est_refusee() {
+    void does_not_notify_when_the_registration_is_rejected() {
         assertThatThrownBy(() -> commandBus.dispatch(new RegisterUser("ivan@example.com", "court")))
                 .isInstanceOf(WeakPasswordException.class);
 

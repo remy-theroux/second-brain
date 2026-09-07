@@ -10,9 +10,9 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
 /**
- * L'envoi est différé à {@code afterCommit} : un rollback n'annonce rien. L'inverse n'est pas
- * garanti — un broker injoignable après le commit perd l'événement, qui est journalisé et non
- * propagé, l'écriture étant déjà acquise (ADR-0023).
+ * Sending is deferred to {@code afterCommit}: a rollback announces nothing. The converse is not
+ * guaranteed — a broker unreachable after the commit loses the event, which is logged and not
+ * propagated, the write being already acquired (ADR-0023).
  */
 @Component
 public class AmqpDomainEventPublisher implements DomainEventPublisher {
@@ -27,11 +27,11 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
 
     @Override
     public void publish(DomainEvent event) {
-        // Dérivé ici et non dans afterCommit : un événement hors de tout contexte borné doit
-        // faire échouer la commande avant le commit, pas remonter à l'appelant après.
+        // Derived here and not in afterCommit: an event outside any bounded context must fail
+        // the command before the commit, not surface to the caller afterwards.
         String name = DomainEventNames.of(event.getClass());
-        // Les deux contrôles : une synchronisation peut être active sans qu'aucune transaction
-        // ne le soit, et il n'y aurait alors jamais d'afterCommit — événement perdu en silence.
+        // Both checks: a synchronisation can be active without any transaction being active,
+        // and there would then never be an afterCommit — event lost in silence.
         if (!TransactionSynchronizationManager.isSynchronizationActive()
                 || !TransactionSynchronizationManager.isActualTransactionActive()) {
             send(name, event);
@@ -44,7 +44,7 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
                     send(name, event);
                 } catch (RuntimeException e) {
                     log.error(
-                            "Événement {} perdu : le broker n'a pas pu être joint après le commit ({})",
+                            "Event {} lost: the broker could not be reached after the commit ({})",
                             name,
                             e.getMessage(),
                             e);
@@ -55,6 +55,6 @@ public class AmqpDomainEventPublisher implements DomainEventPublisher {
 
     private void send(String name, DomainEvent event) {
         rabbitTemplate.convertAndSend(AmqpConfiguration.EVENTS_EXCHANGE, name, event);
-        log.debug("Événement {} publié", name);
+        log.debug("Event {} published", name);
     }
 }

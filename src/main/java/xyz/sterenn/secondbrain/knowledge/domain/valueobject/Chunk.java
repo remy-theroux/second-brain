@@ -5,19 +5,19 @@ import java.util.Objects;
 public record Chunk(String heading, String text) {
 
     public Chunk {
-        Objects.requireNonNull(heading, "Le titre de section est obligatoire, vide s'il n'y en a pas");
-        Objects.requireNonNull(text, "Le texte de l'extrait est obligatoire");
+        Objects.requireNonNull(heading, "A section heading is required, empty when there is none");
+        Objects.requireNonNull(text, "The chunk text is required");
         heading = heading.strip();
         text = text.strip();
         if (text.isEmpty()) {
-            throw new IllegalArgumentException("Un extrait sans texte n'en est pas un : il ne se construit pas");
+            throw new IllegalArgumentException("A chunk without text is not a chunk: it cannot be built");
         }
     }
 
     public String contextualised(String filename) {
-        Objects.requireNonNull(filename, "Le nom du document est obligatoire");
-        String prefixe =
+        Objects.requireNonNull(filename, "The document filename is required");
+        String prefix =
                 heading.isEmpty() ? "Document: " + filename : "Document: " + filename + " — Section: " + heading;
-        return prefixe + "\n\n" + text;
+        return prefix + "\n\n" + text;
     }
 }

@@ -5,7 +5,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.users.domain.port.PasswordHasher;
 
-// BCrypt ignore les octets au-delà du 72e : voir ADR-0005.
+// BCrypt ignores bytes past the 72nd: see ADR-0005.
 @Component
 public class BCryptPasswordHasher implements PasswordHasher {
 

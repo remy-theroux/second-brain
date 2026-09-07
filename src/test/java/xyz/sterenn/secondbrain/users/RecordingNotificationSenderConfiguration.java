@@ -9,8 +9,8 @@ import xyz.sterenn.secondbrain.users.domain.port.NotificationSender;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Notification;
 import xyz.sterenn.secondbrain.users.domain.valueobject.VerificationNotification;
 
-// Le bean est partagé par tout le contexte et le rollback de la transaction de test ne le
-// vide pas : appeler RecordingNotificationSender.clear() en @BeforeEach.
+// The bean is shared by the whole context and the test transaction rollback does not
+// clear it: call RecordingNotificationSender.clear() in @BeforeEach.
 @TestConfiguration(proxyBeanMethods = false)
 public class RecordingNotificationSenderConfiguration {
 
@@ -22,21 +22,21 @@ public class RecordingNotificationSenderConfiguration {
 
     public static class RecordingNotificationSender implements NotificationSender {
 
-        private final List<Notification> envoyees = new CopyOnWriteArrayList<>();
+        private final List<Notification> sent = new CopyOnWriteArrayList<>();
 
         @Override
         public void send(Notification notification) {
-            envoyees.add(notification);
+            sent.add(notification);
         }
 
         public List<VerificationNotification> verifications() {
-            return envoyees.stream()
+            return sent.stream()
                     .filter(VerificationNotification.class::isInstance)
                     .map(VerificationNotification.class::cast)
                     .toList();
         }
 
-        public VerificationNotification derniere() {
+        public VerificationNotification last() {
             List<VerificationNotification> verifications = verifications();
             if (verifications.isEmpty()) {
                 throw new IllegalStateException("Aucune notification de vérification enregistrée");
@@ -45,7 +45,7 @@ public class RecordingNotificationSenderConfiguration {
         }
 
         public void clear() {
-            envoyees.clear();
+            sent.clear();
         }
     }
 }

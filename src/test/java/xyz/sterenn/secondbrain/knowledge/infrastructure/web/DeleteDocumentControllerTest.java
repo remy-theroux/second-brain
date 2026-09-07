@@ -36,7 +36,7 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 @Transactional
 class DeleteDocumentControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -60,39 +60,41 @@ class DeleteDocumentControllerTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     private UUID alice;
-    private String jetonAlice;
+    private String aliceToken;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingNotificationSender.clear();
-        alice = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, alice);
+        alice = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, alice);
     }
 
     @AfterEach
-    void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erase_the_originals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
-    private UUID depose(String jeton, UUID proprietaire, String nom) throws Exception {
+    private UUID upload(String token, UUID ownerId, String filename) throws Exception {
         mockMvc.perform(multipart("/api/documents")
                         .file(new MockMultipartFile(
-                                "file", nom, "application/octet-stream", nom.getBytes(StandardCharsets.UTF_8)))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                                "file",
+                                filename,
+                                "application/octet-stream",
+                                filename.getBytes(StandardCharsets.UTF_8)))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isCreated());
-        return documentRepository.findAllByOwnerId(proprietaire).getFirst().getId();
+        return documentRepository.findAllByOwnerId(ownerId).getFirst().getId();
     }
 
     @Test
-    void retire_le_document_de_la_liste_et_efface_son_fichier_d_origine() throws Exception {
-        UUID document = depose(jetonAlice, alice, "rapport.pdf");
+    void removes_the_document_from_the_list_and_deletes_its_original_file() throws Exception {
+        UUID document = upload(aliceToken, alice, "rapport.pdf");
 
         mockMvc.perform(delete("/api/documents/{id}", document)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNoContent());
 
         assertThat(documentRepository.findAllByOwnerId(alice)).isEmpty();
@@ -100,39 +102,38 @@ class DeleteDocumentControllerTest {
     }
 
     @Test
-    void permet_de_redeposer_un_contenu_apres_l_avoir_supprime() throws Exception {
-        UUID document = depose(jetonAlice, alice, "rapport.pdf");
+    void allows_re_uploading_a_content_after_deleting_it() throws Exception {
+        UUID document = upload(aliceToken, alice, "rapport.pdf");
         mockMvc.perform(delete("/api/documents/{id}", document)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNoContent());
 
-        depose(jetonAlice, alice, "rapport.pdf");
+        upload(aliceToken, alice, "rapport.pdf");
 
         assertThat(documentRepository.findAllByOwnerId(alice)).hasSize(1);
     }
 
     @Test
-    void refuse_de_supprimer_le_document_d_un_autre_compte_comme_s_il_n_existait_pas() throws Exception {
-        UUID bob = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
-        UUID chezBob = depose(KnowledgeFixture.jeton(accessTokenIssuer, bob), bob, "chez-bob.pdf");
+    void refuses_to_delete_the_document_of_another_account_as_if_it_did_not_exist() throws Exception {
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        UUID bobsDocument = upload(KnowledgeFixture.token(accessTokenIssuer, bob), bob, "chez-bob.pdf");
 
-        mockMvc.perform(delete("/api/documents/{id}", chezBob)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(delete("/api/documents/{id}", bobsDocument)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNotFound());
 
         assertThat(documentRepository.findAllByOwnerId(bob)).hasSize(1);
     }
 
     @Test
-    void refuse_de_supprimer_un_document_inexistant() throws Exception {
+    void refuses_to_delete_a_nonexistent_document() throws Exception {
         mockMvc.perform(delete("/api/documents/{id}", UUID.randomUUID())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void refuse_une_suppression_sans_jeton() throws Exception {
+    void refuses_a_deletion_without_a_token() throws Exception {
         mockMvc.perform(delete("/api/documents/{id}", UUID.randomUUID())).andExpect(status().isUnauthorized());
     }
 }

@@ -17,8 +17,8 @@ public class JpaVerificationTokenRepositoryAdapter implements VerificationTokenR
 
     @Override
     public VerificationToken save(VerificationToken token) {
-        // Sans flush explicite, la violation de la clé étrangère vers l'utilisateur ne
-        // surviendrait qu'au commit.
+        // Without an explicit flush, the foreign key violation towards the user would only
+        // surface at commit.
         return springDataVerificationTokenRepository.saveAndFlush(token);
     }
 

@@ -63,129 +63,128 @@ class IndexDocumentTextTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     @BeforeEach
-    void videLaDoublure() {
+    void clearsTheStub() {
         embeddingPort.clear();
     }
 
     @AfterEach
-    void videLaDoublureEtLesOriginaux() {
-        // La doublure est un singleton du contexte Spring, et le stockage objet ne participe à
-        // aucune transaction : @Transactional n'annule ni l'un ni l'autre.
+    void clearsTheStubAndTheOriginals() {
+        // The stub is a singleton of the Spring context, and the object storage takes part in no
+        // transaction: @Transactional rolls back neither of them.
         embeddingPort.clear();
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void range_les_extraits_vectorises_et_marque_le_document_pret() {
-        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+    void stores_the_embedded_chunks_and_marks_the_document_ready() {
+        Document document = anExtractedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
-        assertThat(extraits).isNotEmpty();
-        assertThat(extraits)
-                .allSatisfy(
-                        extrait -> assertThat(extrait.getEmbedding().values()).hasSize(EmbeddingPolicy.DIMENSIONS));
-        assertThat(relis(document).getStatus()).isEqualTo(DocumentStatus.READY);
+        List<TextChunk> chunks = textChunkRepository.findByDocumentId(document.getId());
+        assertThat(chunks).isNotEmpty();
+        assertThat(chunks)
+                .allSatisfy(chunk -> assertThat(chunk.getEmbedding().values()).hasSize(EmbeddingPolicy.DIMENSIONS));
+        assertThat(reload(document).getStatus()).isEqualTo(DocumentStatus.READY);
     }
 
     @Test
-    void numerote_les_extraits_dans_l_ordre_du_document() {
-        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+    void numbers_the_chunks_in_document_order() {
+        Document document = anExtractedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
-        assertThat(extraits)
+        List<TextChunk> chunks = textChunkRepository.findByDocumentId(document.getId());
+        assertThat(chunks)
                 .extracting(TextChunk::getPosition)
                 .containsExactlyElementsOf(
-                        IntStream.range(0, extraits.size()).boxed().toList());
-        List<TextBlock> blocs = textExtractionRepository
+                        IntStream.range(0, chunks.size()).boxed().toList());
+        List<TextBlock> blocks = textExtractionRepository
                 .findByDocumentId(document.getId())
                 .orElseThrow()
                 .text()
                 .blocks();
-        assertThat(extraits)
+        assertThat(chunks)
                 .extracting(TextChunk::getHeading)
                 .containsExactlyElementsOf(
-                        blocs.stream().map(TextBlock::getHeading).toList());
-        assertThat(extraits.getFirst().getText()).isEqualTo(blocs.getFirst().getText());
+                        blocks.stream().map(TextBlock::getHeading).toList());
+        assertThat(chunks.getFirst().getText()).isEqualTo(blocks.getFirst().getText());
     }
 
     @Test
-    void range_sous_chaque_extrait_le_vecteur_de_son_propre_texte() {
-        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+    void stores_under_each_chunk_the_vector_of_its_own_text() {
+        Document document = anExtractedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        List<TextChunk> extraits = textChunkRepository.findByDocumentId(document.getId());
-        assertThat(extraits).isNotEmpty();
-        for (int position = 0; position < extraits.size(); position++) {
-            assertThat(extraits.get(position).getEmbedding()).isEqualTo(RecordingEmbeddingPort.vecteurDuRang(position));
+        List<TextChunk> chunks = textChunkRepository.findByDocumentId(document.getId());
+        assertThat(chunks).isNotEmpty();
+        for (int position = 0; position < chunks.size(); position++) {
+            assertThat(chunks.get(position).getEmbedding()).isEqualTo(RecordingEmbeddingPort.vectorAtRank(position));
         }
     }
 
     @Test
-    void vectorise_un_texte_prefixe_du_nom_du_document_et_de_sa_section() {
-        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+    void embeds_a_text_prefixed_with_the_document_name_and_its_section() {
+        Document document = anExtractedDocument("structure.md", Fixtures.STRUCTURED_MD);
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(embeddingPort.textesRecus()).isNotEmpty().allSatisfy(texte -> assertThat(texte)
+        assertThat(embeddingPort.receivedTexts()).isNotEmpty().allSatisfy(text -> assertThat(text)
                 .startsWith("Document: structure.md"));
-        assertThat(embeddingPort.textesRecus())
-                .anySatisfy(texte -> assertThat(texte).contains("— Section: "));
+        assertThat(embeddingPort.receivedTexts())
+                .anySatisfy(text -> assertThat(text).contains("— Section: "));
         assertThat(textChunkRepository.findByDocumentId(document.getId()))
-                .allSatisfy(extrait -> assertThat(extrait.getText()).doesNotContain("Document: structure.md"));
+                .allSatisfy(chunk -> assertThat(chunk.getText()).doesNotContain("Document: structure.md"));
     }
 
     @Test
-    void une_seconde_indexation_remplace_les_extraits_sans_les_doubler() {
-        Document document = unDocumentExtrait("structure.md", Fixtures.STRUCTURE_MD);
+    void a_second_indexing_replaces_the_chunks_without_duplicating_them() {
+        Document document = anExtractedDocument("structure.md", Fixtures.STRUCTURED_MD);
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
-        int premiers = textChunkRepository.findByDocumentId(document.getId()).size();
+        int firstCount = textChunkRepository.findByDocumentId(document.getId()).size();
 
         commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId()));
 
-        assertThat(textChunkRepository.findByDocumentId(document.getId())).hasSize(premiers);
+        assertThat(textChunkRepository.findByDocumentId(document.getId())).hasSize(firstCount);
     }
 
     @Test
-    void laisse_remonter_le_refus_du_service_de_vectorisation() {
-        Document document = unDocumentExtrait("notes.txt", Fixtures.BRUT_TXT);
-        embeddingPort.tombeEnPanne();
+    void lets_the_embedding_service_refusal_propagate() {
+        Document document = anExtractedDocument("notes.txt", Fixtures.RAW_TXT);
+        embeddingPort.willFail();
 
-        // Dernier appel du test : le refus marque la transaction englobante rollback-only.
+        // Last call of the test: the refusal marks the enclosing transaction rollback-only.
         assertThatExceptionOfType(EmbeddingUnavailableException.class)
                 .isThrownBy(() -> commandBus.dispatch(new IndexDocumentText(document.getId(), document.getOwnerId())));
     }
 
     @Test
-    void refuse_un_document_qui_n_appartient_pas_au_demandeur() {
-        Document document = unDocumentExtrait("notes.txt", Fixtures.BRUT_TXT);
+    void rejects_a_document_that_does_not_belong_to_the_requester() {
+        Document document = anExtractedDocument("notes.txt", Fixtures.RAW_TXT);
 
-        // Dernier appel du test, même raison.
+        // Last call of the test, same reason.
         assertThatExceptionOfType(DocumentNotFoundException.class)
                 .isThrownBy(() -> commandBus.dispatch(new IndexDocumentText(document.getId(), UUID.randomUUID())));
     }
 
-    private Document unDocumentExtrait(String filename, String fixture) {
-        UUID proprietaire = userRepository
+    private Document anExtractedDocument(String filename, String fixture) {
+        UUID owner = userRepository
                 .save(User.register(new Email(UUID.randomUUID() + "@exemple.fr"), "empreinte"))
                 .getId();
-        byte[] contenu = Fixtures.lire(fixture);
-        commandBus.dispatch(new UploadDocument(proprietaire, filename, contenu));
+        byte[] content = Fixtures.read(fixture);
+        commandBus.dispatch(new UploadDocument(owner, filename, content));
         Document document = documentRepository
-                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .findByOwnerIdAndChecksum(owner, Checksum.of(content))
                 .orElseThrow();
         commandBus.dispatch(new ExtractDocumentText(document.getId(), document.getOwnerId()));
         return document;
     }
 
-    private Document relis(Document document) {
+    private Document reload(Document document) {
         return documentRepository
                 .findByIdAndOwnerId(document.getId(), document.getOwnerId())
                 .orElseThrow();

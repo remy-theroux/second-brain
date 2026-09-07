@@ -9,10 +9,10 @@ import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
 import { useAuthStore } from '@/stores/auth'
 
-// Le serveur redirige ici avec un code, pas un message : c'est une navigation, et faire
-// voyager le texte en query string le collerait dans l'historique du navigateur et dans
-// les logs du proxy. Les libellés vivent donc ici — au prix d'une duplication avec les
-// messages du domaine, dont aucun test ne surveille la divergence.
+// The server redirects here with a code, not a message: this is a navigation, and making
+// the text travel in a query string would stick it into the browser history and into the
+// proxy logs. So the labels live here — at the price of a duplication with the domain
+// messages, whose divergence no test watches.
 const VERIFICATION_MESSAGES = {
   ok: 'Votre adresse est vérifiée. Vous pouvez vous connecter.',
   'lien-invalide': "Ce lien de vérification n'est pas valide.",
@@ -28,8 +28,8 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
-// `computed` légitime ici, à l'inverse d'`isAuthenticated()` : la valeur ne dépend que de
-// l'URL, qui est réactive.
+// A legitimate `computed` here, unlike `isAuthenticated()`: the value depends only on the
+// URL, which is reactive.
 const verificationMessage = computed(() => VERIFICATION_MESSAGES[route.query.verification])
 
 async function submit() {
@@ -38,7 +38,7 @@ async function submit() {
     await auth.login(email.value, password.value)
     await router.push({ name: 'home' })
   } catch (error) {
-    // Le message vient du serveur (error_description) et est affichable tel quel.
+    // The message comes from the server (error_description) and is displayable as is.
     errorMessage.value = error.message
   }
 }
@@ -48,7 +48,7 @@ async function submit() {
   <main class="guest-form">
     <PageTitle>Se connecter</PageTitle>
 
-    <!-- Un statut, pas une alerte : le fallthrough remplace le role="alert" du composant. -->
+    <!-- A status, not an alert: the fallthrough replaces the component's role="alert". -->
     <Message v-if="verificationMessage" severity="success" role="status">
       {{ verificationMessage }}
     </Message>

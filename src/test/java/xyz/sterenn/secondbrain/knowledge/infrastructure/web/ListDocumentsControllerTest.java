@@ -36,7 +36,7 @@ import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 @Transactional
 class ListDocumentsControllerTest {
 
-    private static final String MOT_DE_PASSE = "chevalpile42";
+    private static final String PASSWORD = "chevalpile42";
 
     @Autowired
     private MockMvc mockMvc;
@@ -57,45 +57,44 @@ class ListDocumentsControllerTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     private UUID alice;
-    private String jetonAlice;
+    private String aliceToken;
 
     @BeforeEach
-    void prepare_un_compte_connecte() {
+    void prepare_a_signed_in_account() {
         recordingNotificationSender.clear();
-        alice = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "alice@exemple.fr", MOT_DE_PASSE);
-        jetonAlice = KnowledgeFixture.jeton(accessTokenIssuer, alice);
+        alice = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "alice@exemple.fr", PASSWORD);
+        aliceToken = KnowledgeFixture.token(accessTokenIssuer, alice);
     }
 
     @AfterEach
-    void efface_les_originaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void erase_the_originals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
-    private void depose(String jeton, String nom, String contenu) throws Exception {
+    private void upload(String token, String filename, String content) throws Exception {
         mockMvc.perform(multipart("/api/documents")
                         .file(new MockMultipartFile(
-                                "file", nom, "application/octet-stream", contenu.getBytes(StandardCharsets.UTF_8)))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jeton))
+                                "file", filename, "application/octet-stream", content.getBytes(StandardCharsets.UTF_8)))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void rend_une_liste_vide_pour_une_base_de_connaissance_vide() throws Exception {
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+    void returns_an_empty_list_for_an_empty_knowledge_base() throws Exception {
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
-    void rend_le_nom_le_statut_et_la_date_de_chaque_document() throws Exception {
-        depose(jetonAlice, "rapport.pdf", "contenu");
+    void returns_the_name_the_status_and_the_date_of_each_document() throws Exception {
+        upload(aliceToken, "rapport.pdf", "contenu");
 
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").isNotEmpty())
                 .andExpect(jsonPath("$[0].filename").value("rapport.pdf"))
@@ -104,50 +103,49 @@ class ListDocumentsControllerTest {
     }
 
     @Test
-    void rend_les_documents_du_plus_recent_au_plus_ancien() throws Exception {
-        depose(jetonAlice, "ancien.pdf", "premier");
-        depose(jetonAlice, "recent.pdf", "second");
+    void returns_the_documents_from_the_most_recent_to_the_oldest() throws Exception {
+        upload(aliceToken, "ancien.pdf", "premier");
+        upload(aliceToken, "recent.pdf", "second");
 
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].filename").value("recent.pdf"))
                 .andExpect(jsonPath("$[1].filename").value("ancien.pdf"));
     }
 
     @Test
-    void ne_montre_pas_les_documents_d_un_autre_compte() throws Exception {
-        UUID bob = AccountFixture.registerVerified(
-                commandBus, recordingNotificationSender, "bob@exemple.fr", MOT_DE_PASSE);
-        depose(KnowledgeFixture.jeton(accessTokenIssuer, bob), "chez-bob.pdf", "contenu");
+    void does_not_show_the_documents_of_another_account() throws Exception {
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        upload(KnowledgeFixture.token(accessTokenIssuer, bob), "chez-bob.pdf", "contenu");
 
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
-    void refuse_la_liste_sans_jeton() throws Exception {
+    void refuses_the_list_without_a_token() throws Exception {
         mockMvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void expose_le_motif_d_un_document_en_echec() throws Exception {
-        depose(jetonAlice, "scan.pdf", "un contenu quelconque");
+    void exposes_the_reason_of_a_failed_document() throws Exception {
+        upload(aliceToken, "scan.pdf", "un contenu quelconque");
         Document document = documentRepository.findAllByOwnerId(alice).getFirst();
         document.markProcessingFailed("Ce document ne contient pas de texte exploitable.");
         documentRepository.save(document);
 
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("FAILED"))
                 .andExpect(jsonPath("$[0].errorMessage").value("Ce document ne contient pas de texte exploitable."));
     }
 
     @Test
-    void n_expose_aucun_motif_pour_un_document_en_attente() throws Exception {
-        depose(jetonAlice, "notes.md", "un contenu quelconque");
+    void exposes_no_reason_for_a_pending_document() throws Exception {
+        upload(aliceToken, "notes.md", "un contenu quelconque");
 
-        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + jetonAlice))
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("PENDING"))
                 .andExpect(jsonPath("$[0].errorMessage").doesNotExist());

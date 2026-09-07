@@ -13,37 +13,37 @@ public final class DomainEventNames {
     private static final String ROOT = "xyz.sterenn.secondbrain";
     private static final Set<String> NOT_A_CONTEXT = Set.of("shared", "config");
 
-    // Coupe avant une majuscule qui suit une minuscule ou un chiffre, et avant la dernière
-    // majuscule d'une suite : un acronyme reste un seul mot (`PDFExtracted` → `PDF`, `Extracted`).
+    // Splits before an uppercase letter following a lowercase or a digit, and before the last
+    // uppercase of a run: an acronym stays one word (`PDFExtracted` → `PDF`, `Extracted`).
     private static final String WORD_BOUNDARY = "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])";
 
     private DomainEventNames() {}
 
     public static String of(Class<? extends DomainEvent> type) {
-        // `DomainEvent` n'a qu'une méthode abstraite : une lambda compile, et son nom simple est
-        // vide ou synthétique — elle voyagerait sous un nom que rien ne peut redésérialiser.
+        // `DomainEvent` has a single abstract method: a lambda compiles, and its simple name is
+        // empty or synthetic — it would travel under a name nothing can deserialise back.
         if (type.isAnonymousClass()
                 || type.isLocalClass()
                 || type.isSynthetic()
                 || type.getSimpleName().isEmpty()) {
             throw new IllegalArgumentException(
-                    type.getName() + " doit être un record nommé, pas une classe anonyme ou une lambda");
+                    type.getName() + " must be a named record, not an anonymous class or a lambda");
         }
         String pkg = type.getPackageName();
         if (!pkg.startsWith(ROOT + ".")) {
-            throw new IllegalArgumentException(type.getName() + " n'est pas dans un contexte borné de " + ROOT);
+            throw new IllegalArgumentException(type.getName() + " is not in a bounded context of " + ROOT);
         }
         String context = pkg.substring(ROOT.length() + 1).split("\\.")[0];
         if (NOT_A_CONTEXT.contains(context)) {
             throw new IllegalArgumentException(
-                    type.getName() + " est dans " + context + ", qui n'est pas un contexte borné");
+                    type.getName() + " is in " + context + ", which is not a bounded context");
         }
         List<String> words = Arrays.stream(type.getSimpleName().split(WORD_BOUNDARY))
                 .map(word -> word.toLowerCase(Locale.ROOT))
                 .toList();
         if (words.size() < 2) {
             throw new IllegalArgumentException(
-                    type.getName() + " doit se nommer <Objet><Fait> : un seul mot ne désigne aucun objet");
+                    type.getName() + " must be named <Object><Fact>: a single word designates no object");
         }
         String object = String.join("-", words.subList(0, words.size() - 1));
         String fact = words.getLast();
@@ -56,8 +56,8 @@ public final class DomainEventNames {
             String name = of(type);
             Class<?> previous = mapping.put(name, type);
             if (previous != null) {
-                throw new IllegalStateException("Deux événements portent le nom " + name + " : " + previous.getName()
-                        + " et " + type.getName());
+                throw new IllegalStateException(
+                        "Two events carry the name " + name + ": " + previous.getName() + " and " + type.getName());
             }
         }
         return mapping;

@@ -29,7 +29,7 @@ class JpaUserRepositoryAdapterTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void persiste_un_compte_dans_un_etat_non_verifie() {
+    void persists_an_account_in_an_unverified_state() {
         User saved = userRepository.save(User.register(new Email("alice@example.com"), "empreinte"));
 
         assertThat(saved.getId()).isNotNull();
@@ -40,7 +40,7 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
-    void detecte_un_email_deja_pris() {
+    void detects_an_already_taken_email() {
         userRepository.save(User.register(new Email("bob@example.com"), "empreinte"));
 
         assertThat(userRepository.existsByEmail(new Email("bob@example.com"))).isTrue();
@@ -48,7 +48,7 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
-    void retrouve_un_compte_par_son_email() {
+    void finds_an_account_by_its_email() {
         userRepository.save(User.register(new Email("dave@example.com"), "empreinte"));
 
         assertThat(userRepository.findByEmail(new Email("dave@example.com")))
@@ -58,9 +58,9 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
-    void projette_l_email_sur_une_colonne_texte() {
-        // Seule preuve observable qu'EmailAttributeConverter est auto-appliqué : un test
-        // unitaire du converter passerait au vert même si Hibernate ne l'appliquait jamais.
+    void projects_the_email_onto_a_text_column() {
+        // Only observable proof that EmailAttributeConverter is auto-applied: a unit test
+        // of the converter would pass even if Hibernate never applied it.
         userRepository.save(User.register(new Email("  Frank@Example.COM "), "empreinte"));
 
         assertThat(jdbcTemplate.queryForObject(
@@ -69,7 +69,7 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
-    void traduit_la_violation_d_unicite_en_erreur_metier() {
+    void translates_the_uniqueness_violation_into_a_business_error() {
         userRepository.save(User.register(new Email("erin@example.com"), "empreinte"));
 
         assertThatThrownBy(() -> userRepository.save(User.register(new Email("erin@example.com"), "autre")))
@@ -77,18 +77,17 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
-    void ne_traduit_plus_une_violation_d_integrite_lors_d_une_mise_a_jour() throws Exception {
+    void no_longer_translates_an_integrity_violation_on_an_update() throws Exception {
         userRepository.save(User.register(new Email("gina@example.com"), "empreinte"));
-        User autre = userRepository.save(User.register(new Email("henri@example.com"), "empreinte"));
+        User other = userRepository.save(User.register(new Email("henri@example.com"), "empreinte"));
 
-        // Le domaine n'expose aucun mutateur d'email : le forcer par réflexion est le seul
-        // moyen de provoquer une violation d'intégrité sur une mise à jour plutôt que sur
-        // une insertion.
+        // The domain exposes no email setter: forcing it by reflection is the only way to
+        // trigger an integrity violation on an update rather than on an insert.
         Field email = User.class.getDeclaredField("email");
         email.setAccessible(true);
-        email.set(autre, new Email("gina@example.com"));
+        email.set(other, new Email("gina@example.com"));
 
-        assertThatThrownBy(() -> userRepository.save(autre))
+        assertThatThrownBy(() -> userRepository.save(other))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .isNotInstanceOf(EmailAlreadyUsedException.class);
     }

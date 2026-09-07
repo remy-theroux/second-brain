@@ -1,99 +1,106 @@
-# Version catalog — centralise les versions de plugins et dépendances.
-# La plupart des versions Spring sont gérées par le BOM Spring Boot ; on ne pin
-# que ce qui n'est pas couvert par le BOM (plugins, springdoc).
+# Version catalog — centralises plugin and dependency versions.
+# Most Spring versions are managed by the Spring Boot BOM; we only pin
+# what the BOM does not cover (plugins, springdoc).
 
 [versions]
 springBoot = "4.0.7"
 dependencyManagement = "1.1.7"
 springdoc = "3.0.3"
 spotless = "8.10.0"
-# Version du formateur lui-même : Spotless la résout à part, aucun BOM ne la porte.
+# Version of the formatter itself: Spotless resolves it separately, no BOM carries it.
 palantirJavaFormat = "2.78.0"
-# Extraction du texte : aucune de ces versions n'est portée par le BOM Spring Boot.
+# Text extraction: none of these versions is carried by the Spring Boot BOM.
 commonmark = "0.24.0"
 poi = "5.5.1"
 pdfbox = "3.0.7"
-# Comptage de tokens : jtokkit est la seule implémentation Java des BPE d'OpenAI, et
-# `cl100k_base` la toise que le ticket impose. Aucun BOM ne la porte.
+# Token counting: jtokkit is the only Java implementation of OpenAI's BPEs, and
+# `cl100k_base` the yardstick the ticket mandates. No BOM carries it.
 jtokkit = "1.1.0"
-# Stockage objet : aucun BOM Spring ne porte AWS, contrairement à Flyway ou PostgreSQL
-# ci-dessus — il faut donc l'épingler nous-mêmes.
+# Object storage: no Spring BOM carries AWS, unlike Flyway or PostgreSQL
+# above — so we have to pin it ourselves.
 awsSdk = "2.54.11"
+# Generation: LangChain4j provides the transport (HTTP, tool-calling protocol,
+# streaming) and nothing else — the agent loop stays in the project, see the spec of
+# 2026-09-04, decision 12. No Spring BOM carries these modules. LangChain4j's Spring Boot
+# starter is NOT used: still at 1.19.0-beta29, and targeting Boot 3.
+langchain4j = "1.19.0"
 
 [libraries]
-# Flyway : versions alignées par le BOM Spring Boot (ne pas pinner). Depuis Spring
-# Boot 4, l'auto-config vit dans le starter dédié spring-boot-starter-flyway ;
-# flyway-database-postgresql fournit le support spécifique PostgreSQL.
+# Flyway: versions aligned by the Spring Boot BOM (do not pin). Since Spring
+# Boot 4, the auto-config lives in the dedicated spring-boot-starter-flyway starter;
+# flyway-database-postgresql provides the PostgreSQL-specific support.
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
-# Vecteurs : le module qui apprend à Hibernate le type `vector` de pgvector, donc
-# @JdbcTypeCode(SqlTypes.VECTOR) sur un float[]. Version alignée par le BOM Spring Boot
-# (elle suit hibernate-core) : ne pas la pinner.
+# Vectors: the module that teaches Hibernate pgvector's `vector` type, hence
+# @JdbcTypeCode(SqlTypes.VECTOR) on a float[]. Version aligned by the Spring Boot BOM
+# (it follows hibernate-core): do not pin it.
 hibernate-vector = { module = "org.hibernate.orm:hibernate-vector" }
 postgresql = { module = "org.postgresql:postgresql" }
 springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
-# Markdown : le parseur de référence CommonMark en Java. Il donne les titres comme des
-# nœuds `Heading` avec leur niveau, là où une expression régulière sur `^#` prendrait pour
-# un titre le `#` d'un commentaire dans un bloc de code.
+# Markdown: the reference CommonMark parser in Java. It yields headings as
+# `Heading` nodes carrying their level, where a regular expression on `^#` would take the
+# `#` of a comment inside a code block for a heading.
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
-# DOCX : POI est la seule bibliothèque Java qui lise le style d'un paragraphe Word, donc
-# la seule qui distingue un titre d'un paragraphe en gras.
+# DOCX: POI is the only Java library that reads a Word paragraph's style, hence
+# the only one that tells a heading from a bold paragraph.
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
-# PDF : PDFBox donne le sommaire du document et, à défaut, la taille de police de chaque
-# glyphe — les deux seules pistes de titre qu'un PDF puisse offrir (ADR-0027).
+# PDF: PDFBox gives the document outline and, failing that, the font size of every
+# glyph — the only two heading clues a PDF can offer (ADR-0027).
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
-# Tokenizer : jtokkit rend `cl100k_base` sans réseau ni modèle à télécharger — les tables
-# BPE sont dans le jar. Ce n'est PAS le tokenizer de bge-m3 (voir TokenCounter) ; c'est un
-# proxy conservateur, et c'est la raison d'être du port.
+# Tokenizer: jtokkit yields `cl100k_base` with no network and no model to download — the
+# BPE tables are in the jar. This is NOT bge-m3's tokenizer (see TokenCounter); it is a
+# conservative proxy, and that is the very reason the port exists.
 jtokkit = { module = "com.knuddels:jtokkit", version.ref = "jtokkit" }
-# Stockage objet : le BOM AWS tient les versions de ses propres modules, comme le BOM
-# Spring Boot tient flyway-postgresql et postgresql ci-dessus — s3 et
-# url-connection-client n'ont donc pas de version.ref.
+# Object storage: the AWS BOM holds the versions of its own modules, just as the Spring
+# Boot BOM holds flyway-postgresql and postgresql above — so s3 and
+# url-connection-client carry no version.ref.
 awssdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "awsSdk" }
 awssdk-s3 = { module = "software.amazon.awssdk:s3" }
-# Ce bloc est le SEUL endroit où vit le raisonnement sur les clients HTTP du SDK :
-# build.gradle.kts pose les deux exclusions et renvoie ici. Il en existait deux copies, qui
-# affirmaient le même faux à quinze lignes d'intervalle — une erreur payée deux fois.
+# This block is the ONLY place where the reasoning about the SDK's HTTP clients lives:
+# build.gradle.kts declares the two exclusions and points back here. There used to be two copies,
+# asserting the same falsehood fifteen lines apart — a mistake paid for twice.
 #
-# D'OÙ VIENNENT LES DEUX EXCLUS. Pas du pom de software.amazon.awssdk:s3 : celui-ci ne
-# mentionne apache5-client ni netty-nio-client nulle part. Les clients HTTP qu'il déclare —
-# url-connection-client, aws-crt-client, apache-client — le sont tous en <scope>test</scope>,
-# donc sans effet sur nous. C'est son pom PARENT, software.amazon.awssdk:services, qui déclare
-# apache5-client et netty-nio-client dans sa propre section <dependencies> (pas
-# <dependencyManagement>) avec <scope>runtime</scope> : un héritage Maven invisible depuis le
-# pom de s3 seul, mais qui les fait bel et bien atterrir sur runtimeClasspath — ce que
-# `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client` confirme, en
-# remontant la requête jusqu'à s3.
+# WHERE THE TWO EXCLUSIONS COME FROM. Not from the pom of software.amazon.awssdk:s3: that one
+# mentions neither apache5-client nor netty-nio-client anywhere. The HTTP clients it declares —
+# url-connection-client, aws-crt-client, apache-client — are all in <scope>test</scope>,
+# so they have no effect on us. It is its PARENT pom, software.amazon.awssdk:services, that declares
+# apache5-client and netty-nio-client in its own <dependencies> section (not
+# <dependencyManagement>) with <scope>runtime</scope>: a Maven inheritance invisible from the
+# pom of s3 alone, but which does land them on runtimeClasspath — as
+# `gtest dependencyInsight --dependency software.amazon.awssdk:apache5-client` confirms, tracing
+# the request back up to s3.
 #
-# APACHE5-CLIENT : exclusion obligatoire, elle règle un conflit actif. Il réclame httpclient5
-# 5.6.4, que le plugin io.spring.dependency-management rétrograde à 5.5.2 — une propriété que
-# le BOM Spring Boot gère pour lui-même, indépendamment de tout starter présent ici (aucun
-# n'en dépend sur cette branche), et que le plugin impose quand même à ce qui traverse le
-# graphe. Une bibliothèque compilée contre une version et chargée contre une autre, pour un
-# client qu'on n'appelle jamais. Il s'enregistre au passage sous le même fichier de service
-# que url-connection-client (META-INF/services/software.amazon.awssdk.http.SdkHttpService) :
-# deux clients SYNCHRONES sur le classpath, là où l'adapter n'en veut qu'un.
+# APACHE5-CLIENT: mandatory exclusion, it settles an active conflict. It requires httpclient5
+# 5.6.4, which the io.spring.dependency-management plugin downgrades to 5.5.2 — a property the
+# Spring Boot BOM manages for itself, independently of any starter present here (none of them
+# depends on it on this branch), and that the plugin imposes anyway on whatever crosses the
+# graph. A library compiled against one version and loaded against another, for a
+# client we never call. On the way it registers under the same service file
+# as url-connection-client (META-INF/services/software.amazon.awssdk.http.SdkHttpService):
+# two SYNCHRONOUS clients on the classpath, where the adapter wants only one.
 #
-# NETTY-NIO-CLIENT : exclusion d'hygiène, et il faut le dire tel quel. Elle n'économise PAS
-# Netty, qui est déjà sur le runtimeClasspath par com.rabbitmq:amqp-client (netty-codec,
-# netty-handler, netty-transport — voir le même dependencyInsight, sur io.netty). Et elle ne
-# règle aucune ambiguïté de découverte : ce client s'enregistre sous
-# META-INF/services/software.amazon.awssdk.http.async.SdkAsyncHttpService, la chaîne
-# ASYNCHRONE, que le S3Client synchrone ne consulte jamais. Ce qu'elle achète est plus modeste
-# et suffit : le classpath reste à exactement un client HTTP du SDK, celui que l'adapter
-# nomme, plutôt qu'à un second que rien ici ne construit et qu'un futur S3AsyncClient
-# choisirait sans que personne ne l'ait décidé.
+# NETTY-NIO-CLIENT: hygiene exclusion, and that must be said as such. It does NOT save
+# Netty, which is already on the runtimeClasspath through com.rabbitmq:amqp-client (netty-codec,
+# netty-handler, netty-transport — see the same dependencyInsight, on io.netty). And it settles
+# no discovery ambiguity: that client registers under
+# META-INF/services/software.amazon.awssdk.http.async.SdkAsyncHttpService, the
+# ASYNCHRONOUS chain, which the synchronous S3Client never consults. What it buys is more modest
+# and enough: the classpath stays at exactly one SDK HTTP client, the one the adapter
+# names, rather than at a second one that nothing here builds and that a future S3AsyncClient
+# would pick without anyone having decided so.
 #
-# url-connection-client, lui, n'est déclaré ni par le pom de s3 en scope compile ni par le pom
-# parent services : rien à en exclure, tout à en déclarer. C'est le seul artefact HTTP du
-# classpath une fois les deux exclusions posées, et il est obligatoire, pas une optimisation —
-# sans lui, le premier appel échoue sur « Unable to load an HTTP implementation from any
-# provider in the chain », au premier dépôt de document et non au démarrage. Préféré à
-# apache5-client : son pom ne déclare hors scope test que utils, annotations et
-# http-client-spi, donc rien qui sorte du SDK. Il s'appuie sur HttpURLConnection : pas
-# d'HTTP/2, pas d'Expect: 100-continue, et le corps est tamponné en mémoire. Aucun des
-# trois ne nous concerne — un objet est un byte[] déjà en mémoire, plafonné à 20 Mo par
+# url-connection-client, for its part, is declared neither by the pom of s3 in compile scope nor by
+# the parent services pom: nothing to exclude, everything to declare. It is the only HTTP artifact on
+# the classpath once the two exclusions are in place, and it is mandatory, not an optimisation —
+# without it, the first call fails on "Unable to load an HTTP implementation from any
+# provider in the chain", at the first document upload and not at startup. Preferred over
+# apache5-client: outside test scope its pom declares only utils, annotations and
+# http-client-spi, so nothing that leaves the SDK. It relies on HttpURLConnection: no
+# HTTP/2, no Expect: 100-continue, and the body is buffered in memory. None of the
+# three concerns us — an object is a byte[] already in memory, capped at 20 MB by
 # spring.servlet.multipart.max-file-size.
 awssdk-url-connection-client = { module = "software.amazon.awssdk:url-connection-client" }
+langchain4j = { module = "dev.langchain4j:langchain4j", version.ref = "langchain4j" }
+langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama", version.ref = "langchain4j" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

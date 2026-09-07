@@ -24,8 +24,8 @@ public class IssueAccessTokenController {
         this.queryBus = queryBus;
     }
 
-    // defaultValue = "" : un paramètre absent doit produire notre erreur de protocole et non
-    // le 400 générique de Spring.
+    // defaultValue = "": a missing parameter must produce our own protocol error and not
+    // Spring's generic 400.
     @PostMapping(path = "/api/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<Object> issueAccessToken(
             @RequestParam(name = "grant_type", defaultValue = "") String grantType,
@@ -47,7 +47,7 @@ public class IssueAccessTokenController {
 
         try {
             AccessTokenView accessToken = queryBus.ask(new AuthenticateUser(username, password));
-            // no-store : RFC 6749 §5.1 interdit qu'une réponse portant un jeton soit mise en cache.
+            // no-store: RFC 6749 §5.1 forbids caching a response that carries a token.
             return ResponseEntity.ok()
                     .cacheControl(CacheControl.noStore())
                     .body(new AccessTokenResponse(accessToken.value(), BEARER_TOKEN_TYPE, accessToken.expiresIn()));

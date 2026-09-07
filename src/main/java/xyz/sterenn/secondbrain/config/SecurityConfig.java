@@ -21,8 +21,8 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations")
                         .permitAll()
-                        // Refus par défaut sous /api : une route publique doit se déclarer
-                        // ci-dessus, sans quoi elle répond 401.
+                        // Deny by default under /api: a public route must declare itself
+                        // above, otherwise it answers 401.
                         .requestMatchers("/api/**")
                         .authenticated()
                         .anyRequest()

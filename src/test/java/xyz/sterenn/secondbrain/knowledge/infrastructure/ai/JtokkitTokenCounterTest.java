@@ -10,28 +10,28 @@ class JtokkitTokenCounterTest {
     private final TokenCounter tokenCounter = new JtokkitTokenCounter();
 
     @Test
-    void ne_compte_rien_dans_un_texte_absent_ou_vide() {
+    void counts_nothing_in_a_missing_or_empty_text() {
         assertThat(tokenCounter.count(null)).isZero();
         assertThat(tokenCounter.count("")).isZero();
     }
 
     @Test
-    void compte_au_moins_un_token_par_mot() {
+    void counts_at_least_one_token_per_word() {
         assertThat(tokenCounter.count("Bonjour")).isPositive();
     }
 
     @Test
-    void compte_plus_de_tokens_que_de_mots_sur_du_francais_accentue() {
-        String texte = "L'élève déchiffrait péniblement les hiéroglyphes gravés sur la stèle funéraire. ".repeat(20);
-        int mots = texte.strip().split("\\s+").length;
+    void counts_more_tokens_than_words_on_accented_french() {
+        String text = "L'élève déchiffrait péniblement les hiéroglyphes gravés sur la stèle funéraire. ".repeat(20);
+        int words = text.strip().split("\\s+").length;
 
-        assertThat(tokenCounter.count(texte)).isGreaterThan(mots);
+        assertThat(tokenCounter.count(text)).isGreaterThan(words);
     }
 
     @Test
-    void compte_davantage_un_texte_plus_long() {
-        String phrase = "Le chat dort sur le tapis.";
+    void counts_more_for_a_longer_text() {
+        String sentence = "Le chat dort sur le tapis.";
 
-        assertThat(tokenCounter.count(phrase.repeat(3))).isGreaterThan(tokenCounter.count(phrase));
+        assertThat(tokenCounter.count(sentence.repeat(3))).isGreaterThan(tokenCounter.count(sentence));
     }
 }

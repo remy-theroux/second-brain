@@ -9,11 +9,11 @@ public record DocumentTextExtracted(UUID documentId, UUID ownerId, int blockCoun
         implements DomainEvent {
 
     public DocumentTextExtracted {
-        Objects.requireNonNull(documentId, "L'identifiant du document est obligatoire");
-        Objects.requireNonNull(ownerId, "Le propriétaire du document est obligatoire");
-        Objects.requireNonNull(occurredAt, "L'instant de l'événement est obligatoire");
+        Objects.requireNonNull(documentId, "The document id is required");
+        Objects.requireNonNull(ownerId, "The document owner is required");
+        Objects.requireNonNull(occurredAt, "The event instant is required");
         if (blockCount <= 0) {
-            throw new IllegalArgumentException("Une extraction sans bloc n'a rien à annoncer");
+            throw new IllegalArgumentException("An extraction without a block has nothing to announce");
         }
     }
 }

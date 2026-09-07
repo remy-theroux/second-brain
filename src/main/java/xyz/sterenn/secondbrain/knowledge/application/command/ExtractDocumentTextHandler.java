@@ -40,35 +40,34 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
         this.documentRepository = documentRepository;
         this.documentStorage = documentStorage;
         this.textExtractionRepository = textExtractionRepository;
-        this.extractorsByFormat = indexeParFormat(documentTextExtractors);
+        this.extractorsByFormat = indexedByFormat(documentTextExtractors);
         this.domainEventPublisher = domainEventPublisher;
         this.clock = clock;
     }
 
-    static Map<DocumentFormat, DocumentTextExtractor> indexeParFormat(
+    static Map<DocumentFormat, DocumentTextExtractor> indexedByFormat(
             List<DocumentTextExtractor> documentTextExtractors) {
-        Map<DocumentFormat, DocumentTextExtractor> parFormat = new EnumMap<>(DocumentFormat.class);
-        for (DocumentTextExtractor extracteur : documentTextExtractors) {
-            if (extracteur.format().type() != DocumentType.TEXTUAL) {
+        Map<DocumentFormat, DocumentTextExtractor> byFormat = new EnumMap<>(DocumentFormat.class);
+        for (DocumentTextExtractor extractor : documentTextExtractors) {
+            if (extractor.format().type() != DocumentType.TEXTUAL) {
                 throw new IllegalStateException(
-                        "L'extracteur " + extracteur.getClass().getName()
-                                + " revendique le format " + extracteur.format()
-                                + ", qui n'est pas de typologie textuelle");
+                        "Extractor " + extractor.getClass().getName() + " claims format " + extractor.format()
+                                + ", which is not of the textual type");
             }
-            DocumentTextExtractor precedent = parFormat.put(extracteur.format(), extracteur);
-            if (precedent != null) {
-                throw new IllegalStateException("Deux extracteurs revendiquent le format " + extracteur.format() + " : "
-                        + precedent.getClass().getName() + " et "
-                        + extracteur.getClass().getName());
+            DocumentTextExtractor previous = byFormat.put(extractor.format(), extractor);
+            if (previous != null) {
+                throw new IllegalStateException("Two extractors claim format " + extractor.format() + ": "
+                        + previous.getClass().getName() + " and "
+                        + extractor.getClass().getName());
             }
         }
         for (DocumentFormat format : DocumentFormat.of(DocumentType.TEXTUAL)) {
-            if (!parFormat.containsKey(format)) {
+            if (!byFormat.containsKey(format)) {
                 throw new IllegalStateException(
-                        "Aucun extracteur ne sait lire " + format + " : un format accepté au dépôt doit être lisible");
+                        "No extractor can read " + format + ": a format accepted at upload must be readable");
             }
         }
-        return Map.copyOf(parFormat);
+        return Map.copyOf(byFormat);
     }
 
     @Override
@@ -77,22 +76,22 @@ public class ExtractDocumentTextHandler implements CommandHandler<ExtractDocumen
                 .findByIdAndOwnerId(command.documentId(), command.ownerId())
                 .orElseThrow(DocumentNotFoundException::new);
 
-        byte[] contenu = documentStorage
+        byte[] content = documentStorage
                 .read(document.getId())
-                // La ligne existe, l'original non : voir ADR-0020.
+                // The row exists, the original does not: see ADR-0020.
                 .orElseThrow(UnreadableDocumentException::new);
 
-        ExtractedText texte = extractorsByFormat.get(document.getFormat()).extract(contenu);
+        ExtractedText text = extractorsByFormat.get(document.getFormat()).extract(content);
 
-        // Effacer avant d'écrire : AMQP livre au moins une fois et document_id est UNIQUE,
-        // une redélivrance échouerait sinon sur la contrainte.
+        // Delete before writing: AMQP delivers at least once and document_id is UNIQUE,
+        // so a redelivery would otherwise fail on the constraint.
         textExtractionRepository.deleteByDocumentId(document.getId());
-        textExtractionRepository.save(TextExtraction.of(document.getId(), texte, clock.instant()));
+        textExtractionRepository.save(TextExtraction.of(document.getId(), text, clock.instant()));
 
         document.markTextExtracted();
         documentRepository.save(document);
 
         domainEventPublisher.publish(new DocumentTextExtracted(
-                document.getId(), document.getOwnerId(), texte.blocks().size(), clock.instant()));
+                document.getId(), document.getOwnerId(), text.blocks().size(), clock.instant()));
     }
 }

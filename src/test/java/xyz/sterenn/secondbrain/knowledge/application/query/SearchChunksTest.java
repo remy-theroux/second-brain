@@ -53,67 +53,67 @@ class SearchChunksTest {
     private UserRepository userRepository;
 
     @BeforeEach
-    void la_question_se_vectorise_toujours_de_la_meme_facon() {
+    void the_question_always_embeds_the_same_way() {
         recordingEmbeddingPort.clear();
-        recordingEmbeddingPort.repondra(KnowledgeFixture.uneQuestion());
+        recordingEmbeddingPort.willAnswer(KnowledgeFixture.aQuestion());
     }
 
     @AfterEach
-    void rend_le_port_de_vectorisation_comme_il_l_a_trouve() {
+    void leaves_the_embedding_port_as_it_found_it() {
         recordingEmbeddingPort.clear();
     }
 
     @Test
-    void rend_l_extrait_qui_porte_la_reponse_en_tete() {
-        UUID alice = unCompte("alice@exemple.fr");
-        Document document = unDocumentDepose(alice, "rapport.md");
+    void returns_first_the_chunk_that_carries_the_answer() {
+        UUID alice = anAccount("alice@exemple.fr");
+        Document document = anUploadedDocument(alice, "rapport.md");
         textChunkRepository.saveAll(List.of(
-                unExtrait(document, 0, "Une digression sans rapport.", 0.1f),
-                unExtrait(document, 1, "La réponse est quarante-deux.", 1f),
-                unExtrait(document, 2, "Un passage à peu près sur le sujet.", 0.6f)));
+                aChunk(document, 0, "Une digression sans rapport.", 0.1f),
+                aChunk(document, 1, "La réponse est quarante-deux.", 1f),
+                aChunk(document, 2, "Un passage à peu près sur le sujet.", 0.6f)));
 
-        List<ChunkMatchView> resultats = queryBus.ask(new SearchChunks("Quelle est la réponse ?", alice));
+        List<ChunkMatchView> results = queryBus.ask(new SearchChunks("Quelle est la réponse ?", alice));
 
-        assertThat(resultats).extracting(ChunkMatchView::text).startsWith("La réponse est quarante-deux.");
+        assertThat(results).extracting(ChunkMatchView::text).startsWith("La réponse est quarante-deux.");
     }
 
     @Test
-    void rend_pour_chaque_extrait_son_contenu_son_document_sa_position_et_son_score() {
-        UUID alice = unCompte("bruno@exemple.fr");
-        Document document = unDocumentDepose(alice, "rapport-annuel.md");
+    void returns_for_each_chunk_its_content_its_document_its_position_and_its_score() {
+        UUID alice = anAccount("bruno@exemple.fr");
+        Document document = anUploadedDocument(alice, "rapport-annuel.md");
         textChunkRepository.saveAll(List.of(TextChunk.of(
                 document.getId(),
                 2,
                 new Chunk("Introduction", "Le corps de l'extrait."),
-                KnowledgeFixture.unVecteurProche(1f),
+                KnowledgeFixture.aNearbyVector(1f),
                 Instant.now())));
 
-        List<ChunkMatchView> resultats = queryBus.ask(new SearchChunks("Une question", alice));
+        List<ChunkMatchView> results = queryBus.ask(new SearchChunks("Une question", alice));
 
-        assertThat(resultats).singleElement().satisfies(resultat -> {
-            assertThat(resultat.documentId()).isEqualTo(document.getId());
-            assertThat(resultat.filename()).isEqualTo("rapport-annuel.md");
-            assertThat(resultat.position()).isEqualTo(2);
-            assertThat(resultat.heading()).isEqualTo("Introduction");
-            assertThat(resultat.text()).isEqualTo("Le corps de l'extrait.");
-            assertThat(resultat.similarity()).isGreaterThan(0.99d);
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.documentId()).isEqualTo(document.getId());
+            assertThat(result.filename()).isEqualTo("rapport-annuel.md");
+            assertThat(result.position()).isEqualTo(2);
+            assertThat(result.heading()).isEqualTo("Introduction");
+            assertThat(result.text()).isEqualTo("Le corps de l'extrait.");
+            assertThat(result.similarity()).isGreaterThan(0.99d);
         });
     }
 
     @Test
-    void rend_une_liste_vide_pour_une_base_de_connaissance_vide() {
-        UUID alice = unCompte("clara@exemple.fr");
+    void returns_an_empty_list_for_an_empty_knowledge_base() {
+        UUID alice = anAccount("clara@exemple.fr");
 
         assertThat(queryBus.ask(new SearchChunks("Une question", alice))).isEmpty();
     }
 
     @Test
-    void ne_rend_pas_les_extraits_d_un_autre_compte() {
-        UUID alice = unCompte("diane@exemple.fr");
-        UUID bob = unCompte("edgar@exemple.fr");
+    void does_not_return_the_chunks_of_another_account() {
+        UUID alice = anAccount("diane@exemple.fr");
+        UUID bob = anAccount("edgar@exemple.fr");
         textChunkRepository.saveAll(List.of(
-                unExtrait(unDocumentDepose(alice, "a-elle.md"), 0, "Le sien.", 0.5f),
-                unExtrait(unDocumentDepose(bob, "a-lui.md"), 0, "Celui de Bob.", 1f)));
+                aChunk(anUploadedDocument(alice, "a-elle.md"), 0, "Le sien.", 0.5f),
+                aChunk(anUploadedDocument(bob, "a-lui.md"), 0, "Celui de Bob.", 1f)));
 
         assertThat(queryBus.ask(new SearchChunks("Une question", alice)))
                 .extracting(ChunkMatchView::text)
@@ -121,19 +121,19 @@ class SearchChunksTest {
     }
 
     @Test
-    void ne_rend_jamais_plus_de_huit_extraits() {
-        UUID alice = unCompte("fatou@exemple.fr");
-        Document document = unDocumentDepose(alice, "long.md");
+    void never_returns_more_than_eight_chunks() {
+        UUID alice = anAccount("fatou@exemple.fr");
+        Document document = anUploadedDocument(alice, "long.md");
         textChunkRepository.saveAll(IntStream.range(0, 12)
-                .mapToObj(position -> unExtrait(document, position, "Extrait " + position, 0.5f))
+                .mapToObj(position -> aChunk(document, position, "Extrait " + position, 0.5f))
                 .toList());
 
         assertThat(queryBus.ask(new SearchChunks("Une question", alice))).hasSize(8);
     }
 
     @Test
-    void refuse_une_question_vide() {
-        UUID alice = unCompte("gaspard@exemple.fr");
+    void rejects_an_empty_question() {
+        UUID alice = anAccount("gaspard@exemple.fr");
 
         assertThatThrownBy(() -> queryBus.ask(new SearchChunks("   ", alice)))
                 .isInstanceOf(InvalidQuestionException.class)
@@ -141,30 +141,30 @@ class SearchChunksTest {
     }
 
     @Test
-    void vectorise_la_question_telle_qu_elle_a_ete_posee() {
-        UUID alice = unCompte("helena@exemple.fr");
+    void embeds_the_question_exactly_as_it_was_asked() {
+        UUID alice = anAccount("helena@exemple.fr");
 
         queryBus.ask(new SearchChunks("  Qui a signé le rapport ?  ", alice));
 
-        assertThat(recordingEmbeddingPort.textesRecus()).containsExactly("Qui a signé le rapport ?");
+        assertThat(recordingEmbeddingPort.receivedTexts()).containsExactly("Qui a signé le rapport ?");
     }
 
-    private static TextChunk unExtrait(Document document, int position, String corps, float proximite) {
+    private static TextChunk aChunk(Document document, int position, String body, float closeness) {
         return TextChunk.of(
                 document.getId(),
                 position,
-                new Chunk("Titre", corps),
-                KnowledgeFixture.unVecteurProche(proximite),
+                new Chunk("Titre", body),
+                KnowledgeFixture.aNearbyVector(closeness),
                 Instant.now());
     }
 
-    private UUID unCompte(String email) {
+    private UUID anAccount(String email) {
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
     }
 
-    private Document unDocumentDepose(UUID proprietaire, String nom) {
-        byte[] octets = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
+    private Document anUploadedDocument(UUID owner, String name) {
+        byte[] bytes = UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8);
         return documentRepository.save(
-                Document.upload(proprietaire, nom, DocumentFormat.MARKDOWN, Checksum.of(octets), octets.length));
+                Document.upload(owner, name, DocumentFormat.MARKDOWN, Checksum.of(bytes), bytes.length));
     }
 }

@@ -1,31 +1,31 @@
 /*
- * Socle global minimal : le thème Aura porte le style des composants, ce fichier ne pose
- * que ce qui n'appartient à aucun composant.
+ * Minimal global base: the Aura theme carries component styling, this file only sets
+ * what belongs to no component.
  *
- * Deux familles de variables cohabitent, et la frontière est nette :
- * - `--p-*` : les design tokens d'Aura. Toutes les COULEURS passent par eux, pour suivre
- *   le thème clair/sombre du système sans double définition. Aucune couleur n'est
- *   définie ici.
- * - `--sb-*` : les tokens du projet — espacements, largeurs, tailles de titre. Un
- *   composant n'écrit jamais un `rem` nu : il nomme le token, et la valeur ne vit qu'ici.
+ * Two families of variables coexist, and the boundary is sharp:
+ * - `--p-*`: Aura's design tokens. Every COLOUR goes through them, so the system's
+ *   light/dark theme is followed without a second definition. No colour is defined
+ *   here.
+ * - `--sb-*`: the project's tokens — spacing, widths, heading sizes. A component never
+ *   writes a bare `rem`: it names the token, and the value lives only here.
  *
- * La page /design-system (développement seulement) rend chacun de ces tokens avec sa
- * valeur : c'est là que se voit l'effet d'un changement.
+ * The /design-system page (development only) renders each of these tokens with its
+ * value: that is where the effect of a change shows.
  */
 
 :root {
-  /* Échelle d'espacement : gap, padding, margin. */
+  /* Spacing scale: gap, padding, margin. */
   --sb-space-xs: 0.5rem;
   --sb-space-sm: 0.75rem;
   --sb-space-md: 1rem;
   --sb-space-lg: 1.5rem;
   --sb-space-xl: 2rem;
 
-  /* Largeurs de mise en page. */
+  /* Layout widths. */
   --sb-sidebar-width: 17rem;
   --sb-guest-width: 26rem;
 
-  /* Typographie : les titres seulement, le reste est la taille du navigateur. */
+  /* Typography: headings only, the rest is the browser's size. */
   --sb-title-size: 1.5rem;
   --sb-section-title-size: 1.25rem;
   --sb-text-small: 0.875rem;
@@ -56,10 +56,9 @@ body {
 }
 
 /*
- * Colonne d'un écran invité (connexion, inscription) : titre, messages, formulaire et
- * lien vers l'autre écran, empilés. Posée ici et non en `scoped` parce que les deux
- * vues la partagent à l'identique — un `<style scoped>` copié-collé dans chacune
- * était la forme précédente.
+ * Column of a guest screen (login, registration): heading, messages, form and link to
+ * the other screen, stacked. Set here rather than `scoped` because both views share it
+ * identically — a `<style scoped>` copy-pasted into each was the previous shape.
  */
 .guest-form {
   display: flex;
@@ -73,26 +72,25 @@ body {
   gap: var(--sb-space-md);
 }
 
-/* Lien de bas d'écran vers l'écran invité voisin. */
+/* Bottom-of-screen link to the neighbouring guest screen. */
 .guest-switch {
   margin: 0;
   text-align: center;
 }
 
 /*
- * Tableau des documents (DocumentsView, et sa copie dans le design system). Ces classes se
- * posent sur des lignes et des colonnes rendues par DataTable, hors de portée d'un
- * `<style scoped>` : partagées par deux vues, elles vivent ici plutôt qu'en `:deep()`
- * recopié dans chacune.
+ * Documents table (DocumentsView, and its copy in the design system). These classes land
+ * on rows and columns rendered by DataTable, out of reach of a `<style scoped>`: shared
+ * by two views, they live here rather than in a `:deep()` copied into each.
  */
 
-/* La ligne du doublon désigné par le serveur : un repère, pas une couleur de plus. */
+/* The duplicate row named by the server: a marker, not one more colour. */
 .table-duplicate-row {
   font-weight: bold;
   box-shadow: inset 3px 0 0 var(--p-primary-color);
 }
 
-/* Colonne des actions, réduite au bouton qu'elle porte. */
+/* Actions column, narrowed to the button it carries. */
 .table-actions {
   width: 1%;
   text-align: right;

@@ -33,9 +33,9 @@ public enum DocumentFormat {
     }
 
     public static DocumentFormat fromFilename(String filename) {
-        String normalise = filename == null ? "" : filename.trim().toLowerCase(Locale.ROOT);
+        String normalised = filename == null ? "" : filename.trim().toLowerCase(Locale.ROOT);
         return Arrays.stream(values())
-                .filter(format -> normalise.endsWith(format.extension))
+                .filter(format -> normalised.endsWith(format.extension))
                 .findFirst()
                 .orElseThrow(() -> new UnsupportedDocumentFormatException(acceptedExtensions()));
     }

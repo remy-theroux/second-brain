@@ -15,33 +15,33 @@ import xyz.sterenn.secondbrain.shared.event.DomainEvent;
 class DomainEventNamesTest {
 
     @Test
-    void nomme_par_le_contexte_l_objet_et_le_fait() {
+    void names_by_the_context_the_object_and_the_fact() {
         assertThat(DomainEventNames.of(DocumentUploaded.class)).isEqualTo("knowledge.document.uploaded");
     }
 
     @Test
-    void joint_les_mots_de_l_objet_par_un_tiret() {
+    void joins_the_words_of_the_object_with_a_dash() {
         assertThat(DomainEventNames.of(DocumentTextExtracted.class)).isEqualTo("knowledge.document-text.extracted");
     }
 
     @Test
-    void refuse_un_nom_sans_objet() {
+    void rejects_a_name_without_an_object() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(TestEvents.Uploaded.class))
-                .withMessageContaining("objet");
+                .withMessageContaining("object");
     }
 
     @Test
-    void refuse_un_evenement_hors_d_un_contexte_borne() {
+    void rejects_an_event_outside_a_bounded_context() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> DomainEventNames.of(HorsContexte.class))
-                .withMessageContaining(HorsContexte.class.getName());
+                .isThrownBy(() -> DomainEventNames.of(OutsideContext.class))
+                .withMessageContaining(OutsideContext.class.getName());
     }
 
     @Test
-    void refuse_une_lambda_ou_une_classe_anonyme() {
+    void rejects_a_lambda_or_an_anonymous_class() {
         DomainEvent lambda = () -> Instant.parse("2026-08-25T10:00:00Z");
-        DomainEvent anonyme = new DomainEvent() {
+        DomainEvent anonymous = new DomainEvent() {
             @Override
             public Instant occurredAt() {
                 return Instant.parse("2026-08-25T10:00:00Z");
@@ -50,24 +50,24 @@ class DomainEventNamesTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DomainEventNames.of(lambda.getClass()))
-                .withMessageContaining("anonyme");
+                .withMessageContaining("anonymous");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> DomainEventNames.of(anonyme.getClass()))
-                .withMessageContaining("anonyme");
+                .isThrownBy(() -> DomainEventNames.of(anonymous.getClass()))
+                .withMessageContaining("anonymous");
     }
 
     @Test
-    void construit_la_table_des_noms_connus() {
+    void builds_the_table_of_known_names() {
         assertThat(DomainEventNames.mappingOf(List.of(DocumentUploaded.class)))
                 .containsExactly(java.util.Map.entry("knowledge.document.uploaded", DocumentUploaded.class));
     }
 
     @Test
-    void refuse_deux_classes_du_meme_nom() {
+    void rejects_two_classes_with_the_same_name() {
         assertThatIllegalStateException()
                 .isThrownBy(() -> DomainEventNames.mappingOf(List.of(DocumentUploaded.class, DocumentUploaded.class)))
                 .withMessageContaining("knowledge.document.uploaded");
     }
 
-    record HorsContexte(Instant occurredAt) implements DomainEvent {}
+    record OutsideContext(Instant occurredAt) implements DomainEvent {}
 }

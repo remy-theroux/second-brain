@@ -31,9 +31,9 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 
 /**
- * Pas de {@code @Transactional} : l'annonce ne part qu'au commit, une transaction de test
- * l'empêcherait de partir. Le compte et le document sont donc réellement écrits, et effacés en
- * {@code @AfterEach} — la cascade emporte le document avec le compte, le bucket se vide à part.
+ * No {@code @Transactional}: the announcement only leaves at commit, a test transaction would keep
+ * it from leaving. The account and the document are therefore really written, and erased in
+ * {@code @AfterEach} — the cascade takes the document with the account, the bucket is emptied apart.
  */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
@@ -41,7 +41,7 @@ class UploadDocumentAnnouncementTest {
 
     private static final String EMAIL = "gaston@exemple.fr";
     private static final String OBSERVATION = "test.observation.depot";
-    private static final byte[] CONTENU = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] CONTENT = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
 
     @Autowired
     private CommandBus commandBus;
@@ -65,14 +65,14 @@ class UploadDocumentAnnouncementTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
-    private UUID compte;
+    private UUID account;
 
     @BeforeEach
-    void prepare_un_compte_et_une_queue_d_observation() {
+    void prepares_an_account_and_an_observation_queue() {
         recordingNotificationSender.clear();
-        compte = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, "chevalpile42");
+        account = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, "chevalpile42");
         amqpAdmin.declareQueue(new Queue(OBSERVATION));
         amqpAdmin.declareBinding(new Binding(
                 OBSERVATION,
@@ -83,26 +83,26 @@ class UploadDocumentAnnouncementTest {
     }
 
     @AfterEach
-    void efface_ce_qui_a_ete_commite() {
+    void erases_what_was_committed() {
         amqpAdmin.deleteQueue(OBSERVATION);
         jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", EMAIL);
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void annonce_le_document_depose_une_fois_le_depot_commite() {
-        commandBus.dispatch(new UploadDocument(compte, "rapport.txt", CONTENU));
+    void announces_the_uploaded_document_once_the_upload_is_committed() {
+        commandBus.dispatch(new UploadDocument(account, "rapport.txt", CONTENT));
 
-        Object recu = rabbitTemplate.receiveAndConvert(
+        Object received = rabbitTemplate.receiveAndConvert(
                 OBSERVATION, Duration.ofSeconds(5).toMillis());
 
         Document document = documentRepository
-                .findByOwnerIdAndChecksum(compte, Checksum.of(CONTENU))
+                .findByOwnerIdAndChecksum(account, Checksum.of(CONTENT))
                 .orElseThrow();
-        assertThat(recu).isInstanceOf(DocumentUploaded.class);
-        DocumentUploaded evenement = (DocumentUploaded) recu;
-        assertThat(evenement.documentId()).isEqualTo(document.getId());
-        assertThat(evenement.ownerId()).isEqualTo(compte);
-        assertThat(evenement.occurredAt()).isNotNull();
+        assertThat(received).isInstanceOf(DocumentUploaded.class);
+        DocumentUploaded event = (DocumentUploaded) received;
+        assertThat(event.documentId()).isEqualTo(document.getId());
+        assertThat(event.ownerId()).isEqualTo(account);
+        assertThat(event.occurredAt()).isNotNull();
     }
 }

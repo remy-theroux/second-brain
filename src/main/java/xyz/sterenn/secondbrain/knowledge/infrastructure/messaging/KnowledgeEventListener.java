@@ -22,7 +22,7 @@ public class KnowledgeEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeEventListener.class);
 
-    private static final String ECHEC_INATTENDU = "Le traitement de ce document a échoué de façon inattendue.";
+    private static final String UNEXPECTED_FAILURE = "Le traitement de ce document a échoué de façon inattendue.";
 
     private final CommandBus commandBus;
 
@@ -31,43 +31,45 @@ public class KnowledgeEventListener {
     }
 
     /**
-     * L'échec se marque par une <em>seconde</em> commande, donc une seconde transaction : le
-     * bus vient d'annuler la première, qui emporterait le statut avec elle. Voir ADR-0028.
+     * The failure is recorded by a <em>second</em> command, hence a second transaction: the bus
+     * has just rolled the first one back, and it would take the status with it. See ADR-0028.
      */
     @RabbitHandler
     public void on(DocumentUploaded event) {
         try {
             commandBus.dispatch(new ExtractDocumentText(event.documentId(), event.ownerId()));
-        } catch (RuntimeException echec) {
-            log.error("Extraction du document {} en échec", event.documentId(), echec);
-            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), motif(echec)));
+        } catch (RuntimeException failure) {
+            log.error("Extraction of document {} failed", event.documentId(), failure);
+            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
         }
     }
 
-    /** Même dispositif qu'au dépôt : le statut d'échec s'écrit hors de la transaction annulée (ADR-0028). */
+    /** Same device as on upload: the failure status is written outside the rolled-back transaction (ADR-0028). */
     @RabbitHandler
     public void on(DocumentTextExtracted event) {
         try {
             commandBus.dispatch(new IndexDocumentText(event.documentId(), event.ownerId()));
-        } catch (RuntimeException echec) {
-            log.error("Indexation du document {} en échec", event.documentId(), echec);
-            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), motif(echec)));
+        } catch (RuntimeException failure) {
+            log.error("Indexing of document {} failed", event.documentId(), failure);
+            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
         }
     }
 
     /**
-     * Ce handler ne journalise que pour exister : un type déclaré dans
-     * {@code DomainEventRegistration} sans {@code @RabbitHandler} est rejeté par Spring AMQP.
+     * This handler only logs so as to exist: a type declared in {@code DomainEventRegistration}
+     * without a {@code @RabbitHandler} is rejected by Spring AMQP.
      */
     @RabbitHandler
     public void on(DocumentTextIndexed event) {
         log.info(
-                "Événement knowledge.document-text.indexed reçu pour le document {} : {} extraits",
+                "Event knowledge.document-text.indexed received for document {}: {} chunks",
                 event.documentId(),
                 event.chunkCount());
     }
 
-    private static String motif(RuntimeException echec) {
-        return echec instanceof DocumentProcessingException refusMetier ? refusMetier.getMessage() : ECHEC_INATTENDU;
+    private static String reason(RuntimeException failure) {
+        return failure instanceof DocumentProcessingException businessRefusal
+                ? businessRefusal.getMessage()
+                : UNEXPECTED_FAILURE;
     }
 }

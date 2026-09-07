@@ -8,7 +8,7 @@ public record RegistrationRequest(
         @NotBlank(message = "Le mot de passe est obligatoire")
         String password) {
 
-    // Le mot de passe en clair ne doit apparaître dans aucun log ni message d'assertion.
+    // The clear-text password must not appear in any log or assertion message.
     @Override
     public String toString() {
         return "RegistrationRequest[email=" + email + ", password=***]";

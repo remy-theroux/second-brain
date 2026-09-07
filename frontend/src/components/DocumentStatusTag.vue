@@ -1,10 +1,10 @@
 <script setup>
 import Tag from 'primevue/tag'
 
-// Le statut voyage en code, comme tout ce que l'API sérialise d'une énumération ; le
-// libellé est une affaire d'écran, et cette copie est assumée — ADR-0022. Il vit ici et
-// non dans une vue parce que deux écrans l'affichent : la liste et le détail. Le motif
-// d'échec, lui, vient du serveur et s'affiche tel quel — le front n'en réécrit aucun.
+// The status travels as a code, like everything the API serialises from an enum; the
+// label is a screen matter, and this copy is assumed — ADR-0022. It lives here and not
+// in a view because two screens display it: the list and the detail. The failure reason,
+// on the other hand, comes from the server and is displayed as is — the front rewrites none.
 const LABELS = {
   PENDING: 'En attente de traitement',
   EXTRACTED: 'Texte extrait',
@@ -12,9 +12,9 @@ const LABELS = {
   FAILED: 'Traitement en échec',
 }
 
-// La sévérité est une décision de rendu, pas une donnée : « en attente » n'est ni un
-// succès ni une erreur. `EXTRACTED` passe de `success` à `info` : ce n'est plus un
-// aboutissement mais une étape, et c'est `READY` qui porte désormais le vert.
+// The severity is a rendering decision, not data: "pending" is neither a success nor an
+// error. `EXTRACTED` moves from `success` to `info`: it is no longer an outcome but a
+// step, and `READY` now carries the green.
 const SEVERITIES = {
   PENDING: 'secondary',
   EXTRACTED: 'info',

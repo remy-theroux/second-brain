@@ -10,9 +10,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Langue
 
-Le projet est intégralement en français : commentaires, Javadoc, messages
-d'exception, libellés d'interface, noms de méthodes de test, messages de commit.
-Les noms de classes, de méthodes de production et de packages restent en anglais.
+**Le code s'écrit en anglais, la prose du projet reste en français.** La frontière n'est
+pas la nature du fichier, c'est le lecteur : ce qu'un développeur lit est en anglais, ce
+qu'un utilisateur lit est en français.
+
+**En anglais** — tout le code, commentaires compris :
+
+- noms de classes, de méthodes, de packages, de champs et de variables ;
+- commentaires et Javadoc, y compris ceux des migrations SQL et des fichiers du front ;
+- **noms de méthodes de test** (`rejects_an_already_used_email`), et les libellés des
+  `describe`/`it` côté Vitest.
+
+**En français** — ce que lit un utilisateur, et rien d'autre :
+
+- les libellés, textes et messages de l'interface ;
+- les **messages d'exception métier**, qui sont affichables tels quels (voir les règles
+  backend) ;
+- le prompt de l'agent documentaire (`src/main/resources/agents/document-agent.md`), qui
+  gouverne la langue de ses réponses ;
+- les messages de commit.
+
+**En français, sans exception : les documents de travail.** Les ADR de `docs/decisions/`,
+les specs de `docs/superpowers/specs/` et les plans de `docs/superpowers/plans/` ne se
+traduisent jamais, même partiellement. Ce sont des documents de réflexion, pas du code, et
+un ADR accepté ne se réécrit de toute façon pas (voir `.claude/rules/decisions.md`).
 
 ## Commandes
 
@@ -62,7 +83,7 @@ gtest() {
 | Toute la suite | `gtest test` |
 | Une classe de test | `gtest test --tests "xyz.sterenn.secondbrain.users.domain.valueobject.EmailTest"` |
 | Un package | `gtest test --tests "xyz.sterenn.secondbrain.shared.bus.*"` |
-| Une méthode | `gtest test --tests "…EmailTest.refuse_un_email_vide"` |
+| Une méthode | `gtest test --tests "…EmailTest.rejects_a_blank_email"` |
 | Compilation seule | `gtest compileJava` |
 | Build complet (ce que fait la CI) | `gtest build` |
 | Refabriquer les fixtures binaires d'extraction | `gtest generateFixtures` |
@@ -139,9 +160,11 @@ le premier démarrage, donc sans conteneur d'amorçage. Pour l'interroger à la 
 nommés (`garage-meta`, `garage-data`) sont propres au projet Compose, comme `db-data` :
 **chaque worktree a donc son propre Garage**, tout comme il a sa propre base.
 
-Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions), tiré au premier
-démarrage par le conteneur one-shot `ollama-pull`. Il ne publie aucun port : seul le worker
-lui parle, par le réseau de la pile. Pour l'interroger à la main,
+Un service `ollama` sert le modèle d'embedding (`bge-m3`, 1024 dimensions) et le modèle de
+génération (`qwen3:4b`), tous deux tirés au premier démarrage par le conteneur one-shot
+`ollama-pull` — **deux modèles**, donc un premier démarrage plus long, et un Ollama de plus
+par worktree en tire deux plutôt qu'un. Il ne publie aucun port : seuls le worker et l'app
+lui parlent, par le réseau de la pile. Pour l'interroger à la main,
 `docker compose exec ollama ollama list`. Le worker **ne l'attend pas** pour démarrer — un
 document traité pendant le téléchargement du modèle échoue avec un motif qui nomme la
 vectorisation.
@@ -214,29 +237,53 @@ xyz.sterenn.secondbrain
 │   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
 │   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
 │   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
+│   │   ├── DocumentAgent    la moitié Java de l'agent documentaire : outil, budget, température
+│   │   ├── GroundingPolicy  décide le verdict d'une réponse — sourcée, conversationnelle,
+│   │   │                    sans source, ou budget dépassé
+│   │   ├── CitationPolicy   l'unique syntaxe de citation `[n]`, un seul endroit qui la connaisse
+│   │   ├── PromptBuilder    message système de l'agent, mise en forme d'un résultat de recherche
 │   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
-│   │   │                    TextChunk (un extrait et son vecteur)
+│   │   │                    TextChunk (un extrait et son vecteur), AgentRun (la trace d'une
+│   │   │                    conversation : question, réponse, recherches, sources citées)
 │   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
 │   │   │                    document se découpe — déduit du format), DocumentStatus,
 │   │   │                    TextBlock + ExtractedText (le format du texte extrait),
 │   │   │                    Embedding (le vecteur produit par le service de vectorisation),
 │   │   │                    Chunk (un extrait, avant qu'il soit rangé),
 │   │   │                    Question (la question posée, non vide),
-│   │   │                    ChunkMatch (un extrait retrouvé et son score)
+│   │   │                    ChunkMatch (un extrait retrouvé et son score),
+│   │   │                    Agent (nom, version, prompt système, outils, budget, température),
+│   │   │                    AgentRefusals (les messages figés d'un aveu d'ignorance),
+│   │   │                    ExecutionBudget (tours et durée maximum d'une conversation),
+│   │   │                    LlmMessage + LlmRequest + LlmTurn (le dialogue avec le service de
+│   │   │                    génération), ToolSpecification + ToolParameter + ToolCall (un outil
+│   │   │                    déclaré à l'agent, et un appel que le modèle en fait),
+│   │   │                    SourceCandidate + SourceCatalogue + Absorption (les extraits
+│   │   │                    retrouvés par une recherche, et leur numérotation cumulative),
+│   │   │                    Source + CitedSource (une source numérotée dans la réponse, puis
+│   │   │                    sa forme persistée dans la trace),
+│   │   │                    Answer + AnswerVerdict (la réponse rendue, et son verdict)
 │   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
 │   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
-│   │   │                    TextChunkRepository
+│   │   │                    TextChunkRepository, LlmPort (le service de génération),
+│   │   │                    AgentRunRepository (les traces de conversation, par propriétaire)
 │   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
 │   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
 │   │   │                    et ses deux filles (Unreadable…, Unextractable…),
 │   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
-│   │   │                    InvalidQuestionException,
+│   │   │                    InvalidQuestionException, LlmUnavailableException,
 │   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
 │   │   │                    c'est elle que le worker interroge)
 │   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
 │   ├── application/
+│   │   ├── agent/           ConversationAgent (la boucle qui décide, hors des bus et sans
+│   │   │                    transaction), ConversationOutcome (son résultat : réponse,
+│   │   │                    recherches, tours, durée), DocumentSearchTool (l'outil que l'agent
+│   │   │                    appelle, par le QueryBus), CitationBuffer (retient les tokens
+│   │   │                    jusqu'à la première citation valide)
 │   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
-│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed
+│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
+│   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
 │   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
 │   │                        + TextExtractionView, SearchChunks + ChunkMatchView
 │   └── infrastructure/
@@ -245,7 +292,12 @@ xyz.sterenn.secondbrain
 │       ├── storage/         ADAPTER S3 du port DocumentStorage + S3ClientConfiguration (le client)
 │       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
 │       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
-│       │                    et JtokkitTokenCounter
+│       │                    JtokkitTokenCounter, et ADAPTER du port LlmPort :
+│       │                    LangChain4jLlmAdapter + OllamaChatConfiguration — seul endroit du
+│       │                    dépôt où `dev.langchain4j.*` peut être importé
+│       ├── agent/           AgentConfiguration (le bean Agent et l'exécuteur de la
+│       │                    conversation), AgentDefinitionLoader (charge et valide la prose
+│       │                    de l'agent au démarrage)
 │       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
 │       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
 │                            KnowledgeEventListener (profil worker), catalogue des
@@ -576,6 +628,97 @@ mono-utilisateur. Un Ollama à terre rend `503`, une question vide `422` sur le 
 **Un document resté `EXTRACTED` n'est pas cherchable**, et rien ici ne le rattrape : c'est
 RAG-7.
 
+### Le flux de la conversation
+
+`POST /api/chat` confie la question à un **agent** qui dispose d'un outil de recherche et
+**décide** s'il l'appelle. Ce n'est pas un RAG en un coup : une question conversationnelle
+n'ouvre aucune recherche, et une question documentaire peut en enchaîner plusieurs avant de
+répondre.
+
+La réponse voyage en **Server-Sent Events**, toujours dans cet ordre : `token` (un fragment
+de texte, zéro ou plusieurs fois), `sources` (une fois, les extraits cités), puis `done` (le
+verdict de la réponse). Un échec en cours de génération émet `error` à la place — `sources`
+et `done` **ne sont alors jamais émis** : un client qui reçoit `error` sait qu'aucune
+conversation complète ne suivra sur ce flux.
+
+La boucle vit dans `ConversationAgent`, **hors des bus et sans transaction** : une
+conversation dure des minutes, et une transaction ouverte tiendrait tout ce temps une
+connexion PostgreSQL. Chaque recherche qu'elle déclenche passe par le `QueryBus`
+(transaction courte, le temps d'un appel), la trace finale par le `CommandBus`, **après la
+fermeture du flux** — son échec ne doit rien coûter à une réponse déjà livrée au client.
+Cette trace n'est écrite que sur le chemin nominal : **une conversation interrompue par une
+erreur ou une déconnexion n'en laisse aucune**, `RecordAgentRun` n'étant dispatché qu'après
+un `answer()` allé à son terme.
+
+**Les tokens sont retenus jusqu'à la première citation valide.** `CitationBuffer` les
+tamponne le temps qu'une référence `[n]` complète apparaisse dans le texte produit ; une
+réponse qui a cherché sans rien citer n'atteint jamais l'écran, elle est remplacée par
+l'aveu d'ignorance — c'est le garde-fou qui interdit qu'une invention parte sourcée par
+erreur.
+
+Le catalogue des sources (`SourceCatalogue`) est **cumulatif et dédoublonné** sur
+`(documentId, position)` : un extrait déjà cité garde son numéro pour toute la
+conversation, même retrouvé par une recherche ultérieure — le modèle ne cite jamais deux
+numéros pour un même passage.
+
+La définition de l'agent se partage entre deux fichiers qui doivent rester en phase : la
+prose dans `src/main/resources/agents/document-agent.md`, l'outil, le budget et la
+température dans `DocumentAgent`. `AgentDefinitionLoader` échoue au démarrage si un
+placeholder du fichier markdown reste non résolu — mieux vaut un démarrage refusé qu'un
+prompt à moitié rédigé envoyé en production.
+
+Bornes du dispositif : **4 tours**, **120 s** de budget d'exécution pour l'agent — vérifié
+**en tête de boucle seulement**, donc un tour déjà lancé va à son terme même au-delà. Un
+nom d'outil inventé ou un argument manquant — attendus d'un petit modèle à outils — sont
+rendus au modèle comme des erreurs d'outil ordinaires et consomment un tour, pas une panne.
+
+**L'emitter SSE se dimensionne sur le pire cas, pas sur le seul budget de l'agent** : 120 s
++ un tour au pire (le délai de lecture d'Ollama, 180 s — `OllamaChatConfiguration`) + 30 s
+de marge, soit **330 s**. Un emitter plus court expirerait pendant que le serveur travaille
+encore, et pas seulement dans un cas dégradé : un tour mesuré prend ~40 s sur cette machine,
+et le cas nominal de quatre tours en fait ~160 s à lui seul, au-dessus d'un emitter à 150 s.
+L'emitter journalise son propre cycle de vie (`onTimeout`, `onError`, `onCompletion`), avec
+l'`ownerId` en contexte — sans corrélation, une ligne de journal sur une pile qui sert
+plusieurs conversations ne se relie à aucune d'elles. Une expiration et une déconnexion
+empruntent le même chemin d'exception (`SseEmitter.send` lève au prochain envoi), mais un
+drapeau posé par `onTimeout` distingue les deux causes dans le message.
+
+**Quatre décisions attendent leur ADR**, faute d'accord préalable du propriétaire du
+dépôt sur leur rédaction — voir `docs/superpowers/specs/2026-09-04-reponse-sourcee-design.md`,
+section « Ce qui reste à arbitrer » : l'orchestration hors des bus et sans transaction, la
+génération confiée à LangChain4j là où la vectorisation est écrite à la main, la rétention
+des tokens jusqu'à la première citation valide, et l'agent qui choisit lui-même s'il
+cherche.
+
+**Quatre limites du garde-fou sont assumées, et ne doivent pas se lire comme une garantie
+totale :**
+
+- **Il ne s'applique que si une recherche a eu lieu.** Si le modèle répond de mémoire sans
+  jamais appeler l'outil, la conversation est classée `CONVERSATIONAL` et son texte part
+  inchangé : la seule défense contre l'invention y est alors la consigne écrite dans
+  `document-agent.md`, pas un contrôle programmatique. C'est le trou assumé de la spec, et
+  c'est le ticket d'évaluation (RAG-14) qui le mesurera.
+- **Un `[n]` recopié depuis un extrait compte comme une citation valide.** Les documents
+  réels portent souvent leurs propres appels de note (`[2]`, `[12]`) ; un modèle qui recopie
+  une phrase qui en contient un rouvre le tampon et fait attacher une source sans rapport à
+  la réponse. C'est le mode d'échec le plus probable du garde-fou sur un vrai corpus.
+- **L'abandon du client n'est détecté qu'après la première citation.** Seuls les envois qui
+  traversent le tampon touchent la socket ; tant qu'il est fermé, une déconnexion est
+  invisible et la génération va au bout de son budget. Corollaire : le flux peut rester
+  **silencieux plusieurs dizaines de secondes** avant son premier octet, ce qu'un proxy
+  intermédiaire peut mal prendre. Un heartbeat réglerait les deux, et c'est un ticket à
+  part : un envoi périodique depuis un second thread sur un `SseEmitter`, qui n'est pas
+  thread-safe en écriture concurrente, se conçoit, il ne s'improvise pas.
+- **Un tour qui porte à la fois un texte cité et un appel d'outil** ouvre le tampon et
+  streame ce texte, puis la boucle continue. Le garde-fou du tour suivant ne voit que le
+  dernier texte : l'événement `sources` peut alors partir **vide** alors que l'écran affiche
+  un texte portant un `[n]`. Improbable, non corrigé, et le correctif demande de faire vivre
+  le tampon d'un tour à l'autre.
+
+Conséquence pour le premier client de la route : **`POST` + SSE ne se consomme pas avec
+`EventSource`** côté navigateur, qui ne fait que du `GET` — il faut un `fetch` et la lecture
+manuelle de son `ReadableStream`.
+
 ### Les deux bus (`shared/bus`)
 
 - `Command` / `CommandHandler<C>` / `CommandBus.dispatch(Command)` — écriture, ne
@@ -687,6 +830,16 @@ colonne, et doit rester égale à `EmbeddingPolicy.DIMENSIONS`. Elle cascade ell
 suppression du document : c'est la deuxième fois qu'un ticket ajoute des tables sans toucher
 à `DeleteDocumentHandler`.
 
+La trace de chaque conversation vit dans `knowledge_agent_runs`, avec deux tables filles
+cascadées (`knowledge_agent_run_searches`, les requêtes envoyées à l'outil de recherche, et
+`knowledge_agent_run_sources`, les sources citées). **Aucune clé étrangère ne relie une
+source citée à la ligne `knowledge_text_chunks` dont elle vient** : `CitedSource` recopie ce
+qu'il faut pour se relire (document, section, texte) plutôt que de référencer l'extrait, qui
+peut disparaître — un document supprimé ne doit pas invalider rétroactivement une trace déjà
+écrite. C'est la même logique qui a valu à deux agrégats de se référencer par identifiant
+plutôt que par `@ManyToOne` (ADR-0006), poussée un cran plus loin : ici, `documentId` reste
+en colonne pour le diagnostic, mais sans contrainte qui l'oblige à désigner encore quelqu'un.
+
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
 objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket
 `second-brain-originals` (servi par Garage en développement, voir la section « Commandes »
@@ -743,8 +896,9 @@ remplace — voir `.claude/rules/decisions.md`.
 **Back** — Java 25 · Spring Boot 4.0.7 (MVC, Data JPA, Security, OAuth2 Resource Server,
 Validation, Mail) · Flyway · PostgreSQL 17 + pgvector · Spring AMQP · RabbitMQ 4 ·
 springdoc-openapi · commonmark-java · Apache POI · PDFBox · jtokkit (comptage de tokens) ·
-hibernate-vector · AWS SDK for Java v2 (stockage objet des originaux) · JUnit 5 + AssertJ +
-Testcontainers · Gradle Kotlin DSL avec version catalog (`gradle/libs.versions.toml`).
+hibernate-vector · AWS SDK for Java v2 (stockage objet des originaux) · LangChain4j 1.19.0
+(transport de la génération) · JUnit 5 + AssertJ + Testcontainers · Gradle Kotlin DSL avec
+version catalog (`gradle/libs.versions.toml`).
 
 **Front** — Vue 3 · Vite · vue-router · pinia · Vitest (jsdom) · nginx pour servir le build.
 Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
@@ -753,9 +907,9 @@ Versions gérées par `frontend/package-lock.json`, hors du version catalog Grad
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
 `RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
-conteneur `worker` de la même image que `app`, un service `ollama` qui sert le modèle
-d'embedding, et un service `garage` (image `dxflrs/garage:v2.3.0`) qui sert le stockage
-objet des originaux.
+conteneur `worker` de la même image que `app`, un service `ollama` qui sert les modèles
+d'embedding et de génération, et un service `garage` (image `dxflrs/garage:v2.3.0`) qui sert
+le stockage objet des originaux.
 
 **Ne pas changer ces versions.** Spring Boot 4 a redécoupé ses modules par rapport
 à Boot 3 : plusieurs annotations ont changé de package (`@AutoConfigureMockMvc` vit

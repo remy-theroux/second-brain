@@ -15,7 +15,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
 
-/** Voir ADR-0002 : l'écart qui autorise les annotations JPA dans le domaine. */
+/** See ADR-0002: the deviation that allows JPA annotations in the domain. */
 @Entity
 @Table(name = "knowledge_documents")
 public class Document {
@@ -70,19 +70,19 @@ public class Document {
     public static Document upload(
             UUID ownerId, String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
         if (ownerId == null) {
-            throw new IllegalArgumentException("Le propriétaire du document est obligatoire");
+            throw new IllegalArgumentException("The document owner is required");
         }
         if (filename == null || filename.isBlank()) {
-            throw new IllegalArgumentException("Le nom du fichier est obligatoire");
+            throw new IllegalArgumentException("A filename is required");
         }
         if (sizeBytes <= 0) {
-            throw new IllegalArgumentException("Un document vide n'a rien à apporter à la base de connaissance");
+            throw new IllegalArgumentException("An empty document has nothing to bring to the knowledge base");
         }
-        String nomBorne = filename.trim();
-        if (nomBorne.length() > MAX_FILENAME_LENGTH) {
-            nomBorne = nomBorne.substring(0, MAX_FILENAME_LENGTH);
+        String boundedFilename = filename.trim();
+        if (boundedFilename.length() > MAX_FILENAME_LENGTH) {
+            boundedFilename = boundedFilename.substring(0, MAX_FILENAME_LENGTH);
         }
-        return new Document(ownerId, nomBorne, format, checksum, sizeBytes);
+        return new Document(ownerId, boundedFilename, format, checksum, sizeBytes);
     }
 
     public void markTextExtracted() {
@@ -97,12 +97,13 @@ public class Document {
 
     public void markProcessingFailed(String reason) {
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("Un échec sans motif n'apprend rien : le motif est obligatoire");
+            throw new IllegalArgumentException("A failure without a reason teaches nothing: the reason is required");
         }
-        String motif = reason.strip();
+        String strippedReason = reason.strip();
         this.status = DocumentStatus.FAILED;
-        this.errorMessage =
-                motif.length() > MAX_ERROR_MESSAGE_LENGTH ? motif.substring(0, MAX_ERROR_MESSAGE_LENGTH) : motif;
+        this.errorMessage = strippedReason.length() > MAX_ERROR_MESSAGE_LENGTH
+                ? strippedReason.substring(0, MAX_ERROR_MESSAGE_LENGTH)
+                : strippedReason;
     }
 
     public UUID getId() {

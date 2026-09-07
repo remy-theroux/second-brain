@@ -10,8 +10,8 @@ import {
   ValidationError,
 } from '@/api/client'
 
-// Réponse minimale : seuls le statut et le corps JSON comptent pour ce module.
-function reponse(status, body) {
+// Minimal response: only the status and the JSON body matter for this module.
+function jsonResponse(status, body) {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -19,7 +19,7 @@ function reponse(status, body) {
   }
 }
 
-describe('création de compte', () => {
+describe('account creation', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -28,8 +28,8 @@ describe('création de compte', () => {
     vi.unstubAllGlobals()
   })
 
-  it('poste la saisie en JSON sur la route des inscriptions', async () => {
-    fetch.mockResolvedValue(reponse(201, null))
+  it('posts the input as JSON to the registrations route', async () => {
+    fetch.mockResolvedValue(jsonResponse(201, null))
 
     await register('alice@example.com', 'chevalpile42')
 
@@ -43,8 +43,8 @@ describe('création de compte', () => {
     })
   })
 
-  it('traduit un 422 en erreurs par champ', async () => {
-    fetch.mockResolvedValue(reponse(422, { errors: { email: "L'email n'est pas valide." } }))
+  it('translates a 422 into per-field errors', async () => {
+    fetch.mockResolvedValue(jsonResponse(422, { errors: { email: "L'email n'est pas valide." } }))
 
     await expect(register('pas-un-email', 'chevalpile42')).rejects.toThrow(ValidationError)
 
@@ -55,17 +55,17 @@ describe('création de compte', () => {
     }
   })
 
-  it('traduit un 503 en message global', async () => {
-    fetch.mockResolvedValue(reponse(503, { message: "L'email n'a pas pu être envoyé." }))
+  it('translates a 503 into a global message', async () => {
+    fetch.mockResolvedValue(jsonResponse(503, { message: "L'email n'a pas pu être envoyé." }))
 
     await expect(register('alice@example.com', 'chevalpile42')).rejects.toThrow(
       "L'email n'a pas pu être envoyé.",
     )
   })
 
-  it("ne remplace pas l'échec par une erreur de syntaxe quand le corps n'est pas du JSON", async () => {
-    // Un proxy en panne rend du HTML : le parsing échoue, mais l'utilisateur doit lire
-    // un message utile, pas « Unexpected token < ».
+  it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+    // A proxy that is down returns HTML: the parse fails, but the user must read a useful
+    // message, not "Unexpected token <".
     fetch.mockResolvedValue({
       ok: false,
       status: 502,
@@ -78,7 +78,7 @@ describe('création de compte', () => {
   })
 })
 
-describe('base de connaissance', () => {
+describe('knowledge base', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -87,10 +87,10 @@ describe('base de connaissance', () => {
     vi.unstubAllGlobals()
   })
 
-  describe('liste des documents', () => {
-    it('lit la liste avec le jeton du porteur', async () => {
+  describe('document list', () => {
+    it('reads the list with the bearer token', async () => {
       const documents = [{ id: 'doc-1', filename: 'notes.md', status: 'PENDING' }]
-      fetch.mockResolvedValue(reponse(200, documents))
+      fetch.mockResolvedValue(jsonResponse(200, documents))
 
       const result = await listDocuments('jeton-abc')
 
@@ -100,14 +100,14 @@ describe('base de connaissance', () => {
       expect(result).toEqual(documents)
     })
 
-    it('traduit un 401 en session expirée', async () => {
-      fetch.mockResolvedValue(reponse(401, null))
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
 
       await expect(listDocuments('jeton-perime')).rejects.toThrow(UnauthorizedError)
     })
 
-    it('traduit toute autre panne en message global', async () => {
-      fetch.mockResolvedValue(reponse(500, null))
+    it('translates any other failure into a global message', async () => {
+      fetch.mockResolvedValue(jsonResponse(500, null))
 
       await expect(listDocuments('jeton-abc')).rejects.toThrow(
         "La liste des documents n'a pas pu être chargée.",
@@ -115,40 +115,40 @@ describe('base de connaissance', () => {
     })
   })
 
-  describe("lecture d'un document", () => {
-    it('lit le document et son extraction avec le jeton du porteur', async () => {
-      const attendu = {
+  describe('reading a document', () => {
+    it('reads the document and its extraction with the bearer token', async () => {
+      const expected = {
         id: 'doc-1',
         filename: 'notes.md',
         type: 'TEXTUAL',
         status: 'EXTRACTED',
         extraction: { extractedAt: '2026-08-26T10:00:00Z', characterCount: 120, blocks: [] },
       }
-      fetch.mockResolvedValue(reponse(200, attendu))
+      fetch.mockResolvedValue(jsonResponse(200, expected))
 
       const document = await fetchDocument('jeton-abc', 'doc-1')
 
       const [url, options] = fetch.mock.calls[0]
       expect(url).toBe('/api/documents/doc-1')
       expect(options.headers.Authorization).toBe('Bearer jeton-abc')
-      expect(document).toEqual(attendu)
+      expect(document).toEqual(expected)
     })
 
-    it('traduit un 401 en session expirée', async () => {
-      fetch.mockResolvedValue(reponse(401, null))
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
 
       await expect(fetchDocument('jeton-perime', 'doc-1')).rejects.toThrow(UnauthorizedError)
     })
 
-    it('rend le message du serveur sur un document introuvable', async () => {
-      fetch.mockResolvedValue(reponse(404, { message: 'Ce document est introuvable.' }))
+    it("returns the server's message for a document that cannot be found", async () => {
+      fetch.mockResolvedValue(jsonResponse(404, { message: 'Ce document est introuvable.' }))
 
       await expect(fetchDocument('jeton-abc', 'doc-1')).rejects.toThrow(
         'Ce document est introuvable.',
       )
     })
 
-    it("rend un message par défaut quand le corps n'est pas du JSON", async () => {
+    it('returns a default message when the body is not JSON', async () => {
       fetch.mockResolvedValue({
         ok: false,
         status: 502,
@@ -161,94 +161,99 @@ describe('base de connaissance', () => {
     })
   })
 
-  describe("dépôt d'un document", () => {
-    const fichier = new File(['# Notes'], 'notes.md', { type: 'text/markdown' })
+  describe('uploading a document', () => {
+    const file = new File(['# Notes'], 'notes.md', { type: 'text/markdown' })
 
-    it('poste le fichier en multipart sous le nom « file », avec le jeton du porteur', async () => {
-      fetch.mockResolvedValue(reponse(201, null))
+    it('posts the file as multipart under the name "file", with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(201, null))
 
-      await uploadDocument('jeton-abc', fichier)
+      await uploadDocument('jeton-abc', file)
 
       const [url, options] = fetch.mock.calls[0]
       expect(url).toBe('/api/documents')
       expect(options.method).toBe('POST')
       expect(options.headers.Authorization).toBe('Bearer jeton-abc')
       expect(options.body).toBeInstanceOf(FormData)
-      expect(options.body.get('file')).toBe(fichier)
-      // Le navigateur pose lui-même le Content-Type multipart avec son boundary : le
-      // fixer à la main le priverait du boundary, et le serveur ne saurait plus découper.
+      expect(options.body.get('file')).toBe(file)
+      // The browser sets the multipart Content-Type itself with its boundary: setting it
+      // by hand would strip the boundary, and the server could no longer split the body.
       expect(options.headers['Content-Type']).toBeUndefined()
     })
 
-    it('traduit un 401 en session expirée', async () => {
-      fetch.mockResolvedValue(reponse(401, null))
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
 
-      await expect(uploadDocument('jeton-perime', fichier)).rejects.toThrow(UnauthorizedError)
+      await expect(uploadDocument('jeton-perime', file)).rejects.toThrow(UnauthorizedError)
     })
 
-    it('traduit un 409 en doublon désignant le document existant', async () => {
+    it('translates a 409 into a duplicate designating the existing document', async () => {
       fetch.mockResolvedValue(
-        reponse(409, { message: 'Ce document est déjà présent.', existingDocumentId: 'doc-1' }),
+        jsonResponse(409, {
+          message: 'Ce document est déjà présent.',
+          existingDocumentId: 'doc-1',
+        }),
       )
 
-      await expect(uploadDocument('jeton-abc', fichier)).rejects.toThrow(DuplicateDocumentError)
+      await expect(uploadDocument('jeton-abc', file)).rejects.toThrow(DuplicateDocumentError)
 
       try {
-        await uploadDocument('jeton-abc', fichier)
+        await uploadDocument('jeton-abc', file)
       } catch (error) {
         expect(error.message).toBe('Ce document est déjà présent.')
         expect(error.existingDocumentId).toBe('doc-1')
       }
     })
 
-    it('traduit un 422 en erreurs par champ', async () => {
-      fetch.mockResolvedValue(reponse(422, { errors: { file: 'Le fichier est obligatoire.' } }))
+    it('translates a 422 into per-field errors', async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(422, { errors: { file: 'Le fichier est obligatoire.' } }),
+      )
 
-      await expect(uploadDocument('jeton-abc', fichier)).rejects.toThrow(ValidationError)
+      await expect(uploadDocument('jeton-abc', file)).rejects.toThrow(ValidationError)
 
       try {
-        await uploadDocument('jeton-abc', fichier)
+        await uploadDocument('jeton-abc', file)
       } catch (error) {
         expect(error.errors).toEqual({ file: 'Le fichier est obligatoire.' })
       }
     })
 
-    it('affiche tel quel le message du serveur pour un format refusé', async () => {
+    it("displays the server's message as is for a refused format", async () => {
       fetch.mockResolvedValue(
-        reponse(415, { message: 'Formats acceptés : .pdf, .md, .txt, .docx.' }),
+        jsonResponse(415, { message: 'Formats acceptés : .pdf, .md, .txt, .docx.' }),
       )
 
-      await expect(uploadDocument('jeton-abc', fichier)).rejects.toThrow(
+      await expect(uploadDocument('jeton-abc', file)).rejects.toThrow(
         'Formats acceptés : .pdf, .md, .txt, .docx.',
       )
     })
 
-    it('affiche tel quel le message du serveur pour un fichier trop volumineux', async () => {
+    it("displays the server's message as is for a file that is too large", async () => {
       fetch.mockResolvedValue(
-        reponse(413, { message: 'Ce fichier dépasse la taille maximale acceptée.' }),
+        jsonResponse(413, { message: 'Ce fichier dépasse la taille maximale acceptée.' }),
       )
 
-      await expect(uploadDocument('jeton-abc', fichier)).rejects.toThrow(
+      await expect(uploadDocument('jeton-abc', file)).rejects.toThrow(
         'Ce fichier dépasse la taille maximale acceptée.',
       )
     })
 
-    it("ne remplace pas l'échec par une erreur de syntaxe quand le corps n'est pas du JSON", async () => {
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
       fetch.mockResolvedValue({
         ok: false,
         status: 502,
         json: () => Promise.reject(new SyntaxError('Unexpected token <')),
       })
 
-      await expect(uploadDocument('jeton-abc', fichier)).rejects.toThrow(
+      await expect(uploadDocument('jeton-abc', file)).rejects.toThrow(
         "Le document n'a pas pu être déposé.",
       )
     })
   })
 
-  describe("suppression d'un document", () => {
-    it('envoie un DELETE sur le document, avec le jeton du porteur', async () => {
-      fetch.mockResolvedValue(reponse(204, null))
+  describe('deleting a document', () => {
+    it('sends a DELETE on the document, with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(204, null))
 
       await deleteDocument('jeton-abc', 'doc-1')
 
@@ -258,21 +263,21 @@ describe('base de connaissance', () => {
       expect(options.headers.Authorization).toBe('Bearer jeton-abc')
     })
 
-    it('traduit un 401 en session expirée', async () => {
-      fetch.mockResolvedValue(reponse(401, null))
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
 
       await expect(deleteDocument('jeton-perime', 'doc-1')).rejects.toThrow(UnauthorizedError)
     })
 
-    it('affiche tel quel le message du serveur pour un document introuvable', async () => {
-      fetch.mockResolvedValue(reponse(404, { message: "Ce document n'existe pas." }))
+    it("displays the server's message as is for a document that cannot be found", async () => {
+      fetch.mockResolvedValue(jsonResponse(404, { message: "Ce document n'existe pas." }))
 
       await expect(deleteDocument('jeton-abc', 'doc-1')).rejects.toThrow(
         "Ce document n'existe pas.",
       )
     })
 
-    it("ne remplace pas l'échec par une erreur de syntaxe quand le corps n'est pas du JSON", async () => {
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
       fetch.mockResolvedValue({
         ok: false,
         status: 502,

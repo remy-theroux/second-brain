@@ -8,13 +8,13 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 class UserTest {
 
     @Test
-    void nait_non_verifie() {
+    void is_born_unverified() {
         assertThat(User.register(new Email("alice@example.com"), "empreinte").isVerified())
                 .isFalse();
     }
 
     @Test
-    void devient_verifie_quand_son_adresse_est_confirmee() {
+    void becomes_verified_when_its_address_is_confirmed() {
         User user = User.register(new Email("alice@example.com"), "empreinte");
 
         user.verify();

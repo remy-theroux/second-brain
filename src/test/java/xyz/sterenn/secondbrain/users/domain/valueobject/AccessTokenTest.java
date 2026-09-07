@@ -8,36 +8,36 @@ import org.junit.jupiter.api.Test;
 
 class AccessTokenTest {
 
-    private static final Instant MAINTENANT = Instant.parse("2026-08-17T10:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-08-17T10:00:00Z");
 
     @Test
-    void refuse_une_valeur_vide() {
-        assertThatThrownBy(() -> new AccessToken("  ", MAINTENANT)).isInstanceOf(IllegalArgumentException.class);
+    void rejects_a_blank_value() {
+        assertThatThrownBy(() -> new AccessToken("  ", NOW)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void refuse_une_expiration_absente() {
+    void rejects_a_missing_expiration() {
         assertThatThrownBy(() -> new AccessToken("eyJ", null)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void compte_les_secondes_restantes() {
-        AccessToken jeton = new AccessToken("eyJ", MAINTENANT.plusSeconds(3600));
+    void counts_the_remaining_seconds() {
+        AccessToken token = new AccessToken("eyJ", NOW.plusSeconds(3600));
 
-        assertThat(jeton.expiresIn(MAINTENANT)).isEqualTo(3600L);
+        assertThat(token.expiresIn(NOW)).isEqualTo(3600L);
     }
 
     @Test
-    void ne_compte_jamais_de_secondes_negatives() {
-        AccessToken jeton = new AccessToken("eyJ", MAINTENANT.minusSeconds(10));
+    void never_counts_negative_seconds() {
+        AccessToken token = new AccessToken("eyJ", NOW.minusSeconds(10));
 
-        assertThat(jeton.expiresIn(MAINTENANT)).isZero();
+        assertThat(token.expiresIn(NOW)).isZero();
     }
 
     @Test
-    void ne_divulgue_pas_sa_valeur_dans_son_rendu_texte() {
-        AccessToken jeton = new AccessToken("eyJ.secret.abc", MAINTENANT);
+    void does_not_disclose_its_value_in_its_string_representation() {
+        AccessToken token = new AccessToken("eyJ.secret.abc", NOW);
 
-        assertThat(jeton.toString()).doesNotContain("eyJ.secret.abc");
+        assertThat(token.toString()).doesNotContain("eyJ.secret.abc");
     }
 }

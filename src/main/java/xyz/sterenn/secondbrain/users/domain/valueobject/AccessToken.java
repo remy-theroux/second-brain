@@ -7,19 +7,19 @@ public record AccessToken(String value, Instant expiresAt) {
 
     public AccessToken {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Le jeton d'accès est obligatoire");
+            throw new IllegalArgumentException("The access token is required");
         }
         if (expiresAt == null) {
-            throw new IllegalArgumentException("L'expiration du jeton d'accès est obligatoire");
+            throw new IllegalArgumentException("The access token expiry is required");
         }
     }
 
-    /** Jamais négatif : c'est l'{@code expires_in} de RFC 6749, dont l'entier doit être positif. */
-    public long expiresIn(Instant maintenant) {
-        return Math.max(Duration.between(maintenant, expiresAt).toSeconds(), 0L);
+    /** Never negative: this is RFC 6749's {@code expires_in}, whose integer must be positive. */
+    public long expiresIn(Instant now) {
+        return Math.max(Duration.between(now, expiresAt).toSeconds(), 0L);
     }
 
-    /** Masque la valeur : quiconque la détient est cet utilisateur. */
+    /** Masks the value: whoever holds it is that user. */
     @Override
     public String toString() {
         return "AccessToken[value=***, expiresAt=" + expiresAt + "]";

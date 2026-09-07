@@ -5,11 +5,11 @@ import java.util.Objects;
 import xyz.sterenn.secondbrain.knowledge.domain.ExtractionPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnextractableDocumentException;
 
-/** Le format commun à tous les documents extraits — voir ADR-0024. */
+/** The format shared by every extracted document — see ADR-0024. */
 public record ExtractedText(List<TextBlock> blocks) {
 
     public ExtractedText {
-        Objects.requireNonNull(blocks, "Les blocs de texte sont obligatoires");
+        Objects.requireNonNull(blocks, "Text blocks are required");
         blocks = List.copyOf(blocks);
         if (!ExtractionPolicy.isExploitable(characterCount(blocks))) {
             throw new UnextractableDocumentException();
@@ -25,6 +25,6 @@ public record ExtractedText(List<TextBlock> blocks) {
     }
 
     private static int characterCount(List<TextBlock> blocks) {
-        return blocks.stream().mapToInt(bloc -> bloc.getText().length()).sum();
+        return blocks.stream().mapToInt(block -> block.getText().length()).sum();
     }
 }

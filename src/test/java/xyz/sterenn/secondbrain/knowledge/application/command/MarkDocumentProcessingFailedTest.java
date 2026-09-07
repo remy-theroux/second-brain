@@ -30,7 +30,7 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 @Transactional
 class MarkDocumentProcessingFailedTest {
 
-    private static final String MOTIF = "Ce document ne contient pas de texte exploitable.";
+    private static final String REASON = "Ce document ne contient pas de texte exploitable.";
 
     @Autowired
     private CommandBus commandBus;
@@ -45,44 +45,44 @@ class MarkDocumentProcessingFailedTest {
     private S3Client s3Client;
 
     @Value("${secondbrain.storage.s3.bucket}")
-    private String bucketDesOriginaux;
+    private String originalsBucket;
 
     @AfterEach
-    void nettoieLesOriginaux() {
-        KnowledgeFixture.videLesOriginaux(s3Client, bucketDesOriginaux);
+    void cleansTheOriginals() {
+        KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
     @Test
-    void marque_le_document_en_echec_avec_son_motif() {
-        Document document = unDocumentDepose();
+    void marks_the_document_failed_with_its_reason() {
+        Document document = anUploadedDocument();
 
-        commandBus.dispatch(new MarkDocumentProcessingFailed(document.getId(), document.getOwnerId(), MOTIF));
+        commandBus.dispatch(new MarkDocumentProcessingFailed(document.getId(), document.getOwnerId(), REASON));
 
         assertThat(documentRepository
                         .findByIdAndOwnerId(document.getId(), document.getOwnerId())
                         .orElseThrow())
-                .satisfies(relu -> {
-                    assertThat(relu.getStatus()).isEqualTo(DocumentStatus.FAILED);
-                    assertThat(relu.getErrorMessage()).isEqualTo(MOTIF);
+                .satisfies(reloaded -> {
+                    assertThat(reloaded.getStatus()).isEqualTo(DocumentStatus.FAILED);
+                    assertThat(reloaded.getErrorMessage()).isEqualTo(REASON);
                 });
     }
 
     @Test
-    void refuse_de_marquer_un_document_disparu() {
-        // Dernier appel du test : le refus marque la transaction englobante rollback-only.
+    void refuses_to_mark_a_document_that_has_disappeared() {
+        // Last call of the test: the refusal marks the enclosing transaction rollback-only.
         assertThatExceptionOfType(DocumentNotFoundException.class)
                 .isThrownBy(() -> commandBus.dispatch(
-                        new MarkDocumentProcessingFailed(UUID.randomUUID(), UUID.randomUUID(), MOTIF)));
+                        new MarkDocumentProcessingFailed(UUID.randomUUID(), UUID.randomUUID(), REASON)));
     }
 
-    private Document unDocumentDepose() {
-        UUID proprietaire = userRepository
+    private Document anUploadedDocument() {
+        UUID owner = userRepository
                 .save(User.register(new Email(UUID.randomUUID() + "@exemple.fr"), "empreinte"))
                 .getId();
-        byte[] contenu = Fixtures.lire(Fixtures.BRUT_TXT);
-        commandBus.dispatch(new UploadDocument(proprietaire, "notes.txt", contenu));
+        byte[] content = Fixtures.read(Fixtures.RAW_TXT);
+        commandBus.dispatch(new UploadDocument(owner, "notes.txt", content));
         return documentRepository
-                .findByOwnerIdAndChecksum(proprietaire, Checksum.of(contenu))
+                .findByOwnerIdAndChecksum(owner, Checksum.of(content))
                 .orElseThrow();
     }
 }

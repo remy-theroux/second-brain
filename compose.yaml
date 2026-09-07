@@ -1,35 +1,35 @@
-# Le suffixe vient du `.env` du répertoire courant et vaut vide dans le dépôt principal.
-# C'est lui qui sépare les piles : conteneurs, réseau et volumes nommés sont tous préfixés
-# par ce nom de projet, donc deux worktrees ne partagent ni base ni node_modules.
+# The suffix comes from the `.env` of the current directory and is empty in the main repository.
+# It is what separates the stacks: containers, network and named volumes are all prefixed
+# with this project name, so two worktrees share neither database nor node_modules.
 name: second-brain${STACK_SUFFIX:-}
 
 services:
   proxy:
     image: traefik:v3
     command:
-      # Le routage se lit sur les labels des conteneurs, rien d'autre.
+      # The routing is read from the containers' labels, nothing else.
       - --providers.docker=true
-      # Sans ça, db et mailpit se retrouveraient routés sans l'avoir demandé.
+      # Without this, db and mailpit would end up routed without having asked for it.
       - --providers.docker.exposedByDefault=false
-      # Le provider Docker lit tout le socket, pas seulement la pile qui l'a démarré. Sans
-      # cette contrainte, deux worktrees lancés en parallèle donnent deux Traefik qui voient
-      # chacun les quatre conteneurs étiquetés, donc deux routeurs nommés `backend` et deux
-      # nommés `frontend` : collision, et une requête part chez la mauvaise feature.
+      # The Docker provider reads the whole socket, not only the stack that started it. Without
+      # this constraint, two worktrees launched in parallel give two Traefik instances that each
+      # see the four labelled containers, hence two routers named `backend` and two
+      # named `frontend`: a collision, and a request goes to the wrong feature.
       - --providers.docker.constraints=Label(`com.docker.compose.project`,`second-brain${STACK_SUFFIX:-}`)
       - --entryPoints.web.address=:80
     ports:
-      # Seul port publié de l'application : c'est l'unique origine que voit le navigateur,
-      # en développement comme en production, où Coolify tient ce rôle.
+      # The only published port of the application: it is the single origin the browser sees,
+      # in development as in production, where Coolify plays this role.
       - "${HTTP_PORT:-8080}:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   db:
-    # pgvector/pgvector et non postgres:17-alpine : l'extension `vector` doit être fournie
-    # par l'image, la migration V9 se charge de l'activer. Version épinglée comme le reste
-    # de la pile. Debian et non Alpine : c'est ce que publie pgvector — un volume db-data
-    # initialisé par l'ancienne image se jette (`docker compose down -v`), musl et glibc ne
-    # trient pas le texte de la même façon.
+    # pgvector/pgvector and not postgres:17-alpine: the `vector` extension must be provided
+    # by the image, migration V9 takes care of enabling it. Version pinned like the rest
+    # of the stack. Debian and not Alpine: that is what pgvector publishes — a db-data volume
+    # initialised by the former image is to be thrown away (`docker compose down -v`), musl and glibc
+    # do not sort text the same way.
     image: pgvector/pgvector:0.8.6-pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-second_brain}
@@ -48,30 +48,30 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      # SMTP pour l'application, interface web pour lire les mails capturés.
+      # SMTP for the application, web interface to read the captured mails.
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_WEB_PORT:-8025}:8025"
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
     environment:
-      # Compte administrateur du broker, créé au premier démarrage à la place de `guest`
-      # (l'image ne crée pas `guest` quand ces deux variables sont posées). L'image rend
-      # le compte joignable depuis tout le réseau, et Docker publie les ports sur toutes
-      # les interfaces : c'est un secret de développement, du même rang que POSTGRES_PASSWORD.
+      # Administrator account of the broker, created at first startup in place of `guest`
+      # (the image does not create `guest` when these two variables are set). The image makes
+      # the account reachable from the whole network, and Docker publishes the ports on all
+      # interfaces: this is a development secret, of the same rank as POSTGRES_PASSWORD.
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-second_brain}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-second_brain}
-      # Le worker tient une seule livraison AMQP pendant tout le temps que prend la
-      # vectorisation d'un document, potentiellement plusieurs minutes. Le défaut du
-      # broker (30 minutes) est atteignable sur un document volumineux, et un broker qui
-      # dépasse ce délai ferme le canal — ce qui remet le message en file quoi que dise
-      # `default-requeue-rejected`, réglage qui ne gouverne que `basicNack`, pas une
-      # fermeture de canal. Le document repartirait de zéro, indéfiniment, avec l'unique
-      # consommateur bloqué dessus. Deux heures couvrent large sans masquer un vrai blocage.
+      # The worker holds a single AMQP delivery for the whole time the vectorisation
+      # of a document takes, potentially several minutes. The broker's default
+      # (30 minutes) is reachable on a large document, and a broker that
+      # exceeds this delay closes the channel — which requeues the message whatever
+      # `default-requeue-rejected` says, a setting that only governs `basicNack`, not a
+      # channel closure. The document would start over from zero, indefinitely, with the single
+      # consumer stuck on it. Two hours cover a wide margin without masking a real blockage.
       RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 7200000"
     ports:
-      # AMQP pour l'application, console de gestion pour voir passer les messages. Même
-      # statut que Mailpit : un outil de développement, pas routé par Traefik.
+      # AMQP for the application, management console to watch the messages go by. Same
+      # status as Mailpit: a development tool, not routed by Traefik.
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_WEB_PORT:-15672}:15672"
     healthcheck:
@@ -81,77 +81,77 @@ services:
       retries: 12
 
   ollama:
-    # `latest` et non une version épinglée, même statut que mailpit : un outil de
-    # développement, pas un composant dont la version décide d'un comportement du produit.
+    # `latest` and not a pinned version, same status as mailpit: a development
+    # tool, not a component whose version decides a behaviour of the product.
     image: ollama/ollama:latest
     volumes:
-      # Les modèles pèsent des gigaoctets : un volume nommé, jamais le bind mount.
+      # The models weigh gigabytes: a named volume, never the bind mount.
       - ollama-models:/root/.ollama
     healthcheck:
-      # `ollama list` répond dès que le serveur écoute, sans rien télécharger.
+      # `ollama list` answers as soon as the server listens, without downloading anything.
       test: ["CMD", "ollama", "list"]
       interval: 5s
       timeout: 30s
       retries: 10
-    # Aucun port publié, à la différence de db, rabbitmq et mailpit. Deux raisons : seul le
-    # worker lui parle, depuis le réseau de la pile ; et un port de plus devrait entrer dans
-    # le décalage d'indices du skill `worktree`, sans quoi deux features se le disputeraient.
-    # Pour l'interroger à la main : `docker compose exec ollama ollama list`.
+    # No published port, unlike db, rabbitmq and mailpit. Two reasons: only the
+    # worker talks to it, from the stack's network; and one more port would have to enter
+    # the index offsetting of the `worktree` skill, without which two features would fight over it.
+    # To query it by hand: `docker compose exec ollama ollama list`.
 
   ollama-pull:
     image: ollama/ollama:latest
-    # Un client, pas un serveur : OLLAMA_HOST le fait parler au conteneur voisin, qui
-    # télécharge dans SON volume. Le puller n'a donc aucun volume à monter.
+    # A client, not a server: OLLAMA_HOST makes it talk to the neighbouring container, which
+    # downloads into ITS volume. The puller therefore has no volume to mount.
     environment:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["/bin/sh", "-c"]
-    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}"]
+    command: ["ollama pull ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3} && ollama pull ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}"]
     depends_on:
       ollama:
         condition: service_healthy
-    # Il tire le modèle et s'arrête. `no` est déjà le défaut de Compose — la ligne ne change
-    # rien, elle dit explicitement qu'un conteneur qui s'arrête après avoir tiré le modèle
-    # est attendu, pour qui lirait ce fichier en pensant qu'un service qui s'arrête est une
-    # panne à corriger.
+    # It pulls the model and stops. `no` is already Compose's default — the line changes
+    # nothing, it says explicitly that a container that stops after pulling the model
+    # is expected, for whoever would read this file thinking that a service that stops is a
+    # failure to fix.
     restart: "no"
 
   garage:
-    # Version épinglée comme `db` et `rabbitmq`, pas flottante comme `mailpit` : ce n'est
-    # pas un outil de développement, c'est le composant dont la compatibilité S3 décide du
-    # comportement de l'adapter de stockage.
+    # Version pinned like `db` and `rabbitmq`, not floating like `mailpit`: this is
+    # not a development tool, it is the component whose S3 compatibility decides the
+    # behaviour of the storage adapter.
     image: dxflrs/garage:v2.3.0
     environment:
-      # Identifiants du stockage objet des fichiers d'origine. Garage exige un identifiant
-      # d'au moins 8 caractères [A-Za-z0-9-_.] et un secret d'au moins 16 caractères ASCII
-      # graphiques : en deçà, il refuse de créer la clé et le conteneur ne démarre pas — le
-      # message est dans les logs de `garage`, pas dans ceux de l'app. Secrets de
-      # développement, du même rang que POSTGRES_PASSWORD, à ne jamais réutiliser ailleurs.
+      # Credentials of the object storage of the original files. Garage requires an identifier
+      # of at least 8 characters [A-Za-z0-9-_.] and a secret of at least 16 graphic ASCII
+      # characters: below that, it refuses to create the key and the container does not start — the
+      # message is in `garage`'s logs, not in the app's. Development
+      # secrets, of the same rank as POSTGRES_PASSWORD, never to be reused elsewhere.
       GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY:-second-brain}
       GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY:-secret-de-developpement-second-brain}
-      # Nom de bucket aux règles S3 : minuscules et tirets, jamais de tiret bas.
+      # Bucket name following the S3 rules: lowercase and hyphens, never an underscore.
       GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-second-brain-originals}
-    # L'image n'a pas d'ENTRYPOINT (son Cmd par défaut est déjà ["/garage", "server"]) :
-    # un `command:` sans le chemin du binaire part en recherche de "server" dans le PATH
-    # et échoue. --single-node : sans lui un nœud neuf n'a pas de layout et refuse toute
-    # écriture. --default-access-key et --default-bucket (Garage v2.3.0) créent la clé et
-    # le bucket à partir des trois variables ci-dessus, ce qui dispense d'un conteneur
-    # d'amorçage.
+    # The image has no ENTRYPOINT (its default Cmd is already ["/garage", "server"]):
+    # a `command:` without the binary's path goes looking for "server" in the PATH
+    # and fails. --single-node: without it a fresh node has no layout and refuses any
+    # write. --default-access-key and --default-bucket (Garage v2.3.0) create the key and
+    # the bucket from the three variables above, which does away with a bootstrap
+    # container.
     command: ["/garage", "server", "--single-node", "--default-access-key", "--default-bucket"]
     volumes:
       - ./docker/garage.toml:/etc/garage.toml:ro
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
     healthcheck:
-      # Image bâtie sur `scratch` : ni shell, ni curl, ni wget, le seul exécutable est le
-      # binaire lui-même. D'où CMD et non CMD-SHELL.
+      # Image built on `scratch`: no shell, no curl, no wget, the only executable is the
+      # binary itself. Hence CMD and not CMD-SHELL.
       test: ["CMD", "/garage", "status"]
       interval: 5s
       timeout: 5s
       retries: 12
-    # Aucun port publié : seuls `app` et `worker` lui parlent, depuis le réseau de la
-    # pile. Un port de plus entrerait dans le décalage d'indices du skill `worktree`
-    # (voir CLAUDE.md, section « Plusieurs features en parallèle »), sans quoi deux
-    # features se le disputeraient. Pour regarder dedans à la main :
+    # No published port: only `app` and `worker` talk to it, from the stack's
+    # network. One more port would enter the index offsetting of the `worktree` skill
+    # (see CLAUDE.md, section « Plusieurs features en parallèle »), without which two
+    # features would fight over it. To look inside by hand:
     # docker compose exec garage /garage bucket info second-brain-originals
 
   app:
@@ -172,32 +172,33 @@ services:
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
-      # Endpoint en dur sur le nom de service, comme les autres adresses internes de ce
-      # fichier. Les trois autres variables recopient ce que Garage a reçu pour créer sa
-      # clé et son bucket par défaut (voir le service `garage`).
+      SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
+      # Endpoint hard-coded on the service name, like the other internal addresses of this
+      # file. The three other variables copy what Garage received to create its
+      # default key and bucket (see the `garage` service).
       SECONDBRAIN_S3_ENDPOINT: http://garage:3900
       SECONDBRAIN_S3_BUCKET: ${S3_BUCKET:-second-brain-originals}
       SECONDBRAIN_S3_ACCESS_KEY: ${S3_ACCESS_KEY:-second-brain}
       SECONDBRAIN_S3_SECRET_KEY: ${S3_SECRET_KEY:-secret-de-developpement-second-brain}
     labels:
       - "traefik.enable=true"
-      # /verification est hors /api à dessein : c'est une navigation, pas un appel XHR.
-      # Swagger et actuator sont routés ici parce que ce fichier décrit un environnement de
-      # développement ; en production le proxy n'expose que /api et /verification.
+      # /verification is outside /api on purpose: it is a navigation, not an XHR call.
+      # Swagger and actuator are routed here because this file describes a development
+      # environment; in production the proxy only exposes /api and /verification.
       - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/verification`) || PathPrefix(`/swagger-ui`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/actuator`)"
       - "traefik.http.routers.backend.entrypoints=web"
-      # Priorité explicite : ne pas dépendre du calcul par longueur de règle de Traefik.
+      # Explicit priority: do not depend on Traefik's rule-length computation.
       - "traefik.http.routers.backend.priority=100"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
     volumes:
-      # Source montée pour le hot reload (Gradle --continuous + DevTools).
+      # Source mounted for the hot reload (Gradle --continuous + DevTools).
       - ./:/workspace
-      # Cache Gradle isolé dans un volume nommé (pas écrit sur l'hôte).
+      # Gradle cache isolated in a named volume (not written on the host).
       - gradle-cache:/workspace/.gradle-cache
     healthcheck:
-      # Sain = Tomcat écoute, donc build/classes est compilé et chargé. Bash et /dev/tcp
-      # plutôt que curl, que l'image temurin n'embarque pas forcément. Le premier démarrage
-      # télécharge Gradle et les dépendances : retries généreux plutôt qu'un start_period.
+      # Healthy = Tomcat is listening, hence build/classes is compiled and loaded. Bash and /dev/tcp
+      # rather than curl, which the temurin image does not necessarily ship. The first startup
+      # downloads Gradle and the dependencies: generous retries rather than a start_period.
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null"]
       interval: 10s
       timeout: 3s
@@ -209,8 +210,8 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
-      # Un dépôt sans stockage échoue immédiatement : l'application n'a rien à faire
-      # debout avant que Garage le soit.
+      # An upload without storage fails immediately: the application has no business
+      # being up before Garage is.
       garage:
         condition: service_healthy
 
@@ -218,18 +219,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    # Même image que `app`, second processus, rôle décidé par le profil. Le worker ne compile
-    # JAMAIS : `-x compileJava -x processResources` retire les seules tâches qui écriraient
-    # dans build/. C'est `app` qui écrit ce répertoire, en continu, et le worker s'y contente
-    # de lire — les deux processus Gradle ne partagent donc plus aucune sortie modifiable, et
-    # DevTools redémarre le worker sur le .class que `app` vient de recompiler.
-    # Le --project-cache-dir isole le répertoire de projet .gradle/ que `app` verrouille
-    # (spec, décision 9) ; ça ne suffit pas seul, parce que les deux conteneurs partageraient
-    # encore GRADLE_USER_HOME (gradle-cache) et se bloqueraient sur son verrou de journal —
-    # la contention passe par un port local, invisible de l'autre conteneur. D'où le second
-    # volume ci-dessous. Enfin, `app` sain (voir son healthcheck) garantit que build/classes
-    # existe avant que le worker démarre : la course « Main class name has not been
-    # configured » ne peut plus l'atteindre.
+    # Same image as `app`, second process, role decided by the profile. The worker NEVER
+    # compiles: `-x compileJava -x processResources` removes the only tasks that would write
+    # into build/. It is `app` that writes this directory, continuously, and the worker merely
+    # reads from it — the two Gradle processes therefore no longer share any modifiable output, and
+    # DevTools restarts the worker on the .class that `app` has just recompiled.
+    # The --project-cache-dir isolates the .gradle/ project directory that `app` locks
+    # (spec, decision 9); that is not enough on its own, because the two containers would still
+    # share GRADLE_USER_HOME (gradle-cache) and would block on its journal lock —
+    # the contention goes through a local port, invisible from the other container. Hence the second
+    # volume below. Finally, a healthy `app` (see its healthcheck) guarantees that build/classes
+    # exists before the worker starts: the « Main class name has not been
+    # configured » race can no longer reach it.
     command: ["./gradlew", "--no-daemon", "--project-cache-dir", ".gradle-worker", "bootRun", "-x", "compileJava", "-x", "processResources"]
     environment:
       SPRING_PROFILES_ACTIVE: dev,worker
@@ -245,13 +246,14 @@ services:
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
+      SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
       SECONDBRAIN_S3_ENDPOINT: http://garage:3900
       SECONDBRAIN_S3_BUCKET: ${S3_BUCKET:-second-brain-originals}
       SECONDBRAIN_S3_ACCESS_KEY: ${S3_ACCESS_KEY:-second-brain}
       SECONDBRAIN_S3_SECRET_KEY: ${S3_SECRET_KEY:-secret-de-developpement-second-brain}
-      # Cache Gradle propre : deux conteneurs qui partagent un GRADLE_USER_HOME se bloquent
-      # sur ses verrous (la contention passe par un port local, invisible de l'autre
-      # conteneur). Prix : un second téléchargement des dépendances au premier démarrage.
+      # Its own Gradle cache: two containers sharing a GRADLE_USER_HOME block
+      # on its locks (the contention goes through a local port, invisible from the other
+      # container). Price: a second download of the dependencies at first startup.
       GRADLE_USER_HOME: /workspace/.gradle-cache-worker
     volumes:
       - ./:/workspace
@@ -261,8 +263,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      # Un dépôt sans stockage échoue immédiatement : l'application n'a rien à faire
-      # debout avant que Garage le soit.
+      # An upload without storage fails immediately: the application has no business
+      # being up before Garage is.
       garage:
         condition: service_healthy
       app:
@@ -273,17 +275,17 @@ services:
   frontend:
     image: node:24-alpine
     working_dir: /app
-    # npm ci et non npm install : le lock est la référence, et il n'est pas réécrit dans
-    # le dépôt monté. node_modules vit dans un volume nommé, pas dans le bind mount —
-    # sinon l'arborescence installée en conteneur écraserait celle de l'hôte.
+    # npm ci and not npm install: the lock is the reference, and it is not rewritten in
+    # the mounted repository. node_modules lives in a named volume, not in the bind mount —
+    # otherwise the tree installed in the container would overwrite the host's.
     command: sh -c "npm ci && npm run dev"
     environment:
-      # Le client de rechargement à chaud se connecte à l'origine publique, pas au 5173
-      # du conteneur, qui n'est plus publié.
+      # The hot reload client connects to the public origin, not to the container's
+      # 5173, which is no longer published.
       VITE_PUBLIC_PORT: ${HTTP_PORT:-8080}
     labels:
       - "traefik.enable=true"
-      # Attrape-tout : tout ce que le back n'a pas réclamé est un chemin de la SPA.
+      # Catch-all: everything the back end has not claimed is a path of the SPA.
       - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.routers.frontend.priority=1"

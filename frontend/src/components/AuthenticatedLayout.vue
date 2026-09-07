@@ -10,19 +10,18 @@ const auth = useAuthStore()
 const router = useRouter()
 const errorMessage = ref('')
 
-// Le menu principal ne porte que les actions de l'application, pas la gestion du compte,
-// qui vit dans la zone en bas de la barre. Le modèle grandit avec les features.
+// The main menu carries only the application's actions, not account management, which
+// lives in the area at the bottom of the bar. The model grows with the features.
 const menuItems = [
   { label: 'Accueil', icon: 'pi pi-home', route: { name: 'home' } },
   { label: 'Documents', icon: 'pi pi-file', route: { name: 'documents' } },
 ]
 
-// Le garde a laissé passer sur la foi de l'expiration mémorisée côté navigateur ; cet
-// appel demande au serveur ce qu'il en pense vraiment. Un 401 déconnecte (le store l'a déjà
-// fait) et renvoie vers la connexion. Toute autre panne (backend éteint, 500, proxy en
-// erreur) ne déconnecte pas : rediriger quand même laisserait une navigation dupliquée
-// silencieuse et l'utilisateur sur une page vide, sans explication. On affiche donc l'erreur
-// à la place.
+// The guard let this through on the strength of the expiration remembered by the browser; this
+// call asks the server what it really thinks. A 401 signs out (the store has already done so)
+// and sends back to the login. Any other failure (backend down, 500, proxy in error) does not
+// sign out: redirecting anyway would leave a silent duplicated navigation and the user on an
+// empty page, without explanation. So the error is displayed instead.
 onMounted(async () => {
   try {
     await auth.loadProfile()
@@ -97,7 +96,7 @@ async function logout() {
   font-size: var(--sb-section-title-size);
 }
 
-/* Pousse la zone compte en bas de la barre. */
+/* Pushes the account area to the bottom of the bar. */
 .sidebar-menu {
   flex: 1;
   border: none;

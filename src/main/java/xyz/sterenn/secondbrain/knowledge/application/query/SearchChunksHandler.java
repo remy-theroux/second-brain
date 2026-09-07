@@ -23,8 +23,8 @@ public class SearchChunksHandler implements QueryHandler<SearchChunks, List<Chun
     @Override
     public List<ChunkMatchView> handle(SearchChunks query) {
         Question question = new Question(query.question());
-        Embedding vecteur = embeddingPort.embed(List.of(question.value())).getFirst();
-        return textChunkRepository.findNearest(query.ownerId(), vecteur, SearchPolicy.RESULTS).stream()
+        Embedding embedding = embeddingPort.embed(List.of(question.value())).getFirst();
+        return textChunkRepository.findNearest(query.ownerId(), embedding, SearchPolicy.RESULTS).stream()
                 .map(ChunkMatchView::of)
                 .toList();
     }

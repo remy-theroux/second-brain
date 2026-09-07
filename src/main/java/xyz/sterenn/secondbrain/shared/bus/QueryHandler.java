@@ -1,8 +1,8 @@
 package xyz.sterenn.secondbrain.shared.bus;
 
 /**
- * <strong>Ne jamais annoter un handler avec {@code @Transactional}</strong> : la proxification
- * qui en résulte empêche la résolution de ses types génériques au démarrage.
+ * <strong>Never annotate a handler with {@code @Transactional}</strong>: the resulting proxying
+ * prevents its generic types from being resolved at startup.
  */
 public interface QueryHandler<Q extends Query<R>, R> {
 

@@ -111,7 +111,9 @@ Avant d'écrire une classe, décider de sa couche :
 - Un agrégat expose une **fabrique statique** nommée par l'intention (`User.register`)
   et garde son constructeur privé, pour que ses invariants de naissance tiennent.
 - Les messages d'exception métier sont **affichables tels quels à l'utilisateur** :
-  ils énoncent la règle, en français, sans jargon technique.
+  ils énoncent la règle, en français, sans jargon technique. C'est la seule chaîne
+  française qui subsiste dans le code Java, et c'est parce qu'elle finit sous les yeux
+  d'un utilisateur — voir la section « Langue » de `CLAUDE.md`.
 - Les règles métier pures (`PasswordPolicy`) sont statiques et sans dépendance :
   elles se testent sans Spring.
 - Le découpage de `domain/` transforme les anciens voisinages de package en imports
@@ -190,8 +192,9 @@ Avant d'écrire une classe, décider de sa couche :
   `JpaUserRepositoryAdapter`. C'est le contrat du domaine qui est vérifié.
 - Dispatcher via le bus plutôt qu'appeler le handler en direct : c'est le chemin réel
   de production.
-- Noms de méthodes de test en français avec des underscores :
-  `refuse_un_email_deja_utilise`. Assertions AssertJ.
+- **Noms de méthodes de test en anglais**, avec des underscores :
+  `rejects_an_already_used_email`. Assertions AssertJ. Les noms étaient en français
+  jusqu'au renversement de la règle de langue ; c'est du code, donc c'est de l'anglais.
 - Un test par scénario Gherkin du ticket, au niveau où le scénario est observable.
 - **Dans un test `@Transactional`, un appel HTTP refusé doit être le dernier du test.**
   L'exception métier traverse le proxy transactionnel du bus et marque la transaction
@@ -201,7 +204,7 @@ Avant d'écrire une classe, décider de sa couche :
   requête.
 - **`@Transactional` annule la base, jamais le stockage objet.** Un test qui écrit un
   original dans Garage le nettoie explicitement en `@AfterEach` (voir
-  `S3DocumentStorageTest.videLesOriginaux`), sans quoi il laisse derrière lui un objet
+  `S3DocumentStorageTest.emptyTheOriginals`), sans quoi il laisse derrière lui un objet
   qu'aucune ligne ne désigne — et que le refus d'écrasement de l'adapter transformera en
   échec pour un test ultérieur. Ce qui a changé depuis le disque : le conteneur Garage est
   jeté à la fin de l'exécution, donc la fuite ne traverse plus qu'**une seule** exécution —
@@ -221,7 +224,7 @@ Avant d'écrire une classe, décider de sa couche :
 - Un mapping qui ne tient qu'à un scan de packages se vérifie **en intégration**. Un test
   unitaire d'`EmailAttributeConverter` passerait au vert même si Hibernate ne l'appliquait
   jamais ; ce qui fait foi, c'est `SecondBrainApplicationTests` pour la découverte, et
-  `JpaUserRepositoryAdapterTest.projette_l_email_sur_une_colonne_texte` pour le contenu
+  `JpaUserRepositoryAdapterTest.projects_the_email_onto_a_text_column` pour le contenu
   réel de la colonne.
 
 ## Dépendances et build
@@ -233,9 +236,12 @@ Avant d'écrire une classe, décider de sa couche :
 
 ## Commentaires
 
+**Les commentaires et la Javadoc s'écrivent en anglais**, comme le reste du code — la
+seule exception est le message d'exception métier, qui est lu par un utilisateur.
+
 **Le raisonnement ne vit pas dans le code.** Il vit dans les ADR (`docs/decisions/`), dans
-`CLAUDE.md` et dans les plans (`docs/superpowers/plans/`). Le code dit ce qu'il fait, les
-tests disent ce qu'on attend de lui. Cette règle est arrivée après coup, sur un dépôt où une
+`CLAUDE.md` et dans les plans (`docs/superpowers/plans/`), tous rédigés en français. Le code
+dit ce qu'il fait, les tests disent ce qu'on attend de lui. Cette règle est arrivée après coup, sur un dépôt où une
 ligne de Java sur trois était de la prose : la Javadoc y racontait des décisions déjà écrites
 ailleurs, et chaque relecture payait deux fois le même texte.
 
@@ -287,5 +293,6 @@ ailleurs, et chaque relecture payait deux fois le même texte.
 ## Commits
 
 - Préfixe conventionnel en minuscule (`feat:`, `fix:`, `refactor:`, `conf:`, `test:`)
-  suivi d'une description en français.
+  suivi d'une description en français. Le message de commit est de la prose, pas du
+  code : il suit les documents de travail, pas la règle d'anglais.
 - Un commit par tâche cohérente, avec les tests verts.

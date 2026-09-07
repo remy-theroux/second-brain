@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.users.domain.valueobject.AccessToken;
 
-/** Émet un jeton désignant un compte et valable jusqu'à un instant donné, dans un format que le domaine ignore. */
+/** Issues a token designating an account and valid until a given instant, in a format unknown to the domain. */
 public interface AccessTokenIssuer {
 
     AccessToken issue(UUID subject, Instant issuedAt, Instant expiresAt);

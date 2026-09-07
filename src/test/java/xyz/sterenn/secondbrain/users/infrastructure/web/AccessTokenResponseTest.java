@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 class AccessTokenResponseTest {
 
     @Test
-    void ne_divulgue_pas_sa_valeur_dans_son_rendu_texte() {
-        AccessTokenResponse reponse = new AccessTokenResponse("eyJ.secret.abc", "Bearer", 3600L);
+    void does_not_disclose_its_value_in_its_string_representation() {
+        AccessTokenResponse response = new AccessTokenResponse("eyJ.secret.abc", "Bearer", 3600L);
 
-        assertThat(reponse.toString()).doesNotContain("eyJ.secret.abc");
+        assertThat(response.toString()).doesNotContain("eyJ.secret.abc");
     }
 }

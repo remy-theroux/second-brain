@@ -20,164 +20,163 @@ public final class RecursiveChunker {
     private final TokenCounter tokenCounter;
 
     public RecursiveChunker(TokenCounter tokenCounter) {
-        this.tokenCounter = Objects.requireNonNull(tokenCounter, "Le compteur de tokens est obligatoire");
+        this.tokenCounter = Objects.requireNonNull(tokenCounter, "A token counter is required");
     }
 
     public List<Chunk> chunk(ExtractedText text) {
-        Objects.requireNonNull(text, "Le texte extrait est obligatoire");
-        List<Chunk> extraits = new ArrayList<>();
-        for (TextBlock bloc : text.blocks()) {
-            extraits.addAll(chunkSection(bloc.getHeading(), bloc.getText()));
+        Objects.requireNonNull(text, "The extracted text is required");
+        List<Chunk> chunks = new ArrayList<>();
+        for (TextBlock block : text.blocks()) {
+            chunks.addAll(chunkSection(block.getHeading(), block.getText()));
         }
-        return List.copyOf(extraits);
+        return List.copyOf(chunks);
     }
 
     private List<Chunk> chunkSection(String heading, String body) {
         if (tokenCounter.count(body) <= ChunkingPolicy.MAX_TOKENS) {
             return List.of(new Chunk(heading, body));
         }
-        List<Chunk> extraits = new ArrayList<>();
-        String courant = "";
-        for (Unit unite : units(body)) {
-            if (courant.isEmpty()) {
-                courant = unite.text();
+        List<Chunk> chunks = new ArrayList<>();
+        String current = "";
+        for (Unit unit : units(body)) {
+            if (current.isEmpty()) {
+                current = unit.text();
                 continue;
             }
-            String candidat = courant + unite.separator() + unite.text();
-            if (tokenCounter.count(candidat) <= ChunkingPolicy.TARGET_TOKENS) {
-                courant = candidat;
+            String candidate = current + unit.separator() + unit.text();
+            if (tokenCounter.count(candidate) <= ChunkingPolicy.TARGET_TOKENS) {
+                current = candidate;
                 continue;
             }
-            List<String> phrases = sentences(courant);
-            List<String> reprises = keptOverlap(phrases, unite);
-            if (reprises.size() < phrases.size()) {
-                extraits.add(new Chunk(heading, courant));
+            List<String> sentences = sentences(current);
+            List<String> kept = keptOverlap(sentences, unit);
+            if (kept.size() < sentences.size()) {
+                chunks.add(new Chunk(heading, current));
             }
-            courant = reprises.isEmpty() ? unite.text() : join(reprises) + unite.separator() + unite.text();
+            current = kept.isEmpty() ? unit.text() : join(kept) + unit.separator() + unit.text();
         }
-        if (!courant.isEmpty()) {
-            extraits.add(new Chunk(heading, courant));
+        if (!current.isEmpty()) {
+            chunks.add(new Chunk(heading, current));
         }
-        return extraits;
+        return chunks;
     }
 
-    private List<String> keptOverlap(List<String> phrases, Unit suivante) {
-        List<String> reprises = new ArrayList<>(trailingSentences(phrases));
-        while (!reprises.isEmpty()
-                && tokenCounter.count(join(reprises) + suivante.separator() + suivante.text())
-                        > ChunkingPolicy.MAX_TOKENS) {
-            reprises.removeFirst();
+    private List<String> keptOverlap(List<String> sentences, Unit next) {
+        List<String> kept = new ArrayList<>(trailingSentences(sentences));
+        while (!kept.isEmpty()
+                && tokenCounter.count(join(kept) + next.separator() + next.text()) > ChunkingPolicy.MAX_TOKENS) {
+            kept.removeFirst();
         }
-        return reprises;
+        return kept;
     }
 
-    private List<String> trailingSentences(List<String> phrases) {
-        List<String> reprises = new ArrayList<>();
+    private List<String> trailingSentences(List<String> sentences) {
+        List<String> kept = new ArrayList<>();
         int total = 0;
-        for (int index = phrases.size() - 1; index >= 0; index--) {
-            int cout = tokenCounter.count(phrases.get(index));
-            if (total + cout > ChunkingPolicy.OVERLAP_TOKENS) {
+        for (int index = sentences.size() - 1; index >= 0; index--) {
+            int cost = tokenCounter.count(sentences.get(index));
+            if (total + cost > ChunkingPolicy.OVERLAP_TOKENS) {
                 break;
             }
-            reprises.addFirst(phrases.get(index));
-            total += cout;
+            kept.addFirst(sentences.get(index));
+            total += cost;
         }
-        return reprises;
+        return kept;
     }
 
     private List<Unit> units(String body) {
-        List<Unit> unites = new ArrayList<>();
-        for (String paragraphe : body.split(PARAGRAPH_BOUNDARY)) {
-            String bloc = paragraphe.strip();
-            if (bloc.isEmpty()) {
+        List<Unit> units = new ArrayList<>();
+        for (String paragraph : body.split(PARAGRAPH_BOUNDARY)) {
+            String block = paragraph.strip();
+            if (block.isEmpty()) {
                 continue;
             }
-            if (tokenCounter.count(bloc) <= ChunkingPolicy.MAX_TOKENS) {
-                unites.add(new Unit(bloc, PARAGRAPH_SEPARATOR));
+            if (tokenCounter.count(block) <= ChunkingPolicy.MAX_TOKENS) {
+                units.add(new Unit(block, PARAGRAPH_SEPARATOR));
                 continue;
             }
-            String separateur = PARAGRAPH_SEPARATOR;
-            for (String phrase : sentences(bloc)) {
-                for (String morceau : forceSplit(phrase)) {
-                    unites.add(new Unit(morceau, separateur));
-                    separateur = SENTENCE_SEPARATOR;
+            String separator = PARAGRAPH_SEPARATOR;
+            for (String sentence : sentences(block)) {
+                for (String piece : forceSplit(sentence)) {
+                    units.add(new Unit(piece, separator));
+                    separator = SENTENCE_SEPARATOR;
                 }
             }
         }
-        return unites;
+        return units;
     }
 
-    private List<String> forceSplit(String phrase) {
-        if (tokenCounter.count(phrase) <= ChunkingPolicy.MAX_TOKENS) {
-            return List.of(phrase);
+    private List<String> forceSplit(String sentence) {
+        if (tokenCounter.count(sentence) <= ChunkingPolicy.MAX_TOKENS) {
+            return List.of(sentence);
         }
-        List<String> morceaux = new ArrayList<>();
-        String courant = "";
-        for (String mot : phrase.split(WHITESPACE)) {
-            if (tokenCounter.count(mot) > ChunkingPolicy.MAX_TOKENS) {
-                if (!courant.isEmpty()) {
-                    morceaux.add(courant);
-                    courant = "";
+        List<String> pieces = new ArrayList<>();
+        String current = "";
+        for (String word : sentence.split(WHITESPACE)) {
+            if (tokenCounter.count(word) > ChunkingPolicy.MAX_TOKENS) {
+                if (!current.isEmpty()) {
+                    pieces.add(current);
+                    current = "";
                 }
-                morceaux.addAll(splitOnCharacters(mot));
+                pieces.addAll(splitOnCharacters(word));
                 continue;
             }
-            String candidat = courant.isEmpty() ? mot : courant + SENTENCE_SEPARATOR + mot;
-            if (tokenCounter.count(candidat) > ChunkingPolicy.MAX_TOKENS) {
-                morceaux.add(courant);
-                courant = mot;
+            String candidate = current.isEmpty() ? word : current + SENTENCE_SEPARATOR + word;
+            if (tokenCounter.count(candidate) > ChunkingPolicy.MAX_TOKENS) {
+                pieces.add(current);
+                current = word;
             } else {
-                courant = candidat;
+                current = candidate;
             }
         }
-        if (!courant.isEmpty()) {
-            morceaux.add(courant);
+        if (!current.isEmpty()) {
+            pieces.add(current);
         }
-        return morceaux;
+        return pieces;
     }
 
-    private List<String> splitOnCharacters(String mot) {
-        List<String> morceaux = new ArrayList<>();
-        // La densité de tokens est mesurée une fois : la recompter à chaque tour rendrait
-        // le découpage quadratique.
-        long tokens = Math.max(1, tokenCounter.count(mot));
-        // (long) : le produit dépasse int dès 2,7 millions de caractères. L'entier négatif
-        // qui en sortait ramenait la coupe à un caractère par tour.
-        int estimation = (int) Math.max(1L, (long) mot.length() * ChunkingPolicy.MAX_TOKENS / tokens);
-        String reste = mot;
-        while (!reste.isEmpty()) {
-            int taille = Math.min(estimation, reste.length());
-            while (taille > 1 && tokenCounter.count(reste.substring(0, taille)) > ChunkingPolicy.MAX_TOKENS) {
-                taille = taille * 3 / 4;
+    private List<String> splitOnCharacters(String word) {
+        List<String> pieces = new ArrayList<>();
+        // Token density is measured once: recounting it on every pass would make the split
+        // quadratic.
+        long tokens = Math.max(1, tokenCounter.count(word));
+        // (long): the product overflows int past 2.7 million characters. The negative int that
+        // came out of it brought the cut back to one character per pass.
+        int estimate = (int) Math.max(1L, (long) word.length() * ChunkingPolicy.MAX_TOKENS / tokens);
+        String remaining = word;
+        while (!remaining.isEmpty()) {
+            int size = Math.min(estimate, remaining.length());
+            while (size > 1 && tokenCounter.count(remaining.substring(0, size)) > ChunkingPolicy.MAX_TOKENS) {
+                size = size * 3 / 4;
             }
-            // Ne pas couper une paire de substituts en deux : la moitié orpheline n'est plus
-            // de l'UTF-8 valide, et PostgreSQL refuse de l'écrire.
-            if (taille > 1 && taille < reste.length() && Character.isHighSurrogate(reste.charAt(taille - 1))) {
-                taille--;
+            // Never cut a surrogate pair in two: the orphaned half is no longer valid UTF-8,
+            // and PostgreSQL refuses to write it.
+            if (size > 1 && size < remaining.length() && Character.isHighSurrogate(remaining.charAt(size - 1))) {
+                size--;
             }
-            morceaux.add(reste.substring(0, taille));
-            reste = reste.substring(taille);
+            pieces.add(remaining.substring(0, size));
+            remaining = remaining.substring(size);
         }
-        return morceaux;
+        return pieces;
     }
 
-    /** Une nouvelle instance à chaque appel : {@code BreakIterator} n'est pas sûr en accès concurrent. */
-    private static List<String> sentences(String texte) {
-        BreakIterator frontieres = BreakIterator.getSentenceInstance(Locale.FRENCH);
-        frontieres.setText(texte);
-        List<String> phrases = new ArrayList<>();
-        int debut = frontieres.first();
-        for (int fin = frontieres.next(); fin != BreakIterator.DONE; debut = fin, fin = frontieres.next()) {
-            String phrase = texte.substring(debut, fin).strip();
-            if (!phrase.isEmpty()) {
-                phrases.add(phrase);
+    /** A new instance on every call: {@code BreakIterator} is not safe under concurrent access. */
+    private static List<String> sentences(String text) {
+        BreakIterator boundaries = BreakIterator.getSentenceInstance(Locale.FRENCH);
+        boundaries.setText(text);
+        List<String> sentences = new ArrayList<>();
+        int start = boundaries.first();
+        for (int end = boundaries.next(); end != BreakIterator.DONE; start = end, end = boundaries.next()) {
+            String sentence = text.substring(start, end).strip();
+            if (!sentence.isEmpty()) {
+                sentences.add(sentence);
             }
         }
-        return phrases;
+        return sentences;
     }
 
-    private static String join(List<String> phrases) {
-        return String.join(SENTENCE_SEPARATOR, phrases);
+    private static String join(List<String> sentences) {
+        return String.join(SENTENCE_SEPARATOR, sentences);
     }
 
     private record Unit(String text, String separator) {}
