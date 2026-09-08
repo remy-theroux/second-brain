@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +33,10 @@ import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration.RecordingEmbeddingPort;
+import xyz.sterenn.secondbrain.knowledge.application.command.ReplaceDocumentContent;
 import xyz.sterenn.secondbrain.knowledge.application.command.UploadDocument;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
@@ -41,6 +44,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
@@ -192,6 +196,52 @@ class KnowledgeEventListenerTest {
     }
 
     @Test
+    void re_indexes_the_document_whose_content_replacement_is_announced() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
+        publish(document);
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY));
+
+        commandBus.dispatch(new ReplaceDocumentContent(
+                document.getOwnerId(), document.getId(), "structure.md", Fixtures.read(Fixtures.HEADINGLESS_MD)));
+
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY);
+            assertThat(extractedTextOf(document))
+                    .contains("Un fichier Markdown peut parfaitement")
+                    .doesNotContain("Journal de bord");
+            assertThat(textChunkRepository.findByDocumentId(document.getId()))
+                    .isNotEmpty()
+                    .allSatisfy(chunk -> assertThat(chunk.chunk().text()).doesNotContain("Journal de bord"));
+        });
+    }
+
+    @Test
+    void announces_nothing_when_the_replacing_content_is_identical() {
+        Document document = anUploadedDocument("structure.md", Fixtures.STRUCTURED_MD);
+        publish(document);
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY));
+        UUID extraction = textExtractionRepository
+                .findByDocumentId(document.getId())
+                .orElseThrow()
+                .getId();
+
+        commandBus.dispatch(new ReplaceDocumentContent(
+                document.getOwnerId(), document.getId(), "structure.md", Fixtures.read(Fixtures.STRUCTURED_MD)));
+
+        // A rerun would have deleted the extraction before writing its own: the identifier is
+        // what says the pipeline never started.
+        await().during(Duration.ofSeconds(2)).atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(statusOf(document)).isEqualTo(DocumentStatus.READY);
+            assertThat(textExtractionRepository.findByDocumentId(document.getId()))
+                    .get()
+                    .extracting(TextExtraction::getId)
+                    .isEqualTo(extraction);
+        });
+    }
+
+    @Test
     void rejects_an_undeclared_event_without_reprocessing_it(CapturedOutput output) throws InterruptedException {
         UUID document = UUID.randomUUID();
         Message message = rabbitTemplate
@@ -239,6 +289,12 @@ class KnowledgeEventListenerTest {
 
     private String errorMessageOf(Document document) {
         return reload(document).getErrorMessage();
+    }
+
+    private String extractedTextOf(Document document) {
+        return textExtractionRepository.findByDocumentId(document.getId()).orElseThrow().getBlocks().stream()
+                .map(TextBlock::getText)
+                .collect(Collectors.joining("\n"));
     }
 
     private Document reload(Document document) {
