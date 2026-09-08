@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
@@ -11,6 +11,7 @@ import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import { hasUnsettled } from '@/components/documentStatus'
+import { driveMessage } from '@/components/driveMessages'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import {
   deleteDocument,
@@ -34,6 +35,7 @@ const INVALID_FORMAT_MESSAGE = "« {0} » n'est pas d'un format accepté. Format
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const confirm = useConfirm()
 const uploader = useTemplateRef('uploader')
 
@@ -58,6 +60,8 @@ const rejections = ref([])
 // Identifiers of the documents the server designated as duplicates of the last refused
 // uploads: the matching rows are highlighted rather than left to be searched for.
 const duplicateIds = ref([])
+// The outcome of a Google authorization, read once from the URL then erased from it.
+const driveOutcome = ref(null)
 
 // The server prevails: a 401 on any call signs out, whatever the browser thinks. Any
 // other failure is displayed, without signing out.
@@ -68,6 +72,19 @@ async function handle(error) {
     return
   }
   rejections.value.push({ filename: null, message: error.message })
+}
+
+// The code is read at mount, then removed from the URL: left there, an F5 would replay the
+// message of a connection made ten minutes earlier, and it would stay in the browser history.
+function readDriveOutcome() {
+  if (route.query.drive === undefined) {
+    return
+  }
+  driveOutcome.value = driveMessage(route.query.drive)
+
+  const query = { ...route.query }
+  delete query.drive
+  router.replace({ query })
 }
 
 function scheduleRefresh() {
@@ -172,7 +189,10 @@ function formatDate(isoInstant) {
   return new Date(isoInstant).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-onMounted(load)
+onMounted(async () => {
+  readDriveOutcome()
+  await load()
+})
 onUnmounted(() => {
   mounted = false
   clearTimeout(refreshTimer)
@@ -204,6 +224,10 @@ onUnmounted(() => {
         </template>
       </FileUpload>
     </div>
+
+    <Message v-if="driveOutcome" :severity="driveOutcome.severity" closable>
+      {{ driveOutcome.text }}
+    </Message>
 
     <Message v-for="(rejection, index) in rejections" :key="index" severity="error" closable>
       <span v-if="rejection.filename">« {{ rejection.filename }} » — </span>{{ rejection.message }}
