@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChanges;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChannels;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 
@@ -53,5 +54,10 @@ class GoogleDriveConfiguration {
     @Bean
     GoogleDriveChanges googleDriveChanges(RestClient.Builder restClientBuilder) {
         return new GoogleDriveChangesAdapter(restClientBuilder);
+    }
+
+    @Bean
+    GoogleDriveChannels googleDriveChannels(RestClient.Builder restClientBuilder) {
+        return new GoogleDriveChannelsAdapter(restClientBuilder);
     }
 }
