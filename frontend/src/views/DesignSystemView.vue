@@ -13,6 +13,7 @@ import Password from 'primevue/password'
 import { useConfirm } from 'primevue/useconfirm'
 import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentSourceTag from '@/components/DocumentSourceTag.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import AnswerText from '@/components/AnswerText.vue'
 import AnswerSources from '@/components/AnswerSources.vue'
@@ -69,18 +70,22 @@ const DOCUMENTS = [
     id: 'a',
     filename: 'notes-de-lecture.md',
     status: 'EXTRACTED',
+    source: 'MANUAL',
     createdAt: '25 août 2026, 09:12',
   },
   {
     id: 'b',
     filename: 'rapport-annuel.pdf',
     status: 'PENDING',
+    source: 'GOOGLE_DRIVE',
+    driveLink: 'https://drive.google.com/file/d/exemple/view',
     createdAt: '24 août 2026, 18:40',
   },
   {
     id: 'c',
     filename: 'compte-rendu.docx',
     status: 'FAILED',
+    source: 'MANUAL',
     createdAt: '23 août 2026, 11:05',
   },
 ]
@@ -152,10 +157,15 @@ const openedSources = ref([1])
 
 const confirm = useConfirm()
 
-function showConfirmation(event) {
+// The very message of DocumentsView: a document that came from a watched folder warns that it
+// will be back at the next synchronisation, the others do not.
+function showConfirmation(event, document) {
   confirm.require({
     target: event.currentTarget,
-    message: 'Supprimer « rapport-annuel.pdf » ?',
+    message:
+      document.source === 'GOOGLE_DRIVE'
+        ? `Supprimer « ${document.filename} » ? Il vient d'un dossier surveillé : il reviendra à la prochaine synchronisation.`
+        : `Supprimer « ${document.filename} » ?`,
     icon: 'pi pi-exclamation-triangle',
     rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Supprimer', severity: 'danger' },
@@ -448,6 +458,24 @@ onMounted(() => {
     </section>
 
     <section>
+      <h2>Provenance d'un document — DocumentSourceTag</h2>
+      <p class="muted">
+        D'où vient un document, dans la liste. Un document importé porte un lien vers son fichier
+        Drive, en <code>target="_blank" rel="noopener"</code> — c'est une URL tierce. Le lien peut
+        manquer : l'identifiant du fichier n'est pas exposé, seul le lien l'est, et Drive n'en rend
+        pas toujours un.
+      </p>
+      <div class="row">
+        <DocumentSourceTag source="MANUAL" />
+        <DocumentSourceTag
+          source="GOOGLE_DRIVE"
+          drive-link="https://drive.google.com/file/d/exemple/view"
+        />
+        <DocumentSourceTag source="GOOGLE_DRIVE" />
+      </div>
+    </section>
+
+    <section>
       <h2>Tableau — DataTable</h2>
       <p class="muted">
         La liste des documents (<code>DocumentsView</code>). La ligne en gras, soulignée à gauche
@@ -462,6 +490,11 @@ onMounted(() => {
         :row-class="(row) => (row.id === 'b' ? 'table-duplicate-row' : '')"
       >
         <Column field="filename" header="Fichier" />
+        <Column header="Provenance">
+          <template #body="{ data }">
+            <DocumentSourceTag :source="data.source" :drive-link="data.driveLink" />
+          </template>
+        </Column>
         <Column header="Statut">
           <template #body="{ data }"><DocumentStatusTag :status="data.status" /></template>
         </Column>
@@ -482,7 +515,7 @@ onMounted(() => {
               text
               rounded
               :aria-label="`Supprimer ${data.filename}`"
-              @click="showConfirmation"
+              @click="showConfirmation($event, data)"
             />
           </template>
         </Column>
@@ -490,6 +523,7 @@ onMounted(() => {
       <DataTable :value="[]">
         <template #empty>Aucun document pour l'instant.</template>
         <Column header="Fichier" />
+        <Column header="Provenance" />
         <Column header="Statut" />
         <Column header="Déposé le" />
       </DataTable>

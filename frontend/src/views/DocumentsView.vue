@@ -9,6 +9,7 @@ import DataTable from 'primevue/datatable'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentSourceTag from '@/components/DocumentSourceTag.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import DriveFolderPicker from '@/components/DriveFolderPicker.vue'
 import DriveSourceCard from '@/components/DriveSourceCard.vue'
@@ -296,10 +297,16 @@ async function uploadOne(file) {
   return true
 }
 
+// A document that came from a watched folder is not removed for good: the next import walks
+// the folder again and brings it back. Staying silent about it would have the user believe
+// they took something out of their base, then watch it reappear without understanding.
 function confirmRemoval(event, document) {
+  const imported = document.source === 'GOOGLE_DRIVE'
   confirm.require({
     target: event.currentTarget,
-    message: `Supprimer « ${document.filename} » ?`,
+    message: imported
+      ? `Supprimer « ${document.filename} » ? Il vient d'un dossier surveillé : il reviendra à la prochaine synchronisation.`
+      : `Supprimer « ${document.filename} » ?`,
     icon: 'pi pi-exclamation-triangle',
     rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Supprimer', severity: 'danger' },
@@ -462,6 +469,11 @@ onUnmounted(() => {
     <DataTable :value="documents" :loading="loading" data-key="id" :row-class="rowClass">
       <template #empty>Aucun document pour l'instant.</template>
       <Column field="filename" header="Fichier" />
+      <Column header="Provenance">
+        <template #body="{ data }">
+          <DocumentSourceTag :source="data.source" :drive-link="data.driveLink" />
+        </template>
+      </Column>
       <Column header="Statut">
         <template #body="{ data }">
           <DocumentStatusTag :status="data.status" />
