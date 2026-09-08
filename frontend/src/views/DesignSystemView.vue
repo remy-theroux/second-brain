@@ -431,6 +431,27 @@ onMounted(() => {
     </section>
 
     <section>
+      <h2>Compte Drive à reconnecter</h2>
+      <p class="muted">
+        L'état <code>NEEDS_RECONNECTION</code> d'une connexion Drive, tel que le rend
+        <code>DocumentsView</code> : le refus est annoncé, et le geste qui répare reste offert
+        <strong>même quand le sélecteur de dossier est ouvert</strong> — c'est en l'ouvrant qu'on
+        découvre le plus souvent que l'autorisation ne tient plus. L'état <code>ACTIVE</code>
+        n'affiche ni l'un ni l'autre.
+      </p>
+      <div class="stack">
+        <Message severity="warn">
+          L'autorisation Google Drive n'est plus valide. Reconnectez le compte pour que les dossiers
+          surveillés reprennent.
+        </Message>
+        <div class="row">
+          <Button type="button" label="Ajouter un dossier" icon="pi pi-plus" text />
+          <Button type="button" label="Reconnecter le compte" icon="pi pi-google" />
+        </div>
+      </div>
+    </section>
+
+    <section>
       <h2>Dossier surveillé — DriveSourceCard</h2>
       <p class="muted">
         Un dossier Drive, le bilan de son dernier import et ses deux gestes. Un dossier

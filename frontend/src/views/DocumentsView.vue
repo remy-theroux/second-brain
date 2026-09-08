@@ -150,10 +150,11 @@ async function load() {
   }
 }
 
+// Stops at the connection: reading the watched folders belongs to `load`, which reads them
+// once the connection is known and refreshes them at every cycle afterwards.
 async function loadDrive() {
   try {
     driveConnection.value = await fetchDriveConnection(auth.token)
-    watchedFolders.value = driveConnection.value ? await listWatchedFolders(auth.token) : []
   } catch (error) {
     await handle(error)
   }
@@ -207,7 +208,13 @@ async function watchFolder(folder) {
     picking.value = false
     watchedFolders.value = await listWatchedFolders(auth.token)
   } catch (error) {
-    await handle(error)
+    if (error instanceof ValidationError) {
+      // A single field in this command: its message is the folder's message, and it comes
+      // from the server. The generic one of `ValidationError` would say nothing.
+      rejections.value.push({ filename: null, message: error.errors.folderId ?? error.message })
+    } else {
+      await handle(error)
+    }
   } finally {
     busy.value = false
   }

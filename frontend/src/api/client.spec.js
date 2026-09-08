@@ -519,7 +519,7 @@ describe('Google Drive', () => {
     it('reads the connection with the bearer token', async () => {
       const connection = {
         googleEmail: 'alice@example.com',
-        status: 'CONNECTED',
+        status: 'ACTIVE',
         connectedAt: '2026-09-08T10:00:00Z',
       }
       fetch.mockResolvedValue(jsonResponse(200, connection))
