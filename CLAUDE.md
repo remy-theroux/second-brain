@@ -723,6 +723,113 @@ sous quel dossier.
 Ce qu'aucun écran ne fait encore : appeler ces routes — c'est DRIVE-7, et il est désormais
 **front seul**.
 
+### Le flux de la synchronisation d'un Drive surveillé
+
+**La règle est celle du miroir** : ce que le Drive surveillé contient et ce que la base contient
+sont la même chose. Personne ne demande une synchronisation ; elle a lieu sur horloge, et un
+fichier modifié dans Drive est cité par l'agent dans sa nouvelle version sans qu'aucun geste ait
+été fait.
+
+Un tour lit les changements depuis le jeton de page conservé (`changes.list`, DRIVE-5) et, pour
+chacun, décide d'un geste :
+
+| Changement | Geste | Commande |
+|---|---|---|
+| Contenu modifié | Ré-ingestion sans changer d'identité | `ImportDriveFile` |
+| Fichier ajouté dans un dossier surveillé | Import | `ImportDriveFile` |
+| Fichier supprimé ou mis à la corbeille | Retrait | `DeleteDocument` |
+| Fichier sorti des dossiers surveillés | Retrait | `DeleteDocument` |
+| Fichier renommé | Le nom change, **rien d'autre** | `RenameDocument` |
+| Fichier déplacé dans un sous-dossier surveillé | Rien | — |
+| Rien n'a bougé | Rien | — |
+
+**La décision est isolée de son exécution.** `DriveChangeDecision.decide` est de la logique pure —
+ni Spring, ni Drive, ni base — et rend un `Import`, un `Reingest`, un `Rename`, un `Remove` ou
+`NOTHING`. C'est une table de vérité, exactement le genre de chose qui casse en silence, et elle se
+lit donc dans un test unitaire. `DriveSynchroniser`, lui, ne fait que porter ces gestes.
+
+**La ré-ingestion passe par `ImportDriveFile`, pas par `ReplaceDocumentContent`** — un lecteur du
+ticket DRIVE-5 cherchera la seconde et ne la trouvera pas. La raison est le court-circuit de
+RAG-7 : `ReplaceDocumentContentHandler` sort sans rien écrire sur une empreinte identique, donc
+sans rafraîchir `drive_modified_time`. Un binaire dont seul l'horodatage Drive bouge serait alors
+re-téléchargé à chaque tour, pour toujours. `ImportDriveFileHandler.reingest` fait tout ce qu'il
+faut — le garde-fou d'empreinte, l'écriture de la date, le contrôle de doublon, l'effacement du
+texte et des extraits, la publication de `DocumentContentReplaced` — et il sait en plus exporter
+un Google Doc. C'est bien la machinerie de RAG-7 qui opère, appelée depuis DRIVE-3. Conséquence
+pratique : le synchroniseur **télécharge avant de dispatcher**, comme l'importeur.
+
+**L'invariant coûteux : un fichier dont le contenu n'a pas changé n'est jamais revectorisé**, et
+il tient à deux mécanismes différents. Pour un binaire, c'est le court-circuit d'empreinte. Pour
+un Google Doc, c'est `drive_modified_time` — son export est reconstruit à chaque appel, donc deux
+exports d'un document intact n'ont jamais la même empreinte, et il faut **ne même pas exporter**
+un Doc dont le `modifiedTime` n'a pas bougé. La décision porte cette règle : un Doc immobile rend
+`NOTHING` avant tout téléchargement.
+
+**Résoudre le dossier surveillé d'un fichier lève en cas d'échec, et ne rend jamais vide.** C'est
+le mode d'échec le plus grave de ce flux : `decide` lit « aucun dossier surveillé » comme un
+retrait, donc un hoquet de Drive au moment de remonter les parents d'un fichier effacerait la
+base. La résolution est écrite **hors** du `catch` qui laisse un changement de côté, une panne
+arrête le tour, et un test l'observe explicitement. Les parents d'un dossier ne sont demandés
+qu'une fois par tour : cent changements dans le même dossier feraient sinon cent allers-retours.
+
+**Une synchronisation en échec n'efface rien et ne conserve rien.** Elle se signale dans le
+journal et sera rejouée au tour suivant, depuis le même jeton. Une autorisation retirée est le
+seul échec qui écrive quelque chose : `MarkDriveConnectionExpired`, dispatchée hors de la
+transaction annulée (ADR-0028), comme le fait déjà l'import d'un dossier.
+
+**Le jeton de page ne se conserve qu'après un tour complet réussi** — `RecordDriveChangePosition`,
+en dernière étape. Conservé au fil de l'eau, il ferait perdre les changements d'une page dont le
+traitement a échoué. Il vit dans `knowledge_drive_connections.changes_page_token` (V18), en
+`text` : Google ne documente aucune longueur, et une troncature silencieuse rendrait un jeton
+refusé, donc un balayage complet.
+
+**Un jeton perdu ou périmé retombe sur un balayage complet, jamais sur « on repart de
+maintenant »** — ce dernier laisserait la base dériver en silence, ce qui est exactement le
+mensonge que ce flux supprime. Deux cas y mènent : aucun jeton conservé (première synchronisation
+d'une connexion), et le `410 Gone` de Google, que l'adapter traduit en
+`DriveChangeTokenExpiredException`. Le balayage rejoue `DriveFolderImporter` sur chaque dossier
+surveillé, et **le point de départ est demandé avant lui** : pris après, tout ce qui a bougé
+pendant le balayage tomberait entre deux tours. **Ce qu'un balayage complet ne fait pas : retirer.**
+`DriveFolderImporter` importe et ré-ingère, il ne supprime rien — un fichier disparu du Drive
+pendant que le jeton était périmé reste donc en base. C'est le trou assumé de ce repli, et il
+demanderait que le balayage rende la liste des fichiers vus.
+
+**La tâche planifiée publie, elle ne travaille pas.** `DriveSynchronisationScheduler` dispatche
+`RequestDriveSynchronisation`, dont le handler annonce un `DriveSynchronisationRequested` par
+connexion active ; c'est le listener qui synchronise. Deux raisons : le travail appartient à la
+queue du contexte, à `concurrency: 1`, qui sérialise donc les tours ; et une tâche qui
+synchroniserait sur place tiendrait son thread pendant tout le tour. **`fixedDelay` et non
+`fixedRate`** : le second lancerait un tour toutes les N minutes même si le précédent n'est pas
+fini. L'intervalle est `secondbrain.drive.synchronisation-interval`
+(`SECONDBRAIN_DRIVE_SYNC_INTERVAL`, 15 minutes par défaut), au format **ISO-8601** — `PT15M` et
+jamais `15m`, que `@Scheduled` lit comme un nombre de millisecondes. Seul le conteneur `worker`
+porte l'horloge : `@Profile("worker")`, et `@EnableScheduling` avec elle.
+
+**`RenameDocument` est la seule commande du contexte sans route HTTP.** Aucune commande existante
+ne savait renommer sans revectoriser — `ReplaceDocumentContent` court-circuite sur empreinte
+identique et ne touche donc pas au nom (« le nom ne suit que le contenu », RAG-7) — et rien dans
+le produit ne demande de renommer un document à la main. Son handler ne publie rien : le contenu
+n'a pas bougé, rien en aval n'a quoi que ce soit à refaire.
+
+**Et c'est là ce que le renommage laisse derrière lui.** Le nom entre dans le **préfixe de
+contextualisation** des extraits (`Chunk.contextualised(filename)`), mais pas dans la colonne
+`text`. Renommer sans revectoriser laisse donc les vecteurs calculés sous l'**ancien** nom : la
+recherche continue de comparer une question à un `Document: ancien-nom.pdf — Section: …` qui n'est
+plus le nom affiché. C'est ce que le ticket demande — « ses extraits ne sont pas recalculés » —
+et c'est un écart assumé, mais il **nuance la promesse de RAG-5** selon laquelle changer la forme
+du préfixe ne demanderait que de revectoriser : cette promesse supposait qu'aucun chemin ne
+renomme un document, ce qui n'est plus vrai. À savoir, pas à corriger.
+
+**Deux commandes de plus que ce que le plan annonçait**, et c'est assumé :
+`RequestDriveSynchronisation` (l'horloge, qui ne nomme aucun propriétaire — le handler dit quels
+Drive elle couvre) et `RecordDriveChangePosition` (le jeton, `null` valant « position perdue,
+un balayage complet est dû »). Le synchroniseur vit hors des bus et n'écrit donc rien lui-même ;
+toute écriture reste une commande, une transaction courte chacune.
+
+**Deux décisions attendent leur ADR** et sont signalées dans la PR : la synchronisation sur
+horloge, et la règle du miroir elle-même — un fichier retiré du Drive fait disparaître son
+document, sans corbeille ni confirmation.
+
 ### Le flux du dépôt d'un document
 
 `POST /api/documents` reçoit un multipart (`file`), dispatche `UploadDocument` et répond
@@ -872,7 +979,8 @@ un `.png` est refusé même s'il portait par miracle le contenu du PDF en place.
 
 **Le nom d'un document ne suit que son contenu.** Un `PUT` qui porte le même fichier sous un autre
 nom ne renomme rien : le court-circuit est sur l'empreinte, et il passe avant toute écriture.
-Renommer sans remplacer demandera une route à soi.
+Renommer sans remplacer se fait par `RenameDocument`, qui n'a pas de route et n'a qu'un appelant,
+la synchronisation d'un Drive.
 
 Le contenu neuf annonce `DocumentContentReplaced`, et **non un `DocumentUploaded` republié** : un
 événement est un fait au passé, le document n'a pas été déposé une seconde fois. Le coût est un
@@ -949,8 +1057,9 @@ ce qui rend les frontières lisibles dans les assertions.
 `Chunk.contextualised(filename)` rend `Document: rapport.pdf — Section: Introduction` suivi du
 corps, et c'est la seule méthode qui connaisse cette forme ; la colonne `text` porte le corps
 nu. Changer la forme du préfixe ne demandera donc pas de réécrire la base, seulement de
-revectoriser — et l'écran reste lisible. Ce que ça suppose et qui est vrai : aucune route ne
-renomme un document.
+revectoriser — et l'écran reste lisible. Ce que ça supposait : qu'aucun chemin ne renomme un
+document. Ce n'est plus vrai depuis `RenameDocument` — voir « Le flux de la synchronisation d'un
+Drive surveillé », qui dit ce que le renommage laisse derrière lui.
 
 **Tout tient dans la transaction du bus, appels Ollama compris.** Le « tout ou rien » est
 gratuit : c'est le rollback. Un Ollama à terre ne laisse aucun extrait derrière lui, le
@@ -1225,7 +1334,9 @@ famille dans ce cas.
 La connexion à un Drive vit dans `knowledge_drive_connections` — `owner_id` **`UNIQUE`**, ce qui
 pose la règle « une connexion par compte » là où elle ne se contourne pas — et la demande
 d'autorisation en cours dans `knowledge_drive_authorization_requests`. Les deux cascadent à la
-suppression du compte.
+suppression du compte. La connexion porte en plus `changes_page_token` (V18) : où en est la lecture
+du flux de changements, écrit **après** un tour de synchronisation complet, `NULL` tant qu'aucun
+n'a eu lieu — auquel cas un balayage complet est dû.
 
 Les dossiers mis sous surveillance vivent dans `knowledge_drive_watched_folders`, rattachés à la
 **connexion** et non au propriétaire : `UNIQUE (connection_id, drive_folder_id)`, et deux cascades
