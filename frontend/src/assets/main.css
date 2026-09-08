@@ -21,9 +21,11 @@
   --sb-space-lg: 1.5rem;
   --sb-space-xl: 2rem;
 
-  /* Layout widths. */
+  /* Layout sizes. */
   --sb-sidebar-width: 17rem;
   --sb-guest-width: 26rem;
+  /* Height at which the Drive folder list starts scrolling instead of pushing the page down. */
+  --sb-picker-max-height: 18rem;
 
   /* Typography: headings only, the rest is the browser's size. */
   --sb-title-size: 1.5rem;

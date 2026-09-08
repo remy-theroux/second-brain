@@ -13,10 +13,13 @@ import Password from 'primevue/password'
 import { useConfirm } from 'primevue/useconfirm'
 import FormField from '@/components/FormField.vue'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentSourceTag from '@/components/DocumentSourceTag.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import AnswerText from '@/components/AnswerText.vue'
 import AnswerSources from '@/components/AnswerSources.vue'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
+import DriveSourceCard from '@/components/DriveSourceCard.vue'
+import DriveFolderPicker from '@/components/DriveFolderPicker.vue'
 
 // Static catalogue: everything that is shared — tokens, project components, PrimeVue
 // components as we use them — in each of its states. Mostly no store, no network call —
@@ -31,6 +34,7 @@ const PROJECT_TOKENS = [
   '--sb-space-xl',
   '--sb-sidebar-width',
   '--sb-guest-width',
+  '--sb-picker-max-height',
   '--sb-title-size',
   '--sb-section-title-size',
   '--sb-text-small',
@@ -44,6 +48,7 @@ const THEME_TOKENS = [
   '--p-text-color',
   '--p-text-muted-color',
   '--p-primary-color',
+  '--p-content-border-radius',
 ]
 
 const BUTTON_SEVERITIES = ['primary', 'secondary', 'success', 'info', 'warn', 'danger', 'contrast']
@@ -65,18 +70,22 @@ const DOCUMENTS = [
     id: 'a',
     filename: 'notes-de-lecture.md',
     status: 'EXTRACTED',
+    source: 'MANUAL',
     createdAt: '25 août 2026, 09:12',
   },
   {
     id: 'b',
     filename: 'rapport-annuel.pdf',
     status: 'PENDING',
+    source: 'GOOGLE_DRIVE',
+    driveLink: 'https://drive.google.com/file/d/exemple/view',
     createdAt: '24 août 2026, 18:40',
   },
   {
     id: 'c',
     filename: 'compte-rendu.docx',
     status: 'FAILED',
+    source: 'MANUAL',
     createdAt: '23 août 2026, 11:05',
   },
 ]
@@ -100,14 +109,63 @@ const ANSWER_SOURCES = [
   },
 ]
 
+// The four states of a watched folder. The one that never ran carries NEITHER `lastImportAt`,
+// NOR `lastImportStatus`, NOR `lastImportError`: the API leaves the three out, and it is their
+// absence that says so — the fixture must be missing them, not carry them null.
+const WATCHED_FOLDERS = [
+  {
+    id: '1',
+    name: 'Notes de réunion',
+    watchedAt: '2026-09-07T08:00:00Z',
+    documentCount: 0,
+    rejections: [],
+  },
+  {
+    id: '2',
+    name: 'Contrats',
+    watchedAt: '2026-09-01T08:00:00Z',
+    lastImportAt: '2026-09-08T07:30:00Z',
+    lastImportStatus: 'SUCCEEDED',
+    documentCount: 12,
+    rejections: [],
+  },
+  {
+    id: '3',
+    name: 'Photos de chantier',
+    watchedAt: '2026-09-02T08:00:00Z',
+    lastImportAt: '2026-09-08T07:31:00Z',
+    lastImportStatus: 'SUCCEEDED',
+    documentCount: 3,
+    rejections: [
+      { filename: 'facade.jpg', reason: "Ce format de fichier n'est pas accepté." },
+      { filename: 'plan.dwg', reason: "Ce format de fichier n'est pas accepté." },
+    ],
+  },
+  {
+    id: '4',
+    name: 'Archives 2019',
+    watchedAt: '2026-09-03T08:00:00Z',
+    lastImportAt: '2026-09-08T07:32:00Z',
+    lastImportStatus: 'FAILED',
+    lastImportError: 'Google Drive est momentanément injoignable.',
+    documentCount: 5,
+    rejections: [],
+  },
+]
+
 const openedSources = ref([1])
 
 const confirm = useConfirm()
 
-function showConfirmation(event) {
+// The very message of DocumentsView: a document that came from a watched folder warns that it
+// will be back at the next synchronisation, the others do not.
+function showConfirmation(event, document) {
   confirm.require({
     target: event.currentTarget,
-    message: 'Supprimer « rapport-annuel.pdf » ?',
+    message:
+      document.source === 'GOOGLE_DRIVE'
+        ? `Supprimer « ${document.filename} » ? Il vient d'un dossier surveillé : il reviendra à la prochaine synchronisation.`
+        : `Supprimer « ${document.filename} » ?`,
     icon: 'pi pi-exclamation-triangle',
     rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Supprimer', severity: 'danger' },
@@ -182,7 +240,14 @@ onMounted(() => {
               <code>{{ token }}</code>
             </th>
             <td>{{ tokenValues[token] }}</td>
-            <td><span class="color-sample" :style="{ background: `var(${token})` }" /></td>
+            <td>
+              <span
+                v-if="token.endsWith('-radius')"
+                class="radius-sample"
+                :style="{ borderRadius: `var(${token})` }"
+              />
+              <span v-else class="color-sample" :style="{ background: `var(${token})` }" />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -366,6 +431,72 @@ onMounted(() => {
     </section>
 
     <section>
+      <h2>Compte Drive à reconnecter</h2>
+      <p class="muted">
+        L'état <code>NEEDS_RECONNECTION</code> d'une connexion Drive, tel que le rend
+        <code>DocumentsView</code> : le refus est annoncé, et le geste qui répare reste offert
+        <strong>même quand le sélecteur de dossier est ouvert</strong> — c'est en l'ouvrant qu'on
+        découvre le plus souvent que l'autorisation ne tient plus. L'état <code>ACTIVE</code>
+        n'affiche ni l'un ni l'autre.
+      </p>
+      <div class="stack">
+        <Message severity="warn">
+          L'autorisation Google Drive n'est plus valide. Reconnectez le compte pour que les dossiers
+          surveillés reprennent.
+        </Message>
+        <div class="row">
+          <Button type="button" label="Ajouter un dossier" icon="pi pi-plus" text />
+          <Button type="button" label="Reconnecter le compte" icon="pi pi-google" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Dossier surveillé — DriveSourceCard</h2>
+      <p class="muted">
+        Un dossier Drive, le bilan de son dernier import et ses deux gestes. Un dossier
+        <strong>jamais synchronisé</strong> se reconnaît à l'<em>absence</em> des trois champs de
+        bilan, pas à une valeur nulle. Le motif d'un échec et la raison d'un fichier écarté viennent
+        du serveur et s'affichent tels quels ; l'état, lui, est un code que l'écran traduit —
+        ADR-0022. Les boutons émettent, la vue garde les confirmations et la déconnexion : ici, ils
+        ne font rien.
+      </p>
+      <div class="stack">
+        <DriveSourceCard v-for="folder in WATCHED_FOLDERS" :key="folder.id" :folder="folder" />
+        <DriveSourceCard :folder="WATCHED_FOLDERS[1]" busy />
+      </div>
+    </section>
+
+    <section>
+      <h2>Choix d'un dossier — DriveFolderPicker</h2>
+      <p class="muted">
+        Un fil d'Ariane, pas un arbre : le parcours se fait par appels successifs, un niveau à la
+        fois. Seuls des dossiers y sont listés. Comme le bouton de téléchargement ci-dessus, le
+        composant appelle vraiment <code>src/api/</code> : sans Drive connecté, c'est son état de
+        refus qui s'affiche ici — l'état chargé se regarde sur l'écran des sources.
+      </p>
+      <DriveFolderPicker />
+    </section>
+
+    <section>
+      <h2>Provenance d'un document — DocumentSourceTag</h2>
+      <p class="muted">
+        D'où vient un document, dans la liste. Un document importé porte un lien vers son fichier
+        Drive, en <code>target="_blank" rel="noopener"</code> — c'est une URL tierce. Le lien peut
+        manquer : l'identifiant du fichier n'est pas exposé, seul le lien l'est, et Drive n'en rend
+        pas toujours un.
+      </p>
+      <div class="row">
+        <DocumentSourceTag source="MANUAL" />
+        <DocumentSourceTag
+          source="GOOGLE_DRIVE"
+          drive-link="https://drive.google.com/file/d/exemple/view"
+        />
+        <DocumentSourceTag source="GOOGLE_DRIVE" />
+      </div>
+    </section>
+
+    <section>
       <h2>Tableau — DataTable</h2>
       <p class="muted">
         La liste des documents (<code>DocumentsView</code>). La ligne en gras, soulignée à gauche
@@ -380,6 +511,11 @@ onMounted(() => {
         :row-class="(row) => (row.id === 'b' ? 'table-duplicate-row' : '')"
       >
         <Column field="filename" header="Fichier" />
+        <Column header="Provenance">
+          <template #body="{ data }">
+            <DocumentSourceTag :source="data.source" :drive-link="data.driveLink" />
+          </template>
+        </Column>
         <Column header="Statut">
           <template #body="{ data }"><DocumentStatusTag :status="data.status" /></template>
         </Column>
@@ -400,7 +536,7 @@ onMounted(() => {
               text
               rounded
               :aria-label="`Supprimer ${data.filename}`"
-              @click="showConfirmation"
+              @click="showConfirmation($event, data)"
             />
           </template>
         </Column>
@@ -408,6 +544,7 @@ onMounted(() => {
       <DataTable :value="[]">
         <template #empty>Aucun document pour l'instant.</template>
         <Column header="Fichier" />
+        <Column header="Provenance" />
         <Column header="Statut" />
         <Column header="Déposé le" />
       </DataTable>
@@ -513,6 +650,15 @@ code {
 
 .space-sample {
   display: inline-block;
+  background: var(--p-primary-color);
+  vertical-align: middle;
+}
+
+.radius-sample {
+  display: inline-block;
+  width: 3rem;
+  height: 1.5rem;
+  border: 1px solid var(--p-content-border-color);
   background: var(--p-primary-color);
   vertical-align: middle;
 }

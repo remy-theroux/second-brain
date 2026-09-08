@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import PageTitle from '@/components/PageTitle.vue'
+import DocumentSourceTag from '@/components/DocumentSourceTag.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import { fetchDocument, UnauthorizedError } from '@/api/client'
@@ -94,6 +95,12 @@ onMounted(load)
         <div>
           <dt>Statut</dt>
           <dd><DocumentStatusTag :status="document.status" /></dd>
+        </div>
+        <div>
+          <dt>Provenance</dt>
+          <dd>
+            <DocumentSourceTag :source="document.source" :drive-link="document.driveLink" />
+          </dd>
         </div>
         <div>
           <dt>Format</dt>
