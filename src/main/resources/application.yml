@@ -191,6 +191,18 @@ secondbrain:
     # and never "15m": @Scheduled reads a bare string as milliseconds unless it parses as a
     # Duration. It is a delay, not a rate — see DriveSynchronisationScheduler.
     synchronisation-interval: ${SECONDBRAIN_DRIVE_SYNC_INTERVAL:PT15M}
+    # The public address Google calls back on a change, and the one it verifies before opening a
+    # channel. DELIBERATELY WITHOUT A USABLE DEFAULT, and empty rather than absent: Google demands
+    # a public, verified HTTPS URL, which `http://localhost:8080` is not. An empty value TURNS THE
+    # CHANNELS OFF rather than failing the startup — that is the normal case in development, where
+    # nothing of Google can reach us and where the periodic scan alone keeps the base honest.
+    webhook-url: ${SECONDBRAIN_DRIVE_WEBHOOK_URL:}
+    # How long the worker waits between two rounds of channel renewal. Same ISO-8601 caveat as
+    # above. Far shorter than the deadline it watches — the watch asks Google for seven days, and
+    # DriveChannelPolicy renews within twelve hours of whatever deadline came back, never within
+    # more than a quarter of the lifetime of the channel itself. This round is the safety net of
+    # a first channel too: a connection normally opens its own when it is authorized.
+    channel-renewal-interval: ${SECONDBRAIN_DRIVE_CHANNEL_RENEWAL_INTERVAL:PT1H}
   jwt:
     # Deliberately without a default value: a default signing secret would be
     # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —

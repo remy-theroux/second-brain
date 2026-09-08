@@ -173,6 +173,10 @@ services:
       SECONDBRAIN_DRIVE_TOKEN_KEY: ${SECONDBRAIN_DRIVE_TOKEN_KEY:-Y2xlLWRlLWRldmVsb3BwZW1lbnQtZHJpdmUtYnJhaW4=}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Empty on purpose, and it stays empty in development: Google demands a public HTTPS
+      # address it has verified, and it can reach no localhost. Empty, no channel is opened at
+      # all and the periodic scan is the only path — which is what development looks like.
+      SECONDBRAIN_DRIVE_WEBHOOK_URL: ${SECONDBRAIN_DRIVE_WEBHOOK_URL:-}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
@@ -253,9 +257,14 @@ services:
       SECONDBRAIN_DRIVE_TOKEN_KEY: ${SECONDBRAIN_DRIVE_TOKEN_KEY:-Y2xlLWRlLWRldmVsb3BwZW1lbnQtZHJpdmUtYnJhaW4=}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      # The worker alone carries the clock of the Drive synchronisation: `app` has no scheduled
-      # task, so the variable would designate nothing there.
+      # Same emptiness as in `app`, and for the same reason — but here it is what decides
+      # whether the renewal round opens anything at all.
+      SECONDBRAIN_DRIVE_WEBHOOK_URL: ${SECONDBRAIN_DRIVE_WEBHOOK_URL:-}
+      # The worker alone carries the two clocks of Drive — the synchronisation rounds and the
+      # renewal of the push channels: `app` has no scheduled task, so the variables would
+      # designate nothing there.
       SECONDBRAIN_DRIVE_SYNC_INTERVAL: ${SECONDBRAIN_DRIVE_SYNC_INTERVAL:-PT15M}
+      SECONDBRAIN_DRIVE_CHANNEL_RENEWAL_INTERVAL: ${SECONDBRAIN_DRIVE_CHANNEL_RENEWAL_INTERVAL:-PT1H}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}

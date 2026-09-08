@@ -38,6 +38,11 @@ public class JpaDriveConnectionRepositoryAdapter implements DriveConnectionRepos
     }
 
     @Override
+    public Optional<DriveConnection> findById(UUID id) {
+        return springDataDriveConnectionRepository.findById(id);
+    }
+
+    @Override
     public List<DriveConnection> findAllActive() {
         return springDataDriveConnectionRepository.findAllByStatus(DriveConnectionStatus.ACTIVE);
     }

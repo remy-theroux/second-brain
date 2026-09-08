@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,12 +23,15 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachabl
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChanges;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChannels;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelSubscription;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
@@ -45,11 +49,15 @@ public class FakeGoogleDriveConfiguration {
     }
 
     /**
-     * One stub for the four ports of the context: the token exchange, the folders, their files,
-     * and the feed of what moved.
+     * One stub for the five ports of the context: the token exchange, the folders, their files,
+     * the feed of what moved, and the push subscriptions.
      */
     public static class FakeGoogleDrive
-            implements GoogleAccessTokens, GoogleDriveFolders, GoogleDriveFiles, GoogleDriveChanges {
+            implements GoogleAccessTokens,
+                    GoogleDriveFolders,
+                    GoogleDriveFiles,
+                    GoogleDriveChanges,
+                    GoogleDriveChannels {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
@@ -71,9 +79,22 @@ public class FakeGoogleDriveConfiguration {
 
         private final Set<String> vanished = ConcurrentHashMap.newKeySet();
 
+        /** The Drive of one owner falls over, the others answer: what isolates one round from another. */
+        private final Set<UUID> unreachableOwners = ConcurrentHashMap.newKeySet();
+
         private final List<DriveChange> changes = new CopyOnWriteArrayList<>();
 
         private final List<String> readPageTokens = new CopyOnWriteArrayList<>();
+
+        /** Every channel call in order: what proves the new one is opened before the old is stopped. */
+        private final List<String> channelCalls = new CopyOnWriteArrayList<>();
+
+        private final Map<String, String> openChannels = new ConcurrentHashMap<>();
+
+        private final List<WatchRequest> watchRequests = new CopyOnWriteArrayList<>();
+
+        /** What this Google grants at most: null means it grants exactly what the watch asks for. */
+        private volatile Duration grantedLifetime = null;
 
         private volatile String startPageToken = "1789";
 
@@ -99,6 +120,9 @@ public class FakeGoogleDriveConfiguration {
 
         @Override
         public DriveAccessToken forConnection(DriveConnection connection) {
+            if (unreachableOwners.contains(connection.getOwnerId())) {
+                throw new GoogleDriveUnavailableException();
+            }
             if (revoked || (revokedOnRenewal && purged)) {
                 throw new DriveAuthorizationRevokedException();
             }
@@ -175,6 +199,40 @@ public class FakeGoogleDriveConfiguration {
                 throw new DriveChangeTokenExpiredException();
             }
             return new DriveChangePage(List.copyOf(changes), newStartPageToken);
+        }
+
+        /**
+         * The deadline is derived from what the watch asks for, never from a constant: a stub that
+         * answered the same lifetime whatever the request would go on passing while the code
+         * stopped asking for one, which is exactly how the hour Google grants by default went
+         * unnoticed.
+         */
+        @Override
+        public DriveChannelSubscription watch(
+                DriveAccessToken accessToken,
+                String channelId,
+                DriveChannelToken token,
+                String address,
+                String pageToken,
+                Duration lifetime) {
+            refuseIfUnusable(accessToken);
+            channelCalls.add("watch:" + channelId);
+            watchRequests.add(new WatchRequest(channelId, address, token, pageToken, lifetime));
+            String resourceId = "ressource-" + channelId;
+            openChannels.put(channelId, resourceId);
+            return new DriveChannelSubscription(resourceId, Instant.now().plus(granted(lifetime)));
+        }
+
+        private Duration granted(Duration asked) {
+            Duration cap = grantedLifetime;
+            return cap == null || asked.compareTo(cap) < 0 ? asked : cap;
+        }
+
+        @Override
+        public void stop(DriveAccessToken accessToken, String channelId, String resourceId) {
+            refuseIfUnusable(accessToken);
+            channelCalls.add("stop:" + channelId + "/" + resourceId);
+            openChannels.remove(channelId);
         }
 
         /** The stub drops what it cannot read exactly where the adapter does: in the walk, silently. */
@@ -293,6 +351,11 @@ public class FakeGoogleDriveConfiguration {
             this.unavailable = true;
         }
 
+        /** Only that Drive falls over: everyone else's calls go through as usual. */
+        public void willBeUnavailableFor(UUID ownerId) {
+            unreachableOwners.add(ownerId);
+        }
+
         public void willReportARevokedAuthorization() {
             this.revoked = true;
         }
@@ -359,14 +422,38 @@ public class FakeGoogleDriveConfiguration {
             return List.copyOf(readPageTokens);
         }
 
+        public List<String> channelCalls() {
+            return List.copyOf(channelCalls);
+        }
+
+        /** The channels Google would still notify, by identifier. */
+        public Set<String> openChannels() {
+            return Set.copyOf(openChannels.keySet());
+        }
+
+        /** Everything a watch carried, in order: the address, the token, the position and the lifetime. */
+        public List<WatchRequest> watchRequests() {
+            return List.copyOf(watchRequests);
+        }
+
+        /** Google hands back less than it was asked for, and says nothing about it. */
+        public void willGrantChannelsFor(Duration lifetime) {
+            this.grantedLifetime = lifetime;
+        }
+
         public void clear() {
             changes.clear();
             readPageTokens.clear();
+            channelCalls.clear();
+            openChannels.clear();
+            watchRequests.clear();
+            grantedLifetime = null;
             changeTokenExpired = false;
             ancestorsUnavailable = false;
             foldersByParent.clear();
             filesByParent.clear();
             vanished.clear();
+            unreachableOwners.clear();
             downloads.set(0);
             unavailableAfterDownloads = Integer.MAX_VALUE;
             unavailable = false;
@@ -375,6 +462,9 @@ public class FakeGoogleDriveConfiguration {
             revokedOnRenewal = false;
             purged = false;
         }
+
+        public record WatchRequest(
+                String channelId, String address, DriveChannelToken token, String pageToken, Duration lifetime) {}
 
         private static final class StoredFile {
 

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
 
 class RefreshTokenCipherTest {
@@ -14,7 +15,7 @@ class RefreshTokenCipherTest {
 
     private static final RefreshToken TOKEN = new RefreshToken("1//04-un-vrai-jeton-de-rafraichissement");
 
-    private final RefreshTokenAttributeConverter converter = new RefreshTokenAttributeConverter(KEY);
+    private final RefreshTokenAttributeConverter converter = new RefreshTokenAttributeConverter(new TokenCipher(KEY));
 
     @Test
     void restores_the_token_it_enciphered() {
@@ -57,8 +58,23 @@ class RefreshTokenCipherTest {
     void refuses_a_key_that_is_not_thirty_two_bytes() {
         String tooShort = Base64.getEncoder().encodeToString("trop-courte".getBytes());
 
-        assertThatThrownBy(() -> new RefreshTokenAttributeConverter(tooShort))
+        assertThatThrownBy(() -> new TokenCipher(tooShort))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("secondbrain.drive.token-encryption-key");
+    }
+
+    /** The same key, the same dispositif: what protects the refresh token protects the channel token. */
+    @Test
+    void enciphers_a_channel_token_under_the_same_key() {
+        DriveChannelTokenAttributeConverter channelConverter =
+                new DriveChannelTokenAttributeConverter(new TokenCipher(KEY));
+        DriveChannelToken token = DriveChannelToken.random();
+
+        String column = channelConverter.convertToDatabaseColumn(token);
+
+        assertThat(column).doesNotContain(token.value());
+        assertThat(channelConverter.convertToEntityAttribute(column)).isEqualTo(token);
+        assertThat(channelConverter.convertToDatabaseColumn(null)).isNull();
+        assertThat(channelConverter.convertToEntityAttribute(null)).isNull();
     }
 }

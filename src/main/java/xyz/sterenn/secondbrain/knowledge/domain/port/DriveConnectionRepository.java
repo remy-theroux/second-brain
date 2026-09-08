@@ -12,6 +12,9 @@ public interface DriveConnectionRepository {
 
     Optional<DriveConnection> findByOwnerId(UUID ownerId);
 
+    /** By its own identifier, which is how a channel — and only a channel — names its connection. */
+    Optional<DriveConnection> findById(UUID id);
+
     /** Every connection a synchronisation can still read: a withdrawn authorization opens nothing. */
     List<DriveConnection> findAllActive();
 
