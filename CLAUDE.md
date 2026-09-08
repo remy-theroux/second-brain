@@ -480,13 +480,34 @@ c'est le cas **nominal** d'une synchronisation, et chaque revectorisation inutil
 worker plusieurs minutes. Le contrôle de format, lui, passe **avant** le calcul de l'empreinte :
 un `.png` est refusé même s'il portait par miracle le contenu du PDF en place.
 
+**Le nom d'un document ne suit que son contenu.** Un `PUT` qui porte le même fichier sous un autre
+nom ne renomme rien : le court-circuit est sur l'empreinte, et il passe avant toute écriture.
+Renommer sans remplacer demandera une route à soi.
+
 Le contenu neuf annonce `DocumentContentReplaced`, et **non un `DocumentUploaded` republié** : un
 événement est un fait au passé, le document n'a pas été déposé une seconde fois. Le coût est un
 `@RabbitHandler` de plus, qui dispatche la même `ExtractDocumentText` que le dépôt ; la clé de
 routage `knowledge.document-content.replaced` se dérive du nom et le binding `knowledge.#` la
-couvre déjà. **Le pipeline d'ingestion n'a pas été modifié d'une ligne** : il efface le texte et
-les extraits précédents avant d'écrire les siens, parce qu'AMQP livre au moins une fois. C'est la
-troisième fois qu'un ticket s'appuie sur cette idempotence sans avoir à la construire.
+couvre déjà.
+
+**C'est le handler du remplacement qui efface le texte et les extraits de l'ancien contenu**, dans
+la transaction du bus, entre l'écriture de la ligne et l'écrasement de l'original. Le
+« delete-before-write » du pipeline ne suffit pas ici : il vient **après** le premier appel qui
+peut échouer — la vectorisation d'un côté, le plancher de caractères de l'autre —, donc une
+ré-ingestion refusée laisserait en base les extraits d'une version que le document ne porte plus,
+sous une ligne qui affiche déjà la nouvelle empreinte, et la recherche les rendrait. Cet
+effacement du pipeline garde tout son rôle : il répond à la **redélivrance** du même contenu, ce
+qu'AMQP autorise, pas au remplacement.
+
+**`Document` porte un `@Version` depuis cette route**, qui est la seule à muter un document en
+parallèle du worker. Sans lui, un `PUT` commité pendant que le worker indexe encore la version
+précédente se faisait écraser par le `save` final de celui-ci — Hibernate met à jour toutes les
+colonnes —, et la ligne revenait en silence au nom, au format, à l'empreinte et à la taille d'un
+contenu que le stockage ne portait plus : l'empreinte périmée ôtait alors au dépôt son
+court-circuit comme son `409`. Le worker qui perd la course échoue désormais sur une
+`OptimisticLockException`, que le listener écrit en `FAILED` ; l'événement de remplacement déjà en
+vol relance le traitement, et le document repasse `PENDING` puis `READY`. Transitoirement faux et
+réparé seul, là où l'état d'avant était durablement faux et muet.
 
 ### Le flux de l'extraction du texte
 

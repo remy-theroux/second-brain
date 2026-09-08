@@ -83,10 +83,12 @@ public class Document {
     }
 
     public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
-        this.filename = boundedFilename(filename);
+        String bounded = boundedFilename(filename);
+        long size = requirePositive(sizeBytes);
+        this.filename = bounded;
         this.format = format;
         this.checksum = checksum;
-        this.sizeBytes = requirePositive(sizeBytes);
+        this.sizeBytes = size;
         this.status = DocumentStatus.PENDING;
         this.errorMessage = null;
     }

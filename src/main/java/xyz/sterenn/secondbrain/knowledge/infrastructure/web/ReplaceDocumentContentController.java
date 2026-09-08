@@ -64,11 +64,6 @@ public class ReplaceDocumentContentController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Sees the exception only because {@code spring.servlet.multipart.resolve-lazily} is
-     * {@code true}: otherwise the multipart is resolved by {@code DispatcherServlet} before a
-     * controller is chosen, and only a global {@code @RestControllerAdvice} would catch it.
-     */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> tooLarge() {
         return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)

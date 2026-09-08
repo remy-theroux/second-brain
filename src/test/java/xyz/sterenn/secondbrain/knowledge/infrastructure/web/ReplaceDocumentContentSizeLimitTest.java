@@ -27,12 +27,7 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * MockMvc could not check this: a {@code MockMultipartFile} is already parsed, so
- * {@code MaxUploadSizeExceededException} would never be raised there. And
- * {@link SimpleClientHttpRequestFactory} is not a detail: the default factory sends the body in
- * {@code Transfer-Encoding: chunked} and gives up before reading the 413 already sent.
- */
+/** Same staging as {@link UploadDocumentSizeLimitTest}, and for the same two reasons. */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ReplaceDocumentContentSizeLimitTest {

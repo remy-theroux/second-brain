@@ -43,12 +43,6 @@ import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration.RecordingNotificationSender;
 import xyz.sterenn.secondbrain.users.domain.port.AccessTokenIssuer;
 
-/**
- * A refusal is always the <em>last</em> HTTP call of its test: the exception marks the enclosing
- * transaction rollback-only, and a second call behind it would fail on an
- * {@code UnexpectedRollbackException}. Whatever is left to check after a refusal is read through
- * the port.
- */
 @Import({TestcontainersConfiguration.class, RecordingNotificationSenderConfiguration.class})
 @SpringBootTest
 @AutoConfigureMockMvc

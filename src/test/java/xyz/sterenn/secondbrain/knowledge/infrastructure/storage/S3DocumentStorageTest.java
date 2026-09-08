@@ -90,8 +90,6 @@ class S3DocumentStorageTest {
                 .hasValueSatisfying(reloaded -> assertThat(reloaded).isEqualTo(REPLACEMENT));
     }
 
-    // A replacement does not check what it replaces: a row whose original has gone missing must
-    // be repairable, not left without one.
     @Test
     void writes_an_original_that_was_not_there() {
         UUID document = UUID.randomUUID();
