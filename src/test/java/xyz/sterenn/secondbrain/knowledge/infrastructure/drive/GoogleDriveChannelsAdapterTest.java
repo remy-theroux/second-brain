@@ -44,7 +44,7 @@ class GoogleDriveChannelsAdapterTest {
 
     /**
      * The lifetime is the point: a watch that carries no {@code params.ttl} gets one hour from
-     * Google, whatever the seven days written everywhere else.
+     * Google, whatever the seven days the policy means to have.
      */
     @Test
     void asks_google_for_the_address_the_token_and_the_lifetime_of_the_channel() {

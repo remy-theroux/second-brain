@@ -22,6 +22,7 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
+import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration.FakeGoogleDrive;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
@@ -52,10 +53,14 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
  * clock never triggers anything here: the interval is pushed to a day in the test properties and
  * the event is published by hand, exactly as {@code KnowledgeEventListenerTest} does.
  */
+// The four stubs travel together so that the Drive test classes of this package share one
+// Spring context: an import set of its own is a context of its own, and the suite already holds
+// a dozen of them in a 512 MB test JVM.
 @Import({
     TestcontainersConfiguration.class,
     RecordingEmbeddingPortConfiguration.class,
-    FakeGoogleDriveConfiguration.class
+    FakeGoogleDriveConfiguration.class,
+    FakeGoogleDriveAuthorizationConfiguration.class
 })
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")

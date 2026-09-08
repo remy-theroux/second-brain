@@ -22,22 +22,27 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
+import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration.FakeGoogleDrive;
 import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
+import xyz.sterenn.secondbrain.knowledge.application.command.CompleteDriveAuthorization;
 import xyz.sterenn.secondbrain.knowledge.application.command.DisconnectDrive;
 import xyz.sterenn.secondbrain.knowledge.domain.DriveChannelPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveAuthorizationRequest;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveChannel;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveSynchronisationRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.DriveAuthorizationRequestRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveChannelRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAuthorizationState;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
@@ -49,12 +54,16 @@ import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
 /**
  * The subscription that outlives its own deadline, and the one that dies with the Drive. The
  * clock never triggers anything here either: the renewal interval is pushed to a day in the test
- * properties and the round is dispatched by hand.
+ * properties and the round is called by hand.
  */
+// The four stubs travel together so that the Drive test classes of this package share one
+// Spring context: an import set of its own is a context of its own, and the suite already holds
+// a dozen of them in a 512 MB test JVM.
 @Import({
     TestcontainersConfiguration.class,
     RecordingEmbeddingPortConfiguration.class,
-    FakeGoogleDriveConfiguration.class
+    FakeGoogleDriveConfiguration.class,
+    FakeGoogleDriveAuthorizationConfiguration.class
 })
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("worker")
@@ -85,6 +94,9 @@ class DriveChannelRenewalTest {
 
     @Autowired
     private DriveChannelRepository driveChannelRepository;
+
+    @Autowired
+    private DriveAuthorizationRequestRepository driveAuthorizationRequestRepository;
 
     @Autowired
     private WatchedFolderRepository watchedFolderRepository;
@@ -159,7 +171,23 @@ class DriveChannelRenewalTest {
                 .isEmpty();
     }
 
-    /** Nothing opens a channel at the consent screen: the first round after a connection does. */
+    /**
+     * The renewal round is no longer the only thing that opens a first channel: waiting for it
+     * left a Drive just connected without any subscription for a whole interval — the very hour
+     * its owner drops files in it and watches the screen.
+     */
+    @Test
+    void opens_a_channel_as_soon_as_a_drive_is_connected() {
+        DriveAuthorizationState state = DriveAuthorizationState.random();
+        driveAuthorizationRequestRepository.save(DriveAuthorizationRequest.open(alice, state, Instant.now()));
+
+        commandBus.dispatch(new CompleteDriveAuthorization(state.value(), "4/code-rendu-par-google"));
+
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(driveChannelRepository.findByConnectionId(connectionId))
+                .isPresent());
+    }
+
+    /** The round still opens the channel of a connection that has none: a notification can be missed. */
     @Test
     void opens_a_channel_for_a_connection_that_has_none() {
         driveChannelRenewer.renewAll();
@@ -170,7 +198,7 @@ class DriveChannelRenewalTest {
         assertThat(fakeGoogleDrive.channelCalls()).containsExactly("watch:" + opened.getChannelId());
     }
 
-    /** A channel renewed every round is a stop and a watch paid for nothing, seven days too early. */
+    /** A channel renewed every round is a stop and a watch paid for nothing, days too early. */
     @Test
     void leaves_alone_a_channel_that_is_not_due_yet() {
         DriveChannel comfortable = aChannelExpiringAt(Instant.now().plus(Duration.ofDays(3)));

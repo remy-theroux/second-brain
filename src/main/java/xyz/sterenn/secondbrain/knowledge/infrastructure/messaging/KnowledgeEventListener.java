@@ -10,12 +10,15 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.IndexDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
+import xyz.sterenn.secondbrain.knowledge.application.command.RenewDriveChannel;
+import xyz.sterenn.secondbrain.knowledge.application.drive.DriveFailures;
 import xyz.sterenn.secondbrain.knowledge.application.drive.DriveFolderImporter;
 import xyz.sterenn.secondbrain.knowledge.application.drive.DriveSynchroniser;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DriveConnected;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveSynchronisationRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
@@ -83,6 +86,24 @@ public class KnowledgeEventListener {
     @RabbitHandler
     public void on(DriveFolderImportRequested event) {
         driveFolderImporter.importFolder(event.ownerId(), event.watchedFolderId());
+    }
+
+    /**
+     * The first channel of a Drive, opened as soon as it is connected rather than at the next
+     * renewal round: an hour without any subscription is exactly the hour its owner spends
+     * dropping files into it. A channel that does not open costs a delay and nothing else — the
+     * round retries within the hour, and the periodic scan keeps the base honest meanwhile.
+     */
+    @RabbitHandler
+    public void on(DriveConnected event) {
+        try {
+            commandBus.dispatch(new RenewDriveChannel(event.ownerId()));
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "The first channel of the Drive of {} could not be opened: {}",
+                    event.ownerId(),
+                    DriveFailures.describe(failure));
+        }
     }
 
     /**

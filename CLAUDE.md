@@ -926,18 +926,43 @@ balayage périodique aurait rattrapé le coup. Un `404` et non un `401` sur un j
 invite à s'authentifier, ce qui n'a aucun sens ici, et confirmerait au passage que l'URL est un
 webhook actif.
 
+**Ce que la route coûte, et qui n'est pas borné.** Chaque appel anonyme sur cette route publique
+interroge la base — une lecture par identifiant de canal, avant même de comparer le jeton — et
+**rien ne plafonne ce débit**. C'est la même dette qu'ADR-0012 pour `/api/token`, et elle n'a pas
+d'ADR à elle : elle est nommée ici, faute d'accord préalable pour en écrire un.
+
+**Rien de ce que Google refuse n'atteint le journal.** Un refus sur `changes.watch` cite la valeur
+fautive dans le corps de sa réponse — le jeton du canal, l'adresse du webhook —, et ce corps est
+le message de l'exception qui voyage ensuite en cause. Les trois appelants qui journalisent un
+échec de canal passent donc par `DriveFailures.describe`, qui ne rend que les **types** de la
+chaîne : l'adapter, lui, journalise le statut HTTP au moment où il l'a.
+
 **Le corps de la notification est ignoré**, et c'est le point du ticket : Google envoie tout en
 en-têtes (`X-Goog-Channel-ID`, `X-Goog-Channel-Token`, `X-Goog-Resource-State`), le corps étant
 vide. **L'état `sync`** est envoyé une fois à l'ouverture d'un canal, pour le valider : il ne
 signale aucun changement, il est reconnu et ignoré — le traiter comme un changement ferait un
 balayage inutile à chaque renouvellement.
 
-**L'expiration est lue chez Google, jamais supposée.** Sept jours est un maximum, pas une
-promesse : `changes.watch` rend une échéance que l'adapter lit, et une réponse sans échéance
-lisible est un échec plutôt qu'un canal dont le renouvellement ne pourrait pas se planifier.
-`DriveChannelPolicy` renouvelle dans les douze heures qui la précèdent, et le tour de
-renouvellement (horloge du worker) est aussi celui qui ouvre le **premier** canal d'une connexion
-qui n'en a pas : rien ne s'abonne à l'écran de consentement.
+**La durée de vie est demandée, l'expiration est lue.** Les sept jours ne tombent pas du ciel :
+ils voyagent dans `params.ttl`, au corps du `watch`, et **un `watch` qui ne demande rien obtient
+une heure** — c'est le défaut de Google, pas son maximum. L'échéance qui revient fait foi :
+`changes.watch` rend une expiration que l'adapter lit, et une réponse sans échéance lisible est un
+échec plutôt qu'un canal dont le renouvellement ne pourrait pas se planifier.
+
+**La marge de renouvellement se lit contre la durée de vie du canal, pas seule.**
+`DriveChannelPolicy` renouvelle dans les douze heures qui précèdent l'échéance, **sans jamais
+dépasser le quart de la durée de vie réelle** du canal. Une marge fixe de douze heures face à un
+canal d'une heure rendrait tout canal « à renouveler » dès son ouverture : un `watch` et un `stop`
+payés à chaque tour, indéfiniment, et un renouvellement qui tombe **après** l'échéance qu'il
+surveille — donc un canal périmé, un `404`, et Google qui désabonne. Le système détruisait ainsi
+son propre canal à chaque expiration.
+
+**Un Drive fraîchement connecté ouvre son canal tout de suite.** La fin de l'autorisation publie
+`DriveConnected`, et le worker ouvre le premier canal en réponse : attendre le tour de
+renouvellement laissait un Drive sans aucun abonnement pendant tout un intervalle — précisément
+l'heure où son propriétaire y dépose ses fichiers. Le tour reste le filet : il ouvre le canal
+d'une connexion qui n'en a pas, quelle qu'en soit la raison, et un canal qui n'a pas pu s'ouvrir
+ne coûte qu'un délai.
 
 **Le tour de renouvellement vit hors des bus**, comme la synchronisation et pour la même raison :
 `DriveChannelRenewer` est un `@Component` que l'ordonnanceur appelle, et il dispatche une

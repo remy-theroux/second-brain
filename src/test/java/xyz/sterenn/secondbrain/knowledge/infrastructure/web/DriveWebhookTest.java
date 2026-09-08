@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -18,8 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -81,9 +80,6 @@ class DriveWebhookTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
-
-    @Autowired
-    private NotifyDriveChangeController notifyDriveChangeController;
 
     private UUID alice;
     private DriveChannel aliceChannel;
@@ -196,16 +192,19 @@ class DriveWebhookTest {
     }
 
     /**
-     * The branch no scenario above can reach, and the one the ticket rests on: Google unsubscribes
-     * a channel that answers in error, so a database momentarily down must not cost the channel.
-     * Called directly for want of a way to make the real stack fall over on demand.
+     * The branch the ticket rests on: Google unsubscribes a channel that answers in error, so
+     * anything falling over on this side must not cost the channel. The row below is one whose
+     * ciphertext no longer deciphers — a rotated key — which is a real way to make the real stack
+     * throw where a mock would only prove that one line returns what it says.
      */
     @Test
-    void answers_200_when_a_notification_cannot_be_handled_at_all() {
-        ResponseEntity<Void> answer = notifyDriveChangeController.keepTheChannelAlive(
-                new IllegalStateException("la base est momentanément injoignable"));
+    void answers_200_when_a_notification_cannot_be_handled_at_all() throws Exception {
+        String channelId = aChannelWhoseTokenCanNoLongerBeRead(aConnectionOn(anAccount(BOB)));
 
-        assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.OK);
+        mockMvc.perform(aNotification(channelId, aliceChannel.getToken(), "change"))
+                .andExpect(status().isOk());
+
+        assertThat(noAnnouncement()).isNull();
     }
 
     private static MockHttpServletRequestBuilder aNotification(
@@ -229,10 +228,31 @@ class DriveWebhookTest {
     }
 
     private DriveChannel aChannelOn(UUID owner) {
-        DriveConnection connection = driveConnectionRepository.save(
-                DriveConnection.connect(owner, owner + "@gmail.com", new RefreshToken("1//jeton"), Instant.now()));
-        DriveChannel channel = DriveChannel.open(connection.getId(), Instant.now());
+        DriveChannel channel = DriveChannel.open(aConnectionOn(owner), Instant.now());
         channel.subscribed("ressource-" + owner, Instant.now().plus(Duration.ofDays(7)));
         return driveChannelRepository.save(channel);
+    }
+
+    private UUID aConnectionOn(UUID owner) {
+        return driveConnectionRepository
+                .save(DriveConnection.connect(owner, owner + "@gmail.com", new RefreshToken("1//jeton"), Instant.now()))
+                .getId();
+    }
+
+    /** Written under the repository, which would refuse to encipher what is not a token. */
+    private String aChannelWhoseTokenCanNoLongerBeRead(UUID connectionId) {
+        String channelId = UUID.randomUUID().toString();
+        jdbcTemplate.update(
+                """
+                INSERT INTO knowledge_drive_channels
+                    (connection_id, channel_id, resource_id, token, opened_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                connectionId,
+                channelId,
+                "ressource-illisible",
+                "ceci n'est pas un chiffre",
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now().plus(Duration.ofDays(7))));
+        return channelId;
     }
 }

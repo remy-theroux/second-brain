@@ -198,9 +198,10 @@ secondbrain:
     # nothing of Google can reach us and where the periodic scan alone keeps the base honest.
     webhook-url: ${SECONDBRAIN_DRIVE_WEBHOOK_URL:}
     # How long the worker waits between two rounds of channel renewal. Same ISO-8601 caveat as
-    # above. Far shorter than the deadline it watches — Google caps a subscription at seven days
-    # and DriveChannelPolicy renews within twelve hours of it — because this round is also what
-    # opens the very first channel of a connection that has none.
+    # above. Far shorter than the deadline it watches — the watch asks Google for seven days, and
+    # DriveChannelPolicy renews within twelve hours of whatever deadline came back, never within
+    # more than a quarter of the lifetime of the channel itself. This round is the safety net of
+    # a first channel too: a connection normally opens its own when it is authorized.
     channel-renewal-interval: ${SECONDBRAIN_DRIVE_CHANNEL_RENEWAL_INTERVAL:PT1H}
   jwt:
     # Deliberately without a default value: a default signing secret would be
