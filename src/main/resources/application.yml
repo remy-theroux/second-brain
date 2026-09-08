@@ -176,6 +176,11 @@ secondbrain:
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
   drive:
+    # The OAuth client of the Google Cloud project, and the redirect URI it must declare is
+    # `base-url` + /drive/callback. Empty by default, unlike the key below: without them only
+    # the Drive connection fails, and it fails loudly at the first consent.
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
     # Enciphers the Google refresh token at rest, through RefreshTokenAttributeConverter.
     # Deliberately without a default value, the same status as `jwt.secret` below: a default
     # key would be a public key, and a dump would give back every connected Drive.
