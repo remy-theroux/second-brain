@@ -804,6 +804,15 @@ pendant le balayage tomberait entre deux tours. **Ce qu'un balayage complet ne f
 pendant que le jeton était périmé reste donc en base. C'est le trou assumé de ce repli, et il
 demanderait que le balayage rende la liste des fichiers vus.
 
+**Et le point de départ ne se conserve que si chaque dossier a réussi.** Un balayage en échec ne
+lève pas : `DriveFolderImporter` rattrape, écrit un bilan `FAILED` et rend la main normalement,
+donc le synchroniseur ne l'apprend qu'en **lisant le bilan** — c'est ce que rend désormais
+`importFolder`. Sans cette lecture, un Drive qui tombe au trois centième fichier sur cinq cents
+faisait avancer le jeton quand même, et les deux cents restants ne figuraient plus jamais dans le
+flux de changements, qui ne rapporte que ce qui bouge **après** le jeton. Le cas le plus visible
+est le premier tour d'une connexion neuve, qui n'a aucun jeton : une panne de trente secondes y
+laissait une base vide que rien n'aurait remplie, sous une connexion affichée active.
+
 **La tâche planifiée publie, elle ne travaille pas.** `DriveSynchronisationScheduler` dispatche
 `RequestDriveSynchronisation`, dont le handler annonce un `DriveSynchronisationRequested` par
 connexion active ; c'est le listener qui synchronise. Deux raisons : le travail appartient à la

@@ -32,6 +32,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveImportStatus;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
 /**
@@ -126,8 +127,20 @@ public class DriveSynchroniser {
                 "Scanning the {} watched folders of the Drive of {} in full",
                 watchedFolders.size(),
                 connection.getOwnerId());
+        boolean scannedInFull = true;
         for (WatchedFolder watchedFolder : watchedFolders) {
-            driveFolderImporter.importFolder(connection.getOwnerId(), watchedFolder.getId());
+            DriveImportStatus outcome =
+                    driveFolderImporter.importFolder(connection.getOwnerId(), watchedFolder.getId());
+            scannedInFull = scannedInFull && outcome == DriveImportStatus.SUCCEEDED;
+        }
+        if (!scannedInFull) {
+            // The importer records its own failure and returns: without reading that outcome, a
+            // Drive falling over at the three hundredth file of five hundred would still move the
+            // position forward, and the two hundred left would never enter the change feed.
+            LOG.error(
+                    "The full scan of the Drive of {} did not go through: the position is not kept",
+                    connection.getOwnerId());
+            return;
         }
         keep(connection.getOwnerId(), startPageToken);
     }

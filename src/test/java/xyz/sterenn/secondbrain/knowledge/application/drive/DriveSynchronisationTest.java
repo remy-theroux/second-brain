@@ -39,6 +39,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveImportStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveProvenance;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
 import xyz.sterenn.secondbrain.shared.event.amqp.AmqpConfiguration;
@@ -334,6 +335,25 @@ class DriveSynchronisationTest {
     }
 
     /**
+     * A scan that fell over at the three hundredth file of five hundred has left two hundred out
+     * of the base, and moving the position forward would keep them out for ever: the change feed
+     * only ever reports what moves after the token.
+     */
+    @Test
+    void keeps_no_page_token_when_the_full_scan_it_owed_failed() {
+        fakeGoogleDrive.putFile("a1", "f1", "structure.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.willRefuseTheChangeToken();
+        fakeGoogleDrive.willBecomeUnavailableAfter(0);
+
+        requestASynchronisation();
+
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(watchedFolder().getLastImportStatus())
+                .isEqualTo(DriveImportStatus.FAILED));
+        assertThat(keptPageToken()).isEmpty();
+        assertThat(documents()).isEmpty();
+    }
+
+    /**
      * The clock is never what triggers the tests, so it is read rather than awaited: the task is
      * registered, and it is a delay between two rounds — a rate would start one while the
      * previous is still going.
@@ -380,6 +400,12 @@ class DriveSynchronisationTest {
 
     private List<Document> documents() {
         return documentRepository.findAllByOwnerId(alice);
+    }
+
+    private WatchedFolder watchedFolder() {
+        return watchedFolderRepository
+                .findByIdAndConnectionId(watchedFolderId, connectionId)
+                .orElseThrow();
     }
 
     private Optional<String> keptPageToken() {
