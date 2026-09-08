@@ -461,6 +461,33 @@ son erreur, et chaque vue la passe à son propre `handle`. Le nom du fichier lui
 prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent de la réponse que
 l'écran affiche déjà.
 
+### Le flux du remplacement du contenu d'un document
+
+`PUT /api/documents/{id}` reçoit un multipart (`file`) et rend `200` **sans corps** — même raison
+qu'au dépôt : rien du document n'est à exposer, et `GET /api/documents` rend l'état complet. Les
+refus sont ceux du dépôt — `422` sur le champ `file`, `415`, `409`, `413` — plus le `404` du
+document introuvable, cloisonné comme partout : le document d'autrui est introuvable, jamais
+interdit.
+
+**L'identité ne bouge pas.** Le document garde son identifiant, sa date de dépôt et sa place dans
+la liste ; seuls son nom, son format, son empreinte, sa taille et son statut changent. C'est toute
+la différence avec le « supprimer puis redéposer » qui était jusqu'ici la seule façon de mettre un
+document à jour.
+
+**Une empreinte identique court-circuite tout.** Ni écriture, ni écrasement de l'original, ni
+publication, ni le moindre appel au modèle d'embedding. Ce n'est pas une optimisation de confort :
+c'est le cas **nominal** d'une synchronisation, et chaque revectorisation inutile immobilise le
+worker plusieurs minutes. Le contrôle de format, lui, passe **avant** le calcul de l'empreinte :
+un `.png` est refusé même s'il portait par miracle le contenu du PDF en place.
+
+Le contenu neuf annonce `DocumentContentReplaced`, et **non un `DocumentUploaded` republié** : un
+événement est un fait au passé, le document n'a pas été déposé une seconde fois. Le coût est un
+`@RabbitHandler` de plus, qui dispatche la même `ExtractDocumentText` que le dépôt ; la clé de
+routage `knowledge.document-content.replaced` se dérive du nom et le binding `knowledge.#` la
+couvre déjà. **Le pipeline d'ingestion n'a pas été modifié d'une ligne** : il efface le texte et
+les extraits précédents avant d'écrire les siens, parce qu'AMQP livre au moins une fois. C'est la
+troisième fois qu'un ticket s'appuie sur cette idempotence sans avoir à la construire.
+
 ### Le flux de l'extraction du texte
 
 Le worker reçoit `DocumentUploaded` et dispatche `ExtractDocumentText`, qui relit le
@@ -806,6 +833,11 @@ peut disparaître — un document supprimé ne doit pas invalider rétroactiveme
 écrite. C'est la même logique qui a valu à deux agrégats de se référencer par identifiant
 plutôt que par `@ManyToOne` (ADR-0006), poussée un cran plus loin : ici, `documentId` reste
 en colonne pour le diagnostic, mais sans contrainte qui l'oblige à désigner encore quelqu'un.
+
+`DocumentStorage` porte trois écritures et non deux : `store` **refuse d'écraser** — le garde-fou
+vise un handler qui l'appellerait deux fois —, là où `replace` écrase délibérément, en un seul
+`PutObject`. Un `delete` suivi d'un `store` aurait laissé une fenêtre où le document n'a plus
+d'original. Ni l'un ni l'autre ne participe à une transaction : ADR-0020 vaut pour les trois.
 
 **Tout n'est pas en base.** Les fichiers d'origine des documents vivent dans un stockage
 objet compatible S3, un objet par document dont la clé est son identifiant, dans le bucket
