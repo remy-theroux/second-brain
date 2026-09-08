@@ -197,7 +197,8 @@ class GoogleDocImportTest {
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(outcome()).isEqualTo(DriveImportStatus.SUCCEEDED));
         assertThat(documents()).extracting(Document::getFilename).containsExactly("structure.md");
         assertThat(reloadTheFolder().getRejections()).singleElement().satisfies(rejection -> {
-            assertThat(rejection.getFilename()).isEqualTo("Thèse.docx");
+            // The name of the file in the Drive of its owner, not the one made up for downstream.
+            assertThat(rejection.getFilename()).isEqualTo("Thèse");
             assertThat(rejection.getDriveFileId()).isEqualTo("g1");
             assertThat(rejection.getReason()).contains("10 Mo");
         });

@@ -68,7 +68,7 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
 
         Document document = documentRepository.save(Document.importedFromDrive(
                 command.ownerId(),
-                file.name(),
+                file.documentName(),
                 file.format(),
                 checksum,
                 command.content().length,
@@ -128,7 +128,7 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         });
 
         document.reimported(
-                file.name(),
+                file.documentName(),
                 file.format(),
                 checksum,
                 command.content().length,

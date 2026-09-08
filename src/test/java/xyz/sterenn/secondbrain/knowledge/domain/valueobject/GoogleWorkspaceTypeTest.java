@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 
 class GoogleWorkspaceTypeTest {
 
@@ -45,6 +46,15 @@ class GoogleWorkspaceTypeTest {
                 .isEqualTo("Notes de réunion.docx");
         assertThat(DocumentFormat.fromFilename(GoogleWorkspaceType.DOCUMENT.exportedName("Notes de réunion")))
                 .isEqualTo(DocumentFormat.DOCX);
+    }
+
+    /** The column truncates at 255, and what it would cut is the extension, added last. */
+    @Test
+    void keeps_the_extension_of_a_document_whose_name_fills_the_column() {
+        String exported = GoogleWorkspaceType.DOCUMENT.exportedName("N".repeat(300));
+
+        assertThat(exported).hasSize(Document.MAX_FILENAME_LENGTH).endsWith(".docx");
+        assertThat(DocumentFormat.fromFilename(exported)).isEqualTo(DocumentFormat.DOCX);
     }
 
     @Test

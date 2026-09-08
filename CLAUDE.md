@@ -574,8 +574,15 @@ taille de police (ADR-0027). C'est ce que vérifie
 
 **Le nom du document est celui du Doc suivi de `.docx`.** Un Doc n'a pas d'extension dans son
 nom Drive, et `DocumentFormat.fromFilename` refuserait « Compte rendu du 3 mars » ; le nom se
-complète donc au balayage, dans `GoogleWorkspaceType.exportedName`, qui **ne double pas** une
-extension déjà présente — un Doc nommé `contrat.docx` est légal côté Drive.
+complète donc dans `GoogleWorkspaceType.exportedName`, qui **ne double pas** une extension déjà
+présente — un Doc nommé `contrat.docx` est légal côté Drive — et qui **borne le nom de base** à
+255 moins l'extension : ajoutée en dernier, l'extension serait sinon ce que la troncature de la
+colonne mange, et `GET /api/documents/{id}/content` rendrait un fichier sans extension.
+
+**`DriveFile` porte les deux noms, et ce n'est pas de la redondance.** `name()` est celui de
+Drive, `documentName()` celui que prend le document — les deux ne diffèrent que pour un Doc
+natif. Un **rejet nomme le premier** : la liste des fichiers écartés se lit à côté du Drive du
+propriétaire, où « Thèse.docx » ne désigne aucun fichier.
 
 **Le plafond de 10 Mo est celui de Google, pas celui du projet** — d'où deux constantes
 distinctes dans `ImportPolicy`, `MAX_FILE_SIZE` (le dépôt, 20 Mo) et `MAX_GOOGLE_EXPORT_SIZE`
@@ -598,12 +605,25 @@ bouchon qui rend deux exports différents pour un `modifiedTime` immobile. Sans 
 chaque synchronisation revectoriserait **tout le Drive**, et rien ne le signalerait qu'une
 charge inexpliquée sur le worker.
 
+**Ce que ce court-circuit économise, et ce qu'il n'économise pas.** L'export a lieu **avant** le
+dispatch, dans `DriveFolderImporter` : quand la commande examine le `modifiedTime`, les octets
+sont déjà là. Un dossier de cinquante Docs inchangés paie donc cinquante exports à chaque
+synchronisation — jusqu'à 10 Mo chacun, entièrement en mémoire (ADR-0021). Ce qui est épargné,
+c'est l'écriture et la vectorisation, **pas le transfert**. C'est une contrainte que DRIVE-5
+devra regarder en face : son miroir passera sur le dossier entier, et le seul moyen de ne pas
+exporter un Doc est de le décider sur le `modifiedTime` du balayage, avant l'appel.
+
 **Un fichier dont Drive dit qu'il a bougé est ré-ingéré**, en revanche : le cas 1 remplace alors
 le contenu, efface texte et extraits, écrase l'original et annonce `DocumentContentReplaced` —
 exactement ce que fait `ReplaceDocumentContent` d'un dépôt manuel, et le worker le traite
-pareil. Le contrôle d'empreinte reste, en garde-fou : un binaire dont seule la date a bougé ne
-coûte rien. Ce que ce ticket ne fait toujours pas, et qui reste à DRIVE-5 : le miroir, donc le
-sort des fichiers **disparus** du dossier.
+pareil. Il en reprend d'ailleurs les deux contrôles, dans le même ordre : l'empreinte inchangée
+n'écrit **que** la nouvelle date et sort — sans quoi la colonne divergerait durablement de Drive
+pour un binaire dont seul l'horodatage bouge —, puis un contenu que la base tient déjà sous un
+autre document est **rejeté avec son motif**, plutôt que laissé buter sur
+`UNIQUE (owner_id, checksum)` dont le refus n'apprend rien. « A bougé » couvre enfin le cas où
+la base ne porte **aucune** date : Drive n'en a pas rendu, ou en a rendu une illisible, et la
+lire comme une immobilité gèlerait ce document pour toujours. Ce que ce ticket ne fait toujours
+pas, et qui reste à DRIVE-5 : le miroir, donc le sort des fichiers **disparus** du dossier.
 
 **Trois sorts pour un fichier, et un seul est muet.** Il est *ignoré sans trace* quand son
 format n'est pas pris en charge — un Drive est plein d'images et de vidéos, les faire figurer

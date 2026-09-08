@@ -242,6 +242,11 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
         return uri.build().encode().toUri();
     }
 
+    /**
+     * The output type of the only exportable Workspace type, written here because the port hands
+     * back a file identifier and nothing else: a second exportable type would leave silently in
+     * DOCX, and the fix is to carry the type down to this call.
+     */
     private static URI exportUri(String fileId) {
         return UriComponentsBuilder.fromUriString(FILES_ENDPOINT)
                 .pathSegment(fileId, "export")

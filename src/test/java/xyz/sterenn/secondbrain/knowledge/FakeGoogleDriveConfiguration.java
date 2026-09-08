@@ -50,7 +50,10 @@ public class FakeGoogleDriveConfiguration {
         /** The same bound as the adapter's, so a programmed cycle fails here the way it would there. */
         public static final int MAX_ANCESTOR_DEPTH = 50;
 
-        /** The modification time every programmed file carries: nothing reads it before DRIVE-5. */
+        /**
+         * The modification time every programmed file carries, and the pivot of a second import:
+         * it alone tells a Google Doc that moved from one that did not.
+         */
         public static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
 
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();

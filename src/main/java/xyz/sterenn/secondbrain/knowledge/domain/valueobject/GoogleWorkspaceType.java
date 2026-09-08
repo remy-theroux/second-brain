@@ -3,6 +3,7 @@ package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 
 /**
  * What Drive calls a Doc, a sheet, a slide deck: none of them holds bytes to download, and only
@@ -46,7 +47,13 @@ public enum GoogleWorkspaceType {
     public String exportedName(String driveName) {
         String extension = format().extension();
         String trimmed = driveName == null ? "" : driveName.trim();
-        return trimmed.toLowerCase(Locale.ROOT).endsWith(extension) ? trimmed : trimmed + extension;
+        if (trimmed.toLowerCase(Locale.ROOT).endsWith(extension)) {
+            return trimmed;
+        }
+        // The extension is added last, so the column's own truncation would be what eats it: a
+        // document downloaded under a name without extension is one Windows will not open.
+        int maxBaseLength = Document.MAX_FILENAME_LENGTH - extension.length();
+        return (trimmed.length() > maxBaseLength ? trimmed.substring(0, maxBaseLength) : trimmed) + extension;
     }
 
     private DocumentFormat format() {

@@ -105,13 +105,14 @@ class GoogleDocExportTest {
     }
 
     @Test
-    void lists_a_native_google_document_under_the_name_of_the_file_it_exports() {
+    void lists_a_native_google_document_under_its_drive_name_and_the_format_it_exports_into() {
         server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
                 .andRespond(record(page(googleDoc("g1", "Compte rendu du 3 mars"))));
 
         assertThat(adapter.filesUnder(ACCESS_TOKEN, "a1")).singleElement().satisfies(doc -> {
             assertThat(doc.id()).isEqualTo("g1");
-            assertThat(doc.name()).isEqualTo("Compte rendu du 3 mars.docx");
+            assertThat(doc.name()).isEqualTo("Compte rendu du 3 mars");
+            assertThat(doc.documentName()).isEqualTo("Compte rendu du 3 mars.docx");
             assertThat(doc.format()).isEqualTo(DocumentFormat.DOCX);
             assertThat(doc.workspaceType()).isEqualTo(GoogleWorkspaceType.DOCUMENT);
             assertThat(doc.modifiedTime()).isEqualTo(Instant.parse("2026-09-08T10:15:30Z"));
