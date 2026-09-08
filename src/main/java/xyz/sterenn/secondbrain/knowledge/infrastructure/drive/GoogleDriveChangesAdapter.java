@@ -77,15 +77,21 @@ class GoogleDriveChangesAdapter implements GoogleDriveChanges {
 
     /**
      * The two ways of being gone, kept apart at the source: a removed change has no {@code file}
-     * to read, and a trashed one is described but must not be handed on as readable.
+     * to read, and a trashed one is described but must not be handed on as readable. A change
+     * that says neither — no {@code removed}, and no {@code file} either — is an incomplete
+     * answer, not a fact: read as a removal, it would erase a document Drive said nothing about.
      */
     private static Optional<DriveChange> toChange(GoogleChangeResponse entry) {
         if (GoogleFiles.isBlank(entry.fileId())) {
             LOG.warn("Google handed back a change without a file identifier: dropped");
             return Optional.empty();
         }
-        if (Boolean.TRUE.equals(entry.removed()) || entry.file() == null) {
+        if (Boolean.TRUE.equals(entry.removed())) {
             return Optional.of(DriveChange.removed(entry.fileId()));
+        }
+        if (entry.file() == null) {
+            LOG.warn("Google described a change on the file {} with no file at all: left out", entry.fileId());
+            return Optional.empty();
         }
         if (Boolean.TRUE.equals(entry.file().trashed())) {
             return Optional.of(DriveChange.trashed(entry.fileId()));

@@ -111,7 +111,17 @@ public class DriveSynchroniser {
             fullScan(connection);
             return;
         }
-        apply(connection, page.changes());
+        int leftOut = apply(connection, page.changes());
+        if (leftOut > 0) {
+            // Every gesture is idempotent, so replaying the round from the same position costs a
+            // few reads; moving it forward would lose those changes for good, and nothing on
+            // screen would say the mirror had drifted.
+            LOG.error(
+                    "{} changes of the Drive of {} were left out: the position is not kept and the round replays",
+                    leftOut,
+                    connection.getOwnerId());
+            return;
+        }
         keep(connection.getOwnerId(), page.newStartPageToken());
     }
 
@@ -145,13 +155,18 @@ public class DriveSynchroniser {
         keep(connection.getOwnerId(), startPageToken);
     }
 
-    private void apply(DriveConnection connection, List<DriveChange> changes) {
+    /** How many gestures were left out: the position of a round that dropped one is not kept. */
+    private int apply(DriveConnection connection, List<DriveChange> changes) {
         Map<String, UUID> watchedFolders = watchedFoldersOf(connection);
         Map<String, Optional<UUID>> alreadyResolved = new HashMap<>();
         LOG.info("Reflecting {} changes of the Drive of {}", changes.size(), connection.getOwnerId());
+        int leftOut = 0;
         for (DriveChange change : changes) {
-            applyOne(connection, watchedFolders, alreadyResolved, change);
+            if (!applyOne(connection, watchedFolders, alreadyResolved, change)) {
+                leftOut++;
+            }
         }
+        return leftOut;
     }
 
     /**
@@ -159,7 +174,7 @@ public class DriveSynchroniser {
      * over while the parents of a file are read must stop the round, never be read as a file that
      * left the watched folders — that reading would erase the base on a hiccup.
      */
-    private void applyOne(
+    private boolean applyOne(
             DriveConnection connection,
             Map<String, UUID> watchedFolders,
             Map<String, Optional<UUID>> alreadyResolved,
@@ -173,10 +188,12 @@ public class DriveSynchroniser {
 
         try {
             carryOut(connection, decision, watchedFolder);
+            return true;
         } catch (GoogleDriveUnavailableException | DriveAuthorizationRevokedException outage) {
             throw outage;
         } catch (RuntimeException leftOut) {
-            LOG.warn("The change on the Drive file {} was left out", change.fileId(), leftOut);
+            LOG.error("The change on the Drive file {} was left out", change.fileId(), leftOut);
+            return false;
         }
     }
 

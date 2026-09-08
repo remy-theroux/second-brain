@@ -71,12 +71,18 @@ public class DriveConnection {
         return new DriveConnection(ownerId, requireGoogleEmail(googleEmail), requireToken(refreshToken), connectedAt);
     }
 
-    /** Reconnecting replaces: one account holds one Drive connection, never a second. */
+    /**
+     * Reconnecting replaces: one account holds one Drive connection, never a second. The change
+     * position goes with the Drive that handed it out — kept across a reconnection on another
+     * Google account, it is one Google refuses in 400 rather than in 410, so no round would ever
+     * fall back on the full scan that a dead position is owed.
+     */
     public void refresh(String googleEmail, RefreshToken refreshToken, Instant connectedAt) {
         this.googleEmail = requireGoogleEmail(googleEmail);
         this.refreshToken = requireToken(refreshToken);
         this.status = DriveConnectionStatus.ACTIVE;
         this.connectedAt = connectedAt;
+        this.changesPageToken = null;
     }
 
     public void markNeedsReconnection() {

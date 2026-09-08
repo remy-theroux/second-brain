@@ -787,6 +787,27 @@ journal et sera rejouée au tour suivant, depuis le même jeton. Une autorisatio
 seul échec qui écrive quelque chose : `MarkDriveConnectionExpired`, dispatchée hors de la
 transaction annulée (ADR-0028), comme le fait déjà l'import d'un dossier.
 
+**Et un seul geste laissé de côté suffit à retenir le jeton.** Un `ImportDriveFile` refusé, un
+`DeleteDocument` dont le stockage objet a un hoquet, un `RenameDocument` qui perd sur un conflit
+optimiste face à un `PUT /api/documents/{id}` : le tour les compte, les journalise en `ERROR` et
+**ne conserve pas la position**. Le tour suivant les rejouera depuis le même jeton, ce qui est
+sans danger — les quatre gestes sont idempotents — et coûte quelques lectures. L'inverse perdait
+ces changements pour toujours, en silence : contrairement à l'import, qui accumule des rejets
+consultables, un tour de synchronisation **n'a aucun écran**.
+
+**Un changement sans `file` mais sans `removed` n'est pas une suppression, c'est une lecture
+partielle.** `removed` dit que le fichier a quitté le périmètre visible et ne porte aucun `file` ;
+une entrée qui ne dit ni l'un ni l'autre est une réponse incomplète, et l'adapter la **laisse de
+côté** avec un `LOG.warn` plutôt que de la faire descendre sans parents — ce qui, en aval, se lit
+comme « sorti de tous les dossiers surveillés », donc comme un retrait. Le prochain mouvement du
+fichier la rattrapera.
+
+**Reconnecter un Drive fait oublier la position.** `DriveConnection.refresh` réutilise la même
+ligne, et un jeton de page appartient au Drive qui l'a délivré : conservé au travers d'une
+reconnexion sur un **autre** compte Google, Google le refuse en `400` et non en `410`, donc aucun
+tour ne retomberait sur le balayage complet que réclame une position morte — toutes les
+synchronisations échoueraient en boucle.
+
 **Le jeton de page ne se conserve qu'après un tour complet réussi** — `RecordDriveChangePosition`,
 en dernière étape. Conservé au fil de l'eau, il ferait perdre les changements d'une page dont le
 traitement a échoué. Il vit dans `knowledge_drive_connections.changes_page_token` (V18), en

@@ -239,6 +239,25 @@ class DriveChangeReadingTest {
         server.verify();
     }
 
+    /**
+     * No {@code removed}, and no {@code file} either: an incomplete answer, not a fact. Handed on
+     * as a removal — which is what "no parents" means downstream — it would erase a document
+     * Drive said nothing about.
+     */
+    @Test
+    void leaves_out_a_change_that_says_neither_that_the_file_is_gone_nor_anything_of_it() {
+        server.expect(requestTo(startsWith(GoogleDriveChangesAdapter.CHANGES_ENDPOINT)))
+                .andRespond(record(page(
+                        "{\"fileId\":\"f1\",\"removed\":false},"
+                                + changed("f2", file("f2", "rapport.pdf", "application/pdf", "1024")),
+                        null)));
+
+        assertThat(adapter.changesSince(ACCESS_TOKEN, "1789").changes())
+                .extracting(DriveChange::fileId)
+                .containsExactly("f2");
+        server.verify();
+    }
+
     private static String hundredChanges() {
         return IntStream.rangeClosed(1, 100)
                 .mapToObj(index ->

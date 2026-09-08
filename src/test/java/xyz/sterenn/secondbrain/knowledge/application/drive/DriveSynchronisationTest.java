@@ -335,6 +335,24 @@ class DriveSynchronisationTest {
     }
 
     /**
+     * A gesture nothing replays is a gesture lost: the mirror would then lie in both directions,
+     * and no screen carries the round the way an import carries its rejections.
+     */
+    @Test
+    void keeps_the_page_token_back_when_a_gesture_was_left_out() {
+        byte[] content = Fixtures.read(Fixtures.STRUCTURED_MD);
+        aDocumentImportedFrom("f2", "rapport.md", DocumentFormat.MARKDOWN, FakeGoogleDrive.MODIFIED_TIME, content);
+        fakeGoogleDrive.putFile("a1", "f1", "copie.md", content);
+        fakeGoogleDrive.willReportChanges(fakeGoogleDrive.changeOn("f1", "a1"));
+
+        requestASynchronisation();
+        letTheChangePageBeRead();
+
+        assertThat(keptPageToken()).contains(KEPT_TOKEN);
+        assertThat(documents()).hasSize(1);
+    }
+
+    /**
      * A scan that fell over at the three hundredth file of five hundred has left two hundred out
      * of the base, and moving the position forward would keep them out for ever: the change feed
      * only ever reports what moves after the token.
@@ -387,7 +405,11 @@ class DriveSynchronisationTest {
     }
 
     private void aDocumentImportedFrom(String fileId, String filename, DocumentFormat format, Instant modifiedTime) {
-        byte[] content = Fixtures.read(Fixtures.RAW_TXT);
+        aDocumentImportedFrom(fileId, filename, format, modifiedTime, Fixtures.read(Fixtures.RAW_TXT));
+    }
+
+    private void aDocumentImportedFrom(
+            String fileId, String filename, DocumentFormat format, Instant modifiedTime, byte[] content) {
         documentRepository.save(Document.importedFromDrive(
                 alice,
                 filename,
