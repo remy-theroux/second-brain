@@ -200,6 +200,56 @@ class DriveConnectionFlowTest {
     }
 
     @Test
+    void reports_a_failure_when_google_cannot_be_reached() throws Exception {
+        fakeGoogleDriveAuthorization.willBeUnavailable();
+        String state = openAnAuthorization();
+
+        comeBackFromGoogle(state, "echec");
+
+        assertThat(fakeGoogleDriveAuthorization.exchangedCodes()).containsExactly(AUTHORIZATION_CODE);
+        assertThat(driveConnectionRepository.findByOwnerId(alice)).isEmpty();
+    }
+
+    @Test
+    void connects_the_account_that_opened_the_request_whoever_plays_the_callback() throws Exception {
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        fakeGoogleDriveAuthorization.willGrant("alice@gmail.com", "1//jeton-alice");
+
+        // Played without any token, as Google would: the owner comes from the request found by
+        // its state, which is what protects an unauthenticated callback.
+        comeBackFromGoogle(openAnAuthorization(), "ok");
+
+        assertThat(driveConnectionRepository.findByOwnerId(alice))
+                .get()
+                .satisfies(connection -> assertThat(connection.getGoogleEmail()).isEqualTo("alice@gmail.com"));
+        assertThat(driveConnectionRepository.findByOwnerId(bob)).isEmpty();
+    }
+
+    @Test
+    void neither_shows_nor_deletes_the_connection_of_another_account() throws Exception {
+        connect("alice@gmail.com", "1//jeton-alice");
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        String bobToken = KnowledgeFixture.token(accessTokenIssuer, bob);
+
+        mockMvc.perform(get("/api/drive/connection").header(HttpHeaders.AUTHORIZATION, "Bearer " + bobToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/drive/connection").header(HttpHeaders.AUTHORIZATION, "Bearer " + bobToken))
+                .andExpect(status().isNotFound());
+
+        assertThat(driveConnectionRepository.findByOwnerId(alice)).isPresent();
+    }
+
+    @Test
+    void refuses_a_callback_replaying_a_state_already_consumed() throws Exception {
+        String state = openAnAuthorization();
+        comeBackFromGoogle(state, "ok");
+
+        comeBackFromGoogle(state, "lien-invalide");
+
+        assertThat(fakeGoogleDriveAuthorization.exchangedCodes()).containsExactly(AUTHORIZATION_CODE);
+    }
+
+    @Test
     void refuses_an_anonymous_request() throws Exception {
         mockMvc.perform(post("/api/drive/authorizations")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/drive/connection")).andExpect(status().isUnauthorized());
