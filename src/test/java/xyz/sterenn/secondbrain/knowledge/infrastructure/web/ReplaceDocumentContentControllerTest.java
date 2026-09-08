@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,10 +26,17 @@ import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextChunk;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Chunk;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.ExtractedText;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.AccountFixture;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
@@ -49,6 +58,8 @@ class ReplaceDocumentContentControllerTest {
     private static final String PASSWORD = "chevalpile42";
     private static final byte[] FIRST = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
     private static final byte[] SECOND = "le contenu revu du rapport".getBytes(StandardCharsets.UTF_8);
+    private static final String PREVIOUS_TEXT =
+            "Le texte qu'avait rendu la version precedente de ce document, assez long pour etre exploitable.";
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,6 +78,12 @@ class ReplaceDocumentContentControllerTest {
 
     @Autowired
     private DocumentStorage documentStorage;
+
+    @Autowired
+    private TextExtractionRepository textExtractionRepository;
+
+    @Autowired
+    private TextChunkRepository textChunkRepository;
 
     @Autowired
     private S3Client s3Client;
@@ -103,6 +120,14 @@ class ReplaceDocumentContentControllerTest {
 
     private Document reload(UUID documentId, UUID ownerId) {
         return documentRepository.findByIdAndOwnerId(documentId, ownerId).orElseThrow();
+    }
+
+    private void indexWithoutTheWorker(UUID document) {
+        Instant now = Instant.now();
+        textExtractionRepository.save(TextExtraction.of(
+                document, new ExtractedText(List.of(TextBlock.of("Introduction", 1, PREVIOUS_TEXT))), now));
+        textChunkRepository.saveAll(List.of(TextChunk.of(
+                document, 0, new Chunk("Introduction", PREVIOUS_TEXT), KnowledgeFixture.aVector(0.1f), now)));
     }
 
     @Test
@@ -153,6 +178,20 @@ class ReplaceDocumentContentControllerTest {
                 .andExpect(status().isOk());
 
         assertThat(reload(document, alice).getStatus()).isEqualTo(DocumentStatus.READY);
+    }
+
+    @Test
+    void drops_the_text_and_the_chunks_of_the_content_it_replaces() throws Exception {
+        UUID document = upload(aliceToken, alice, "rapport.pdf", FIRST);
+        indexWithoutTheWorker(document);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/documents/{id}", document)
+                        .file(file("rapport.pdf", SECOND))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isOk());
+
+        assertThat(textExtractionRepository.findByDocumentId(document)).isEmpty();
+        assertThat(textChunkRepository.findByDocumentId(document)).isEmpty();
     }
 
     @Test

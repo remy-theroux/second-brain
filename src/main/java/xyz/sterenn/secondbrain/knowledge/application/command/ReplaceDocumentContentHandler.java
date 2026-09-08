@@ -8,6 +8,8 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentNotFoundExcept
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDocumentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
@@ -18,16 +20,22 @@ public class ReplaceDocumentContentHandler implements CommandHandler<ReplaceDocu
 
     private final DocumentRepository documentRepository;
     private final DocumentStorage documentStorage;
+    private final TextExtractionRepository textExtractionRepository;
+    private final TextChunkRepository textChunkRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final Clock clock;
 
     public ReplaceDocumentContentHandler(
             DocumentRepository documentRepository,
             DocumentStorage documentStorage,
+            TextExtractionRepository textExtractionRepository,
+            TextChunkRepository textChunkRepository,
             DomainEventPublisher domainEventPublisher,
             Clock clock) {
         this.documentRepository = documentRepository;
         this.documentStorage = documentStorage;
+        this.textExtractionRepository = textExtractionRepository;
+        this.textChunkRepository = textChunkRepository;
         this.domainEventPublisher = domainEventPublisher;
         this.clock = clock;
     }
@@ -53,6 +61,11 @@ public class ReplaceDocumentContentHandler implements CommandHandler<ReplaceDocu
 
         document.replaceContent(command.filename(), format, checksum, command.content().length);
         documentRepository.save(document);
+
+        // The pipeline's own delete-before-write comes after its first failing call, so a
+        // refused re-ingestion would leave the previous version's text under the new checksum.
+        textExtractionRepository.deleteByDocumentId(document.getId());
+        textChunkRepository.deleteByDocumentId(document.getId());
 
         // The file after the row: see ADR-0020.
         documentStorage.replace(document.getId(), command.content());
