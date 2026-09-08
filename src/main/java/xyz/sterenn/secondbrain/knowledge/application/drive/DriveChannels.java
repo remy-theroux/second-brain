@@ -34,7 +34,7 @@ public class DriveChannels {
             GoogleDriveChanges googleDriveChanges,
             DriveAccess driveAccess,
             Clock clock,
-            @Value("${secondbrain.drive.webhook-url:}") String webhookUrl) {
+            @Value("${secondbrain.drive.webhook-url}") String webhookUrl) {
         this.driveChannelRepository = driveChannelRepository;
         this.googleDriveChannels = googleDriveChannels;
         this.googleDriveChanges = googleDriveChanges;

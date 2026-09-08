@@ -892,6 +892,69 @@ précédente), donc il tombe sous la règle du miroir comme les autres. C'est co
 horloge, et la règle du miroir elle-même — un fichier retiré du Drive fait disparaître son
 document, sans corbeille ni confirmation.
 
+### Le flux des notifications push de Drive
+
+**Une notification ne décide de rien.** Drive ne dit pas quel fichier a bougé : il dit
+« quelque chose a bougé, viens lire ». `POST /api/drive/notifications` publie donc **exactement
+l'événement que l'horloge de la section précédente publie** — `DriveSynchronisationRequested`,
+pour le propriétaire du canal — et rien d'autre. Aucun document n'est ingéré sur la seule foi
+d'une notification, et l'idempotence face aux notifications répétées ou désordonnées est celle du
+tour de synchronisation, pas un dispositif de plus. Le push est un **accélérateur** : un fichier
+déposé devient interrogeable en moins d'une minute au lieu d'attendre le tour suivant.
+
+**Le balayage périodique reste actif, et c'est la condition pour que le reste soit tenable.**
+L'abonnement expire, une notification se perd, un canal meurt sans que rien ne le dise : le push
+est un chemin rapide, jamais l'unique chemin. C'est ce qui permet à ce flux de tout traiter en
+« au mieux » — un canal qu'on n'a pas su fermer, une notification qu'on n'a pas su honorer, un
+renouvellement raté ne coûtent qu'un délai, jamais un changement perdu. Un test le vérifie plutôt
+que de l'affirmer : canal périmé, fichier déposé, document en base par le tour périodique.
+
+**La route est publique, et son unique authentification est le jeton de canal.** Google ne
+s'authentifie pas auprès de nous : `X-Goog-Channel-Token` est comparé à celui émis à l'abonnement,
+et c'est tout ce qui sépare une notification légitime d'un appel anonyme. Ce qu'il prouve
+exactement : « celui qui appelle connaît le secret que nous avons émis pour ce canal-là ». Rien
+de plus — pas une identité d'utilisateur, que la route ne porte pas. Un canal périmé
+**n'authentifie plus rien**, quel que soit le jeton présenté. C'est la première route publique
+sous `/api` depuis `/api/token`, et **elle se déclare dans `SecurityConfig`** : sans ça elle rend
+`401`, et Google ferme le canal au bout de quelques essais sans que rien ne le signale — le
+symptôme serait un push qui « ne marche plus », des semaines plus tard.
+
+**Elle rend `200` quoi qu'il arrive**, sauf sur un jeton faux ou un canal inconnu, où elle rend
+`404`. La raison est que **Google désabonne un canal qui répond en erreur** de façon répétée :
+rendre `500` parce que la base est momentanément injoignable coûterait le canal, alors que le
+balayage périodique aurait rattrapé le coup. Un `404` et non un `401` sur un jeton faux : `401`
+invite à s'authentifier, ce qui n'a aucun sens ici, et confirmerait au passage que l'URL est un
+webhook actif.
+
+**Le corps de la notification est ignoré**, et c'est le point du ticket : Google envoie tout en
+en-têtes (`X-Goog-Channel-ID`, `X-Goog-Channel-Token`, `X-Goog-Resource-State`), le corps étant
+vide. **L'état `sync`** est envoyé une fois à l'ouverture d'un canal, pour le valider : il ne
+signale aucun changement, il est reconnu et ignoré — le traiter comme un changement ferait un
+balayage inutile à chaque renouvellement.
+
+**L'expiration est lue chez Google, jamais supposée.** Sept jours est un maximum, pas une
+promesse : `changes.watch` rend une échéance que l'adapter lit, et une réponse sans échéance
+lisible est un échec plutôt qu'un canal dont le renouvellement ne pourrait pas se planifier.
+`DriveChannelPolicy` renouvelle dans les douze heures qui la précèdent, et le tour de
+renouvellement (`RenewDriveChannels`, horloge du worker) est aussi celui qui ouvre le **premier**
+canal d'une connexion qui n'en a pas : rien ne s'abonne à l'écran de consentement.
+
+**Le renouvellement ouvre le nouveau canal avant de fermer l'ancien.** L'inverse laisserait une
+fenêtre sans abonnement. Les deux coexistent le temps d'un appel, donc une notification peut
+arriver en double — sans conséquence, puisqu'une notification ne fait que déclencher une
+relecture. Côté base, l'ordre est l'inverse : `connection_id` est `UNIQUE`, donc la ligne de
+l'ancien canal part (et le repository *flush*) avant que celle du nouveau ne s'écrive.
+**Se déconnecter d'un Drive ferme aussi son canal**, tant que le jeton d'accès existe encore —
+sans quoi Google continuerait de notifier un canal dont plus personne ne veut, jusqu'à son
+échéance.
+
+**En développement, le push ne fonctionne pas**, et ce n'est pas un défaut de configuration :
+Google exige une URL HTTPS publique qu'il a vérifiée, et il ne sait joindre aucun `localhost`.
+`secondbrain.drive.webhook-url` est donc **vide par défaut**, ce qui **désactive l'ouverture de
+canaux** plutôt que de faire échouer le démarrage — aucun canal ne s'ouvre, la route reste servie,
+et le balayage périodique est le seul chemin. Conséquence pour les tests : ils appellent la route
+directement en HTTP plutôt que de faire ouvrir un vrai canal.
+
 ### Le flux du dépôt d'un document
 
 `POST /api/documents` reçoit un multipart (`file`), dispatche `UploadDocument` et répond
@@ -1388,10 +1451,13 @@ détail dans les règles backend, section « Adapters ».
 `knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
 tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
 
-`DriveAuthorizationState` et `RefreshToken` en ont un chacun, sur le même modèle — mais celui du
-jeton **chiffre** au passage, et porte donc `@Component` en plus de `@Converter(autoApply = true)` :
-il lui faut la clé par injection, que Hibernate seul ne saurait pas lui donner. C'est le seul de la
-famille dans ce cas.
+`DriveAuthorizationState`, `RefreshToken` et `DriveChannelToken` en ont un chacun, sur le même
+modèle — mais les deux derniers **chiffrent** au passage, et portent donc `@Component` en plus de
+`@Converter(autoApply = true)` : il leur faut la clé par injection, que Hibernate seul ne saurait
+pas leur donner. La règle des règles backend (« pas de `@Component` sur un converter ») a donc
+**deux exceptions**, pour la même raison. Le chiffrement lui-même a été sorti du converter du
+jeton de rafraîchissement dans `TokenCipher`, qui sert les deux : le jeton de canal est un secret
+au même titre, et « c'est un secret qui ne sert à rien » est le genre de phrase qui vieillit mal.
 
 La connexion à un Drive vit dans `knowledge_drive_connections` — `owner_id` **`UNIQUE`**, ce qui
 pose la règle « une connexion par compte » là où elle ne se contourne pas — et la demande
@@ -1399,6 +1465,13 @@ d'autorisation en cours dans `knowledge_drive_authorization_requests`. Les deux 
 suppression du compte. La connexion porte en plus `changes_page_token` (V19) : où en est la lecture
 du flux de changements, écrit **après** un tour de synchronisation complet, `NULL` tant qu'aucun
 n'a eu lieu — auquel cas un balayage complet est dû.
+
+L'abonnement aux notifications push vit dans `knowledge_drive_channels` (V20), un par connexion
+(`connection_id` **`UNIQUE`**), cascadé sur elle. Il porte `channel_id` **et** `resource_id` :
+les deux sont nécessaires pour fermer un canal, `channels.stop` les exige tous les deux, et un
+canal dont on aurait perdu l'un des deux notifierait jusqu'à sa propre échéance. Le jeton y est
+**chiffré au repos** comme celui de rafraîchissement, et `expires_at` est **`NULL` tant que
+Google n'a pas confirmé l'abonnement** — un canal dans cet état n'authentifie rien.
 
 Les dossiers mis sous surveillance vivent dans `knowledge_drive_watched_folders`, rattachés à la
 **connexion** et non au propriétaire : `UNIQUE (connection_id, drive_folder_id)`, et deux cascades
