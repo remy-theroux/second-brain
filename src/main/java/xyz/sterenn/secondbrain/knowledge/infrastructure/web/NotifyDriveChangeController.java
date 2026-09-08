@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import xyz.sterenn.secondbrain.knowledge.application.command.NotifyDriveChange;
+import xyz.sterenn.secondbrain.knowledge.application.drive.DriveFailures;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnknownDriveChannelException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
@@ -60,7 +61,9 @@ public class NotifyDriveChangeController {
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Void> keepTheChannelAlive(RuntimeException failure) {
-        LOG.error("A Drive notification could not be handled: the channel is kept alive", failure);
+        LOG.error(
+                "A Drive notification could not be handled, the channel is kept alive: {}",
+                DriveFailures.describe(failure));
         return ResponseEntity.ok().build();
     }
 }

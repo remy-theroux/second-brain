@@ -38,7 +38,10 @@ public class DriveChannelRenewer {
             try {
                 commandBus.dispatch(new RenewDriveChannel(connection.getOwnerId()));
             } catch (RuntimeException failure) {
-                LOG.warn("The channel of the connection {} could not be renewed", connection.getId(), failure);
+                LOG.warn(
+                        "The channel of the connection {} could not be renewed: {}",
+                        connection.getId(),
+                        DriveFailures.describe(failure));
             }
         }
     }

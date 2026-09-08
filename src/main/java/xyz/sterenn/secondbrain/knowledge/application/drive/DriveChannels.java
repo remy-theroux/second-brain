@@ -88,9 +88,9 @@ public class DriveChannels {
             });
         } catch (RuntimeException failure) {
             LOG.warn(
-                    "The channel {} could not be stopped at Google: it will expire on its own",
+                    "The channel {} could not be stopped at Google, it will expire on its own: {}",
                     channel.getChannelId(),
-                    failure);
+                    DriveFailures.describe(failure));
         }
         driveChannelRepository.delete(channel);
     }
