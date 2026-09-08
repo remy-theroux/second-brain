@@ -21,6 +21,12 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations")
                         .permitAll()
+                        // Google does not authenticate itself towards us: the channel token, read
+                        // by the handler from a header, is the whole of this route's security.
+                        // Left undeclared it answers 401, which Google reads as a failing channel
+                        // and closes after a few tries, without a word.
+                        .requestMatchers(HttpMethod.POST, "/api/drive/notifications")
+                        .permitAll()
                         // Deny by default under /api: a public route must declare itself
                         // above, otherwise it answers 401.
                         .requestMatchers("/api/**")
