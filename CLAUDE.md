@@ -443,10 +443,13 @@ couvert » obligerait l'utilisateur à chercher lequel. Le même refus couvre le
 redéposé tel quel, qui est alors son propre couvrant, et l'`UNIQUE (connection_id,
 drive_folder_id)` reste le filet sous le contrôle applicatif.
 
-**L'escalade est bornée à cinquante niveaux et lève plutôt que de boucler.** Drive autorise
-plusieurs parents par fichier depuis longtemps : un cycle ne devrait pas exister, mais une
-boucle infinie dans une transaction immobilise le serveur sans rien dire. C'est la même forme
-que la borne de cent pages du parcours, et pour la même raison.
+**L'escalade est bornée à cinquante niveaux et lève plutôt que de boucler.** Drive a
+supprimé le multi-parentage en septembre 2020 — un fichier n'a plus qu'un parent, les cas
+anciens ayant été migrés en raccourcis —, et l'adapter ne suit donc que ce parent-là : un
+cycle ne devrait pas exister. La borne n'est pas une défense contre un cycle attendu, c'est
+de la défiance envers une réponse tierce, qu'on ne veut pas voir boucler dans une
+transaction. C'est la même forme que la borne de cent pages du parcours, et pour la même
+raison.
 
 **Ce que ce contrôle ne fait pas, et qui est assumé :** surveiller un dossier qui est
 l'**ancêtre** d'un dossier déjà surveillé n'est pas refusé. Le ticket ne le demande pas, mais

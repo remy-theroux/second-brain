@@ -138,6 +138,26 @@ class GoogleDriveFoldersAdapterTest {
     }
 
     @Test
+    void drops_a_malformed_entry_rather_than_failing_the_whole_listing() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(
+                        record(page("[{\"id\":\"b1\"},{\"name\":\"2026\"},{\"id\":\"b3\",\"name\":\"2027\"}]", null)));
+
+        assertThat(adapter.children(ACCESS_TOKEN, "a1")).containsExactly(new DriveFolder("b3", "2027"));
+        server.verify();
+    }
+
+    @Test
+    void knows_no_folder_behind_a_nameless_answer() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{\"id\":\"a1\",\"mimeType\":\"" + GoogleDriveFoldersAdapter.FOLDER_MIME_TYPE
+                        + "\",\"trashed\":false}"));
+
+        assertThat(adapter.folder(ACCESS_TOKEN, "a1")).isEmpty();
+        server.verify();
+    }
+
+    @Test
     void reads_one_folder_by_its_identifier() {
         server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT + "/a1")))
                 .andExpect(method(HttpMethod.GET))
@@ -181,7 +201,7 @@ class GoogleDriveFoldersAdapterTest {
         server.verify();
     }
 
-    /** Drive allows several parents per file: a cycle must stop the climb, not the server. */
+    /** An answer that never stops naming a parent must stop the climb, not the server. */
     @Test
     void refuses_to_climb_for_ever_when_the_parents_form_a_cycle() {
         for (int call = 0; call < GoogleDriveFoldersAdapter.MAX_ANCESTOR_DEPTH; call++) {

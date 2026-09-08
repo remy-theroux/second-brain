@@ -3,6 +3,8 @@ package xyz.sterenn.secondbrain.knowledge.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.ConstraintViolationException.ConstraintKind;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
@@ -25,9 +27,19 @@ public class JpaWatchedFolderRepositoryAdapter implements WatchedFolderRepositor
             // only surface at commit, out of reach of this catch.
             return springDataWatchedFolderRepository.saveAndFlush(watchedFolder);
         } catch (DataIntegrityViolationException violation) {
-            // Two simultaneous watches of the same folder: the covering folder is itself.
+            // Only uniqueness means "already covered", and the covering folder is then itself, two
+            // simultaneous watches having raced. The foreign key of a connection deleted meanwhile
+            // would otherwise name a covering folder that never existed.
+            if (!isUniquenessConflict(violation)) {
+                throw violation;
+            }
             throw new FolderAlreadyCoveredException(watchedFolder.getName());
         }
+    }
+
+    private static boolean isUniquenessConflict(DataIntegrityViolationException violation) {
+        return violation.getCause() instanceof ConstraintViolationException constraint
+                && constraint.getKind() == ConstraintKind.UNIQUE;
     }
 
     @Override

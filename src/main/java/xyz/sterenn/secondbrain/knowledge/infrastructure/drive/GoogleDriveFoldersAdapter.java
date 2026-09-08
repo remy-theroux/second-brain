@@ -28,7 +28,7 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
     /** A page token that never runs out would hang a request for good: it is bounded rather than trusted. */
     static final int MAX_PAGES = 100;
 
-    /** Drive allows several parents per file, so a cycle is conceivable: bounded for the same reason. */
+    /** Nothing but Google's own answers ends the climb: bounded rather than trusted, like the pages above. */
     static final int MAX_ANCESTOR_DEPTH = 50;
 
     /** The whole alphabet of a Drive identifier: anything else designates no folder of any Drive. */
@@ -57,7 +57,8 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
             }
             if (answer.files() != null) {
                 answer.files().stream()
-                        .map(file -> new DriveFolder(file.id(), file.name()))
+                        .map(GoogleDriveFoldersAdapter::toFolder)
+                        .flatMap(Optional::stream)
                         .forEach(folders::add);
             }
             pageToken = answer.nextPageToken();
@@ -77,7 +78,7 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
         return get(accessToken, folderId, "id,name,mimeType,trashed")
                 .filter(file -> FOLDER_MIME_TYPE.equals(file.mimeType()))
                 .filter(file -> !Boolean.TRUE.equals(file.trashed()))
-                .map(file -> new DriveFolder(file.id(), file.name()));
+                .flatMap(GoogleDriveFoldersAdapter::toFolder);
     }
 
     @Override
@@ -159,6 +160,19 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
                 .build()
                 .encode()
                 .toUri();
+    }
+
+    /** Every field of the response is nullable: one malformed entry drops out rather than failing the page. */
+    private static Optional<DriveFolder> toFolder(GoogleFileResponse file) {
+        if (isBlank(file.id()) || isBlank(file.name())) {
+            LOG.warn("Google handed back a folder without an identifier or a name: dropped");
+            return Optional.empty();
+        }
+        return Optional.of(new DriveFolder(file.id(), file.name()));
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private static boolean isDriveIdentifier(String folderId) {
