@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -15,8 +17,11 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenReject
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 
 // The bean is shared by the whole context and the test transaction rollback does not
@@ -30,8 +35,8 @@ public class FakeGoogleDriveConfiguration {
         return new FakeGoogleDrive();
     }
 
-    /** One stub for the two ports a browsing needs: the token exchange, then the folders. */
-    public static class FakeGoogleDrive implements GoogleAccessTokens, GoogleDriveFolders {
+    /** One stub for the three ports of the context: the token exchange, then the folders and their files. */
+    public static class FakeGoogleDrive implements GoogleAccessTokens, GoogleDriveFolders, GoogleDriveFiles {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
@@ -41,7 +46,16 @@ public class FakeGoogleDriveConfiguration {
         /** The same bound as the adapter's, so a programmed cycle fails here the way it would there. */
         public static final int MAX_ANCESTOR_DEPTH = 50;
 
+        /** The modification time every programmed file carries: nothing reads it before DRIVE-5. */
+        public static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
+
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();
+
+        private final Map<String, List<StoredFile>> filesByParent = new ConcurrentHashMap<>();
+
+        private final AtomicInteger downloads = new AtomicInteger();
+
+        private volatile int unavailableAfterDownloads = Integer.MAX_VALUE;
 
         private volatile boolean unavailable = false;
 
@@ -101,6 +115,34 @@ public class FakeGoogleDriveConfiguration {
             throw new GoogleDriveUnavailableException();
         }
 
+        /** The stub drops what it cannot read exactly where the adapter does: in the walk, silently. */
+        @Override
+        public List<DriveFile> filesUnder(DriveAccessToken accessToken, String folderId) {
+            refuseIfUnusable(accessToken);
+            List<DriveFile> files = new ArrayList<>(filesByParent.getOrDefault(folderId, List.of()).stream()
+                    .map(StoredFile::toDriveFile)
+                    .flatMap(Optional::stream)
+                    .toList());
+            foldersByParent
+                    .getOrDefault(folderId, List.of())
+                    .forEach(subfolder -> files.addAll(filesUnder(accessToken, subfolder.id())));
+            return files;
+        }
+
+        @Override
+        public byte[] download(DriveAccessToken accessToken, String fileId) {
+            if (downloads.incrementAndGet() > unavailableAfterDownloads) {
+                unavailable = true;
+            }
+            refuseIfUnusable(accessToken);
+            return filesByParent.values().stream()
+                    .flatMap(List::stream)
+                    .filter(file -> file.id().equals(fileId))
+                    .findFirst()
+                    .map(StoredFile::content)
+                    .orElseThrow(GoogleDriveUnavailableException::new);
+        }
+
         private Optional<String> parentOf(String folderId) {
             return foldersByParent.entrySet().stream()
                     .filter(entry -> entry.getValue().stream()
@@ -120,6 +162,12 @@ public class FakeGoogleDriveConfiguration {
 
         public void put(String parentId, DriveFolder... folders) {
             foldersByParent.put(parentId, List.of(folders));
+        }
+
+        public void putFile(String parentId, String fileId, String filename, byte[] content) {
+            filesByParent
+                    .computeIfAbsent(parentId, parent -> new CopyOnWriteArrayList<>())
+                    .add(new StoredFile(fileId, filename, content));
         }
 
         public static DriveFolder folder(String id, String name) {
@@ -145,13 +193,35 @@ public class FakeGoogleDriveConfiguration {
             this.revokedOnRenewal = true;
         }
 
+        /** The Drive falls over once {@code downloads} files have gone through: what is in stays in. */
+        public void willBecomeUnavailableAfter(int downloads) {
+            this.unavailableAfterDownloads = downloads;
+        }
+
         public void clear() {
             foldersByParent.clear();
+            filesByParent.clear();
+            downloads.set(0);
+            unavailableAfterDownloads = Integer.MAX_VALUE;
             unavailable = false;
             revoked = false;
             staleAccessToken = false;
             revokedOnRenewal = false;
             purged = false;
+        }
+
+        private record StoredFile(String id, String name, byte[] content) {
+
+            Optional<DriveFile> toDriveFile() {
+                return DocumentFormat.forFilename(name)
+                        .map(format -> new DriveFile(
+                                id,
+                                name,
+                                format,
+                                content.length,
+                                "https://drive.google.com/file/d/" + id + "/view",
+                                MODIFIED_TIME));
+            }
         }
     }
 }
