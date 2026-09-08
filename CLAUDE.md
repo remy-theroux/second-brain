@@ -425,6 +425,16 @@ qu'il vise** : un message global mentirait dès qu'un dépôt sur trois est refu
 l'utilisateur les chercher. Un `401` en cours de série l'arrête net : les fichiers suivants n'y
 récolteraient que d'autres `401`.
 
+Deux pièges du mode avancé, tous deux payés une fois. `FileUpload` refuse lui-même un fichier
+déposé qui sort d'`accept`, avec un message **en anglais et codé en dur** — c'est une prop,
+`invalid-file-type-message`, pas une entrée de locale, donc `primelocale/fr` ne le porte pas — et
+son `clear()` emporte ses messages avec ses fichiers, ce qui effaçait le refus à la fin de la
+série. La vue pose donc le message français et **draine** les messages du composant dans ses
+propres refus avant de le vider : une seule liste porte tout. Conséquence à connaître :
+`ACCEPTED_EXTENSIONS` n'est plus le filtre de confort qu'ADR-0022 décrivait, c'est un garde
+bloquant — une divergence y retire un format que le serveur aurait accepté, au lieu de le laisser
+passer jusqu'au `415`.
+
 **La liste se relit toutes les 2 s tant qu'un document n'est pas dans un statut terminal**, et
 s'arrête dès qu'ils le sont tous — un `setTimeout` réarmé après chaque lecture **réussie**,
 jamais un `setInterval` qui empilerait les requêtes, désarmé à la sortie de l'écran. Ce qui dit
