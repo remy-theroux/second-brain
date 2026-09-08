@@ -29,10 +29,12 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentSource;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveConnectionStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveImportStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
@@ -169,6 +171,18 @@ class DriveFolderImportTest {
     }
 
     @Test
+    void asks_for_a_reconnection_when_the_authorization_is_withdrawn_during_the_import() {
+        fakeGoogleDrive.putFile("a1", "f1", "structure.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.willReportARevokedAuthorization();
+
+        requestTheImport();
+
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(outcome()).isEqualTo(DriveImportStatus.FAILED));
+        assertThat(reloadTheConnection().getStatus()).isEqualTo(DriveConnectionStatus.NEEDS_RECONNECTION);
+        assertThat(reloadTheFolder().getLastImportError()).isEqualTo(DriveAuthorizationRevokedException.MESSAGE);
+    }
+
+    @Test
     void records_the_reason_of_a_file_left_out() {
         fakeGoogleDrive.putOversizedFile("a1", "f1", "archive.pdf", ImportPolicy.MAX_FILE_SIZE + 1);
         fakeGoogleDrive.putFile("a1", "f2", "structure.md", Fixtures.read(Fixtures.STRUCTURED_MD));
@@ -197,6 +211,10 @@ class DriveFolderImportTest {
 
     private DriveImportStatus outcome() {
         return reloadTheFolder().getLastImportStatus();
+    }
+
+    private DriveConnection reloadTheConnection() {
+        return driveConnectionRepository.findByOwnerId(alice).orElseThrow();
     }
 
     private WatchedFolder reloadTheFolder() {

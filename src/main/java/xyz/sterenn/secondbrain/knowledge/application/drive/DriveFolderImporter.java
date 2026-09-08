@@ -8,10 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ImportDriveFile;
+import xyz.sterenn.secondbrain.knowledge.application.command.MarkDriveConnectionExpired;
 import xyz.sterenn.secondbrain.knowledge.application.command.RecordDriveImportOutcome;
 import xyz.sterenn.secondbrain.knowledge.domain.ImportPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveNotConnectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.WatchedFolderNotFoundException;
@@ -68,6 +70,13 @@ public class DriveFolderImporter {
         List<DriveImportRejection> rejections = new ArrayList<>();
         try {
             walk(connection, watchedFolder, rejections);
+        } catch (DriveAuthorizationRevokedException revoked) {
+            LOG.error("Import of the watched folder {} met a withdrawn authorization", watchedFolderId, revoked);
+            // Two second transactions, the walk having rolled its own back: see ADR-0028. The
+            // outcome alone would leave the owner with a failed import and no idea to reconnect.
+            commandBus.dispatch(new MarkDriveConnectionExpired(ownerId));
+            record(ownerId, watchedFolderId, DriveImportStatus.FAILED, revoked.getMessage(), rejections);
+            return;
         } catch (RuntimeException failure) {
             LOG.error("Import of the watched folder {} failed", watchedFolderId, failure);
             // A second transaction, the walk having rolled its own back: see ADR-0028.
