@@ -238,6 +238,48 @@ class DriveFolderScanTest {
         server.verify();
     }
 
+    @Test
+    void tells_a_quota_apart_from_a_file_it_may_no_longer_read_when_downloading() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(forbidden("usageLimits", "userRateLimitExceeded")));
+
+        assertThatExceptionOfType(GoogleDriveUnavailableException.class)
+                .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
+        server.verify();
+    }
+
+    @Test
+    void reads_a_withdrawn_permission_as_a_file_it_may_no_longer_read_when_downloading() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(forbidden("global", "insufficientFilePermissions")));
+
+        assertThatExceptionOfType(DriveContentUnreachableException.class)
+                .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
+        server.verify();
+    }
+
+    @Test
+    void reads_a_forbidden_answer_it_cannot_parse_as_a_file_it_may_no_longer_read() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\": pas du JSON"));
+
+        assertThatExceptionOfType(DriveContentUnreachableException.class)
+                .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
+        server.verify();
+    }
+
+    private static String forbidden(String domain, String reason) {
+        return "{\"error\":{\"errors\":[{\"domain\":\"" + domain + "\",\"reason\":\"" + reason
+                + "\",\"message\":\"The user has exceeded their quota.\"}],\"code\":403,"
+                + "\"message\":\"The user has exceeded their quota.\"}}";
+    }
+
     private static String hundredFiles() {
         return IntStream.rangeClosed(1, 100)
                 .mapToObj(index -> file("f" + index, "rapport-" + index + ".pdf", "application/pdf", "1024"))

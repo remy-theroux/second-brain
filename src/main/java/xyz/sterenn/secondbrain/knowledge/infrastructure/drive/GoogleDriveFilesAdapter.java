@@ -6,6 +6,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,14 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
 
     /** The whole alphabet of a Drive identifier: anything else designates no folder of any Drive. */
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
+
+    /** The reasons Google gives a 403 that a later run would get past: a cap, not a refusal to read. */
+    private static final Set<String> CAPPED_REASONS = Set.of(
+            "rateLimitExceeded",
+            "userRateLimitExceeded",
+            "dailyLimitExceeded",
+            "backendError",
+            "sharingRateLimitExceeded");
 
     private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveFilesAdapter.class);
 
@@ -224,10 +233,30 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
         if (status.isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
             return new DriveAccessTokenRejectedException(refusal);
         }
-        if (status.isSameCodeAs(HttpStatus.NOT_FOUND) || status.isSameCodeAs(HttpStatus.FORBIDDEN)) {
+        if (status.isSameCodeAs(HttpStatus.NOT_FOUND)) {
             return new DriveContentUnreachableException(refusal);
         }
+        if (status.isSameCodeAs(HttpStatus.FORBIDDEN)) {
+            return isCapped(refusal)
+                    ? new GoogleDriveUnavailableException(refusal)
+                    : new DriveContentUnreachableException(refusal);
+        }
         return new GoogleDriveUnavailableException(refusal);
+    }
+
+    /** A body that will not parse leans towards setting one file aside rather than stopping the import. */
+    private static boolean isCapped(RestClientResponseException refusal) {
+        try {
+            GoogleApiErrorResponse body = refusal.getResponseBodyAs(GoogleApiErrorResponse.class);
+            if (body == null || body.error() == null || body.error().errors() == null) {
+                return false;
+            }
+            return body.error().errors().stream()
+                    .map(GoogleApiErrorResponse.ErrorDetail::reason)
+                    .anyMatch(CAPPED_REASONS::contains);
+        } catch (RestClientException unreadableBody) {
+            return false;
+        }
     }
 
     /** Status and type, never {@code getMessage()}, which would echo the response body into the log. */

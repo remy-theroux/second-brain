@@ -572,11 +572,25 @@ la liste, et une liste qui grossit à chaque passage ne se lit plus au bout de t
 
 **Ce qui arrête l'import, et ce qui ne l'arrête pas.** Seuls un Drive injoignable et une
 autorisation retirée l'arrêtent, et le bilan porte alors leur message ; **tout le reste écarte
-un fichier et continue** — un `404` ou un `403` au téléchargement (supprimé, ou partage retiré
-entre le balayage et le téléchargement), un hoquet du stockage objet, une écriture concurrente
-sur la même ligne. C'est pourquoi l'adapter distingue ces deux codes d'une vraie panne :
-mappés sur « Google Drive est injoignable », un fichier disparu une minute plus tôt laisserait
-les quatre cents suivants dehors, sous un bilan « échec inattendu ».
+un fichier et continue** — un `404` au téléchargement (supprimé entre le balayage et le
+téléchargement), un hoquet du stockage objet, une écriture concurrente sur la même ligne. C'est
+pourquoi l'adapter distingue ces codes d'une vraie panne : mappés sur « Google Drive est
+injoignable », un fichier disparu une minute plus tôt laisserait les quatre cents suivants
+dehors, sous un bilan « échec inattendu ».
+
+**Un `403`, lui, ne se lit pas à son code : c'est le motif que Google met dans son corps qui
+départage.** `error.errors[].reason` vaut `rateLimitExceeded`, `userRateLimitExceeded`,
+`dailyLimitExceeded`, `backendError` ou `sharingRateLimitExceeded` → c'est un **plafonnement**,
+donc une indisponibilité transitoire : l'import s'arrête et sera rejoué. Tout autre motif
+(`insufficientFilePermissions`, `appNotAuthorizedToFile`, `forbidden`…) est un partage retiré :
+on écarte ce fichier et on continue. Sans cette distinction, un plafonnement à mi-parcours
+écrirait un rejet consultable pour chacun des quatre cents fichiers restants — quatre cents
+motifs faux disant « fichier inaccessible » pour des fichiers sains, sous un import annoncé
+« réussi ». **Un corps illisible penche vers le rejet** : c'est le choix le moins destructeur,
+puisqu'il fait entrer les autres fichiers plutôt que de tout bloquer, et le rejet reste
+consultable. Le corps est **lu, jamais journalisé** et jamais recopié dans un message affichable
+— c'est la même raison qui interdit à l'adapter de journaliser `getMessage()` : un corps peut
+porter un secret. Le `404` ne change pas : un fichier disparu est sans ambiguïté.
 
 **Le balayage complet précède le premier téléchargement** : le port rend la liste de tout le
 dossier et de ses sous-dossiers avant qu'un octet de contenu soit demandé. Une panne pendant le
