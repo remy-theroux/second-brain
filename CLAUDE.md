@@ -1706,3 +1706,10 @@ dans les jars du cache Gradle plutôt que de réécrire le code.
 - `docs/superpowers/plans/` — plans d'implémentation détaillés, un par feature.
   Celui de la création de compte porte le raisonnement derrière l'architecture ci-dessus.
 - `.superpowers/sdd/<date>-<feature>/` — briefs, rapports et diffs de revue par tâche.
+- `eval.md` — le protocole d'évaluation de la qualité des réponses, et la baseline. **Rien ne
+  s'y exécute** : la notation est manuelle et assumée comme telle, un LLM-as-judge ne ferait que
+  déplacer le problème de confiance. Son intérêt est d'être **rejouable à l'identique** : sans
+  mesure prise avant la recherche hybride de la v1.1, il sera impossible de dire si elle améliore
+  quoi que ce soit, et l'intuition, sur un RAG, se trompe systématiquement. Un passage se consigne
+  **sous** le précédent, jamais à sa place — c'est la comparaison qui a de la valeur, pas le
+  dernier chiffre.
