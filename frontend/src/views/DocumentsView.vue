@@ -138,11 +138,15 @@ async function load() {
     if (driveConnection.value) {
       watchedFolders.value = await listWatchedFolders(auth.token)
     }
-    scheduleRefresh()
   } catch (error) {
     await handle(error)
   } finally {
     loading.value = false
+    // Rearmed whatever happened: a hiccup on either read would otherwise stop the clock for
+    // good, and the outcome of the running import would never appear without an F5. On a 401,
+    // `handle` has already awaited the redirection, so `mounted` says to stop — and a timer
+    // armed just before the unmount is cleared by `onUnmounted`.
+    scheduleRefresh()
   }
 }
 
@@ -418,8 +422,12 @@ onUnmounted(() => {
             @close="picking = false"
             @error="signOutIfRejected"
           />
-          <div v-else class="source-buttons">
+          <!-- The reconnection stays reachable while the picker is open: opening it with a
+               stale authorization is exactly how one discovers the problem, and the only
+               gesture that repairs it must not be the one that disappears. -->
+          <div class="source-buttons">
             <Button
+              v-if="!picking"
               type="button"
               label="Ajouter un dossier"
               icon="pi pi-plus"
