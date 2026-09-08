@@ -9,6 +9,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveAuthorization;
@@ -91,10 +92,21 @@ class GoogleDriveAuthorizationAdapter implements GoogleDriveAuthorization {
                     .retrieve()
                     .body(GoogleTokenResponse.class);
         } catch (RestClientException failure) {
-            // Never the response body in the log: it carries the refresh token.
-            LOG.error("The Google token endpoint refused the exchange: {}", failure.getMessage());
+            LOG.error("The Google token endpoint refused the exchange: {}", describe(failure));
             throw new GoogleDriveUnavailableException(failure);
         }
+    }
+
+    /**
+     * Status and type, never {@code getMessage()}: HttpStatusCodeException builds its message
+     * from the response body, which the token endpoint would echo back into the log.
+     */
+    private static String describe(RestClientException failure) {
+        if (failure instanceof RestClientResponseException refusal) {
+            return failure.getClass().getSimpleName() + " HTTP "
+                    + refusal.getStatusCode().value();
+        }
+        return failure.getClass().getSimpleName();
     }
 
     /** The address comes from {@code drive.readonly} itself: no {@code userinfo.email} scope. */
@@ -111,7 +123,7 @@ class GoogleDriveAuthorizationAdapter implements GoogleDriveAuthorization {
                     .retrieve()
                     .body(GoogleAboutResponse.class);
         } catch (RestClientException failure) {
-            LOG.error("Google did not hand back the address of the authorizing account: {}", failure.getMessage());
+            LOG.error("Google did not hand back the address of the authorizing account: {}", describe(failure));
             throw new GoogleDriveUnavailableException(failure);
         }
         if (about == null || about.user() == null || about.user().emailAddress() == null) {
