@@ -11,6 +11,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
 import xyz.sterenn.secondbrain.shared.event.amqp.DomainEventRegistration;
 
 @Configuration
@@ -26,7 +27,8 @@ public class KnowledgeMessagingConfiguration {
                 DocumentUploaded.class,
                 DocumentContentReplaced.class,
                 DocumentTextExtracted.class,
-                DocumentTextIndexed.class));
+                DocumentTextIndexed.class,
+                DriveFolderImportRequested.class));
     }
 
     /**

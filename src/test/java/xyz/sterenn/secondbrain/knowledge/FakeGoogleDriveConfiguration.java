@@ -165,9 +165,18 @@ public class FakeGoogleDriveConfiguration {
         }
 
         public void putFile(String parentId, String fileId, String filename, byte[] content) {
+            put(parentId, new StoredFile(fileId, filename, content, content.length));
+        }
+
+        /** A file Drive reports as huge: the ceiling is judged on the listing, before any download. */
+        public void putOversizedFile(String parentId, String fileId, String filename, long sizeBytes) {
+            put(parentId, new StoredFile(fileId, filename, new byte[] {0}, sizeBytes));
+        }
+
+        private void put(String parentId, StoredFile file) {
             filesByParent
                     .computeIfAbsent(parentId, parent -> new CopyOnWriteArrayList<>())
-                    .add(new StoredFile(fileId, filename, content));
+                    .add(file);
         }
 
         public static DriveFolder folder(String id, String name) {
@@ -210,7 +219,7 @@ public class FakeGoogleDriveConfiguration {
             purged = false;
         }
 
-        private record StoredFile(String id, String name, byte[] content) {
+        private record StoredFile(String id, String name, byte[] content, long sizeBytes) {
 
             Optional<DriveFile> toDriveFile() {
                 return DocumentFormat.forFilename(name)
@@ -218,7 +227,7 @@ public class FakeGoogleDriveConfiguration {
                                 id,
                                 name,
                                 format,
-                                content.length,
+                                sizeBytes,
                                 "https://drive.google.com/file/d/" + id + "/view",
                                 MODIFIED_TIME));
             }

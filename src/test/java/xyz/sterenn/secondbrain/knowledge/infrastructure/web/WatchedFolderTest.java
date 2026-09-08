@@ -30,6 +30,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveNotConnectedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.WatchedFolderNotFoundException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
@@ -199,6 +200,36 @@ class WatchedFolderTest {
     }
 
     @Test
+    void accepts_the_import_of_a_watched_folder_without_waiting_for_it() throws Exception {
+        DriveConnection connection = connectADrive();
+        aDriveHolding(folder("a1", "Notes"));
+        watch("a1");
+
+        // 202 and not 201: the walk has not started when the answer leaves, and nothing was created.
+        mockMvc.perform(post(WATCHED_FOLDERS + "/"
+                                + onlyWatchedFolderOf(connection).getId() + "/import")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isAccepted());
+    }
+
+    @Test
+    void refuses_to_import_a_folder_of_another_account() throws Exception {
+        DriveConnection connection = connectADrive();
+        aDriveHolding(folder("a1", "Notes"));
+        watch("a1");
+        UUID watchedFolderId = onlyWatchedFolderOf(connection).getId();
+        UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        connectADriveFor(bob, "bob@gmail.com", "1//jeton-bob");
+
+        // The message matters as much as the code: it says the refusal comes from the folder being
+        // another account's, not from a route that does not exist.
+        mockMvc.perform(post(WATCHED_FOLDERS + "/" + watchedFolderId + "/import")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + KnowledgeFixture.token(accessTokenIssuer, bob)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value(WatchedFolderNotFoundException.MESSAGE));
+    }
+
+    @Test
     void lists_no_watched_folder_without_a_connected_account() throws Exception {
         mockMvc.perform(get(WATCHED_FOLDERS).header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
@@ -253,6 +284,8 @@ class WatchedFolderTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get(WATCHED_FOLDERS)).andExpect(status().isUnauthorized());
         mockMvc.perform(delete(WATCHED_FOLDERS + "/" + UUID.randomUUID())).andExpect(status().isUnauthorized());
+        mockMvc.perform(post(WATCHED_FOLDERS + "/" + UUID.randomUUID() + "/import"))
+                .andExpect(status().isUnauthorized());
     }
 
     private WatchedFolder onlyWatchedFolderOf(DriveConnection connection) {
