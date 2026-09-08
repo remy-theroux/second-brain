@@ -153,6 +153,20 @@ class ImportDriveFileTest {
         assertThat(nothingAnnounced()).isTrue();
     }
 
+    /** A folder unwatched then watched again is a new row: without this, its count reads zero for ever. */
+    @Test
+    void hands_an_already_imported_document_over_to_the_folder_watched_now() {
+        DriveFile file = aDriveFile("f1", "rapport.txt", REPORT);
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, file, REPORT));
+        assertThat(announcement()).isNotNull();
+        UUID notesWatchedAgain = UUID.randomUUID();
+
+        commandBus.dispatch(new ImportDriveFile(alice, notesWatchedAgain, file, REPORT));
+
+        assertThat(onlyDocument().getWatchedFolderId()).isEqualTo(notesWatchedAgain);
+        assertThat(nothingAnnounced()).isTrue();
+    }
+
     @Test
     void re_imports_nothing_when_only_the_name_changed() {
         commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));

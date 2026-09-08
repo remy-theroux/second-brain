@@ -41,9 +41,10 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
     @Override
     public void handle(ImportDriveFile command) {
         DriveFile file = command.file();
-        if (documentRepository
-                .findByOwnerIdAndDriveFileId(command.ownerId(), file.id())
-                .isPresent()) {
+        Optional<Document> alreadyImported =
+                documentRepository.findByOwnerIdAndDriveFileId(command.ownerId(), file.id());
+        if (alreadyImported.isPresent()) {
+            handOver(alreadyImported.get(), command.watchedFolderId());
             return;
         }
 
@@ -67,6 +68,18 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         documentStorage.store(document.getId(), command.content());
 
         domainEventPublisher.publish(new DocumentUploaded(document.getId(), document.getOwnerId(), clock.instant()));
+    }
+
+    /**
+     * The only writing a second import does, and it announces nothing: the content has not moved,
+     * only the folder it now comes through, which a folder unwatched then watched again renames.
+     */
+    private void handOver(Document document, UUID watchedFolderId) {
+        if (watchedFolderId.equals(document.getWatchedFolderId())) {
+            return;
+        }
+        document.cameThrough(watchedFolderId);
+        documentRepository.save(document);
     }
 
     /**

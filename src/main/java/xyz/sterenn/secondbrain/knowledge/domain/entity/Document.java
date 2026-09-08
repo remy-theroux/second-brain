@@ -125,9 +125,7 @@ public class Document {
         if (provenance == null) {
             throw new IllegalArgumentException("The Drive origin of a document is required");
         }
-        if (watchedFolderId == null) {
-            throw new IllegalArgumentException("The watched folder a document came through is required");
-        }
+        UUID watchedFolder = requireWatchedFolder(watchedFolderId);
         if (this.driveFileId != null) {
             throw new IllegalStateException("A document already carries a Drive file: " + this.driveFileId);
         }
@@ -135,7 +133,22 @@ public class Document {
         this.driveFileId = provenance.fileId();
         this.driveWebViewLink = provenance.webViewLink();
         this.driveModifiedTime = provenance.modifiedTime();
-        this.watchedFolderId = watchedFolderId;
+        this.watchedFolderId = watchedFolder;
+    }
+
+    /**
+     * A folder unwatched then watched again is a new row with a new identifier, and the documents
+     * it once brought still name the old one: nothing else would ever write it back.
+     */
+    public void cameThrough(UUID watchedFolderId) {
+        this.watchedFolderId = requireWatchedFolder(watchedFolderId);
+    }
+
+    private static UUID requireWatchedFolder(UUID watchedFolderId) {
+        if (watchedFolderId == null) {
+            throw new IllegalArgumentException("The watched folder a document came through is required");
+        }
+        return watchedFolderId;
     }
 
     public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
