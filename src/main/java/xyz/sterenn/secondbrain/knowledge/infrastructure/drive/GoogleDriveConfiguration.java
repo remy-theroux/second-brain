@@ -1,9 +1,11 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.drive;
 
+import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 
 @Configuration(proxyBeanMethods = false)
 class GoogleDriveConfiguration {
@@ -23,5 +25,15 @@ class GoogleDriveConfiguration {
             @Value("${secondbrain.base-url}") String baseUrl) {
         return new GoogleDriveAuthorizationAdapter(
                 restClientBuilder.build(), clientId, clientSecret, baseUrl + CALLBACK_PATH);
+    }
+
+    @Bean
+    GoogleAccessTokens googleAccessTokens(
+            RestClient.Builder restClientBuilder,
+            @Value("${secondbrain.drive.client-id}") String clientId,
+            @Value("${secondbrain.drive.client-secret}") String clientSecret,
+            Clock clock) {
+        return new CachingGoogleAccessTokens(
+                new GoogleAccessTokensAdapter(restClientBuilder.build(), clientId, clientSecret, clock), clock);
     }
 }
