@@ -175,6 +175,12 @@ secondbrain:
     model: ${SECONDBRAIN_LLM_MODEL:qwen3:4b}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
+  drive:
+    # Enciphers the Google refresh token at rest, through RefreshTokenAttributeConverter.
+    # Deliberately without a default value, the same status as `jwt.secret` below: a default
+    # key would be a public key, and a dump would give back every connected Drive.
+    # 32 bytes encoded in Base64 — AES-256.
+    token-encryption-key: ${SECONDBRAIN_DRIVE_TOKEN_KEY}
   jwt:
     # Deliberately without a default value: a default signing secret would be
     # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —
