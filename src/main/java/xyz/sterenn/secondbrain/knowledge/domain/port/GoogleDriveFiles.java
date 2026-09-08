@@ -15,4 +15,10 @@ public interface GoogleDriveFiles {
 
     /** The bytes of one file, exactly as Drive holds them. */
     byte[] download(DriveAccessToken accessToken, String fileId);
+
+    /**
+     * The bytes Google makes of a native Doc, which holds none of its own: an archive rebuilt on
+     * every call, so two exports of an untouched document never carry the same checksum.
+     */
+    byte[] export(DriveAccessToken accessToken, String fileId);
 }

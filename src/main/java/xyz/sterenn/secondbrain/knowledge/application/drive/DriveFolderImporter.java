@@ -111,6 +111,8 @@ public class DriveFolderImporter {
         LOG.info("Importing {} readable files of the watched folder {}", files.size(), watchedFolder.getId());
 
         for (DriveFile file : files) {
+            // A native Doc has no size in the listing, so nothing can be judged here: the ceiling
+            // it meets is Google's own, and only its refusal to export announces it.
             if (ImportPolicy.isTooLarge(file.sizeBytes())) {
                 rejections.add(DriveImportRejection.of(file, ImportPolicy.tooLargeReason()));
                 continue;
@@ -130,8 +132,11 @@ public class DriveFolderImporter {
             DriveFile file,
             List<DriveImportRejection> rejections) {
         try {
-            byte[] content =
-                    driveAccess.call(connection, accessToken -> googleDriveFiles.download(accessToken, file.id()));
+            byte[] content = driveAccess.call(
+                    connection,
+                    accessToken -> file.isExported()
+                            ? googleDriveFiles.export(accessToken, file.id())
+                            : googleDriveFiles.download(accessToken, file.id()));
             commandBus.dispatch(new ImportDriveFile(connection.getOwnerId(), watchedFolder.getId(), file, content));
         } catch (GoogleDriveUnavailableException | DriveAuthorizationRevokedException outage) {
             throw outage;

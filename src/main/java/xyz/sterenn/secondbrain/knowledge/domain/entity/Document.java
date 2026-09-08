@@ -66,8 +66,8 @@ public class Document {
     @Column(name = "drive_web_view_link", columnDefinition = "text")
     private String driveWebViewLink;
 
-    // Nothing reads it before DRIVE-5: it is stored now because a column added later would
-    // mean walking the whole Drive again for the documents already imported.
+    // What tells a Google Doc that moved from one that did not: its export is rebuilt on every
+    // call, so its checksum says nothing about whether its content has changed.
     @Column(name = "drive_modified_time")
     private Instant driveModifiedTime;
 
@@ -134,6 +134,40 @@ public class Document {
         this.driveWebViewLink = provenance.webViewLink();
         this.driveModifiedTime = provenance.modifiedTime();
         this.watchedFolderId = watchedFolder;
+    }
+
+    /**
+     * The same Drive file, handed over again because Drive says it moved. The modification time
+     * travels with the content: it alone tells the next import that this version is already in,
+     * a Google Doc exporting into a different archive at every single call.
+     */
+    public void reimported(
+            String filename,
+            DocumentFormat format,
+            Checksum checksum,
+            long sizeBytes,
+            DriveProvenance provenance,
+            UUID watchedFolderId) {
+        if (provenance == null || !provenance.fileId().equals(this.driveFileId)) {
+            throw new IllegalStateException(
+                    "A document is re-imported from the Drive file it came from: " + this.driveFileId);
+        }
+        replaceContent(filename, format, checksum, sizeBytes);
+        this.driveWebViewLink = provenance.webViewLink();
+        this.driveModifiedTime = provenance.modifiedTime();
+        this.watchedFolderId = requireWatchedFolder(watchedFolderId);
+    }
+
+    /**
+     * Drive says the file moved while its content did not: the time alone is written, so the
+     * next import weighs it against what Drive tells now rather than against a time the base
+     * would otherwise keep for ever.
+     */
+    public void movedAt(Instant modifiedTime) {
+        if (modifiedTime == null) {
+            throw new IllegalArgumentException("The modification time a Drive file moved to is required");
+        }
+        this.driveModifiedTime = modifiedTime;
     }
 
     /**

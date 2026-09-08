@@ -376,7 +376,7 @@ class WatchedFolderTest {
     }
 
     private static DriveFile aDriveFile(String driveFileId, String filename) {
-        return new DriveFile(driveFileId, filename, DocumentFormat.PDF, 42L, null, null);
+        return DriveFile.downloaded(driveFileId, filename, DocumentFormat.PDF, 42L, null, null);
     }
 
     private void importADocument(UUID watchedFolderId, String filename, String driveFileId) {

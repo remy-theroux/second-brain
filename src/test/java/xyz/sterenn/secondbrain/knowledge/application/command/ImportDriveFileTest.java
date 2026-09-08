@@ -24,10 +24,12 @@ import software.amazon.awssdk.services.s3.S3Client;
 import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDriveContentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentSource;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
@@ -55,7 +57,11 @@ class ImportDriveFileTest {
 
     private static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
 
+    private static final Instant MODIFIED_LATER = MODIFIED_TIME.plus(Duration.ofHours(1));
+
     private static final byte[] REPORT = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
+
+    private static final byte[] REVISED_REPORT = "le contenu revu du rapport".getBytes(StandardCharsets.UTF_8);
 
     /** Nothing is expected on the queue: long enough for an announcement to arrive, short enough to pay. */
     private static final Duration SILENCE = Duration.ofSeconds(1);
@@ -94,12 +100,8 @@ class ImportDriveFileTest {
         recordingNotificationSender.clear();
         alice = AccountFixture.registerVerified(commandBus, recordingNotificationSender, EMAIL, "chevalpile42");
         amqpAdmin.declareQueue(new Queue(OBSERVATION));
-        amqpAdmin.declareBinding(new Binding(
-                OBSERVATION,
-                Binding.DestinationType.QUEUE,
-                AmqpConfiguration.EVENTS_EXCHANGE,
-                "knowledge.document.uploaded",
-                null));
+        observe("knowledge.document.uploaded");
+        observe("knowledge.document-content.replaced");
     }
 
     @AfterEach
@@ -178,6 +180,92 @@ class ImportDriveFileTest {
         assertThat(nothingAnnounced()).isTrue();
     }
 
+    /**
+     * Drive tells no readable modification time now and then, and the base stores none: read as
+     * an immobility, that document would never be re-imported again, whatever Drive says later.
+     */
+    @Test
+    void re_imports_a_file_whose_first_import_stored_no_modification_time() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT, null), REPORT));
+        UUID imported = onlyDocument().getId();
+        assertThat(announcement()).isEqualTo(imported);
+
+        commandBus.dispatch(new ImportDriveFile(
+                alice, NOTES, aDriveFile("f1", "rapport.txt", REVISED_REPORT, MODIFIED_TIME), REVISED_REPORT));
+
+        assertThat(onlyDocument().getChecksum()).isEqualTo(Checksum.of(REVISED_REPORT));
+        assertThat(replacement()).isEqualTo(imported);
+    }
+
+    /** Left unwritten, the stored time would drift from Drive's for as long as the content holds. */
+    @Test
+    void records_the_new_modification_time_of_a_file_whose_content_did_not_move() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        assertThat(announcement()).isNotNull();
+
+        commandBus.dispatch(
+                new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT, MODIFIED_LATER), REPORT));
+
+        assertThat(onlyDocument().getDriveProvenance())
+                .map(DriveProvenance::modifiedTime)
+                .contains(MODIFIED_LATER);
+    }
+
+    /**
+     * The guard that keeps a binary out of the drift a Google Doc's export lives in: Drive says
+     * the file moved, its bytes say otherwise, and its bytes are the ones to be believed here.
+     */
+    @Test
+    void re_imports_nothing_of_a_file_whose_date_moved_without_its_content() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        UUID imported = onlyDocument().getId();
+        assertThat(announcement()).isEqualTo(imported);
+
+        commandBus.dispatch(
+                new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT, MODIFIED_LATER), REPORT));
+
+        assertThat(onlyDocument().getChecksum()).isEqualTo(Checksum.of(REPORT));
+        assertThat(nothingAnnounced()).isTrue();
+    }
+
+    @Test
+    void re_imports_a_file_whose_content_moved_with_its_date() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        UUID imported = onlyDocument().getId();
+        assertThat(announcement()).isEqualTo(imported);
+
+        commandBus.dispatch(new ImportDriveFile(
+                alice, NOTES, aDriveFile("f1", "rapport.txt", REVISED_REPORT, MODIFIED_LATER), REVISED_REPORT));
+
+        assertThat(onlyDocument().getChecksum()).isEqualTo(Checksum.of(REVISED_REPORT));
+        assertThat(documentStorage.read(imported)).contains(REVISED_REPORT);
+        assertThat(replacement()).isEqualTo(imported);
+    }
+
+    /**
+     * Read before written, as the manual replacement does: left to the unique constraint, the
+     * refusal would come back as an unexplained « ce fichier n'a pas pu être importé ».
+     */
+    @Test
+    void refuses_a_re_import_whose_new_content_another_document_already_holds() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        assertThat(announcement()).isNotNull();
+        commandBus.dispatch(new UploadDocument(alice, "rapport-revu.txt", REVISED_REPORT));
+        assertThat(announcement()).isNotNull();
+
+        assertThatExceptionOfType(DuplicateDriveContentException.class)
+                .isThrownBy(() -> commandBus.dispatch(new ImportDriveFile(
+                        alice,
+                        NOTES,
+                        aDriveFile("f1", "rapport.txt", REVISED_REPORT, MODIFIED_LATER),
+                        REVISED_REPORT)));
+
+        assertThat(documentRepository.findByOwnerIdAndDriveFileId(alice, "f1"))
+                .get()
+                .satisfies(document -> assertThat(document.getChecksum()).isEqualTo(Checksum.of(REPORT)));
+        assertThat(nothingAnnounced()).isTrue();
+    }
+
     @Test
     void refuses_a_content_a_document_already_carries_from_another_drive_file() {
         commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
@@ -193,14 +281,23 @@ class ImportDriveFileTest {
         assertThat(nothingAnnounced()).isTrue();
     }
 
+    private void observe(String routingKey) {
+        amqpAdmin.declareBinding(new Binding(
+                OBSERVATION, Binding.DestinationType.QUEUE, AmqpConfiguration.EVENTS_EXCHANGE, routingKey, null));
+    }
+
     private static DriveFile aDriveFile(String fileId, String filename, byte[] content) {
-        return new DriveFile(
+        return aDriveFile(fileId, filename, content, MODIFIED_TIME);
+    }
+
+    private static DriveFile aDriveFile(String fileId, String filename, byte[] content, Instant modifiedTime) {
+        return DriveFile.downloaded(
                 fileId,
                 filename,
                 DocumentFormat.fromFilename(filename),
                 content.length,
                 "https://drive.google.com/file/d/" + fileId + "/view",
-                MODIFIED_TIME);
+                modifiedTime);
     }
 
     private Document onlyDocument() {
@@ -214,6 +311,13 @@ class ImportDriveFileTest {
                 OBSERVATION, Duration.ofSeconds(5).toMillis());
         assertThat(received).isInstanceOf(DocumentUploaded.class);
         return ((DocumentUploaded) received).documentId();
+    }
+
+    private UUID replacement() {
+        Object received = rabbitTemplate.receiveAndConvert(
+                OBSERVATION, Duration.ofSeconds(5).toMillis());
+        assertThat(received).isInstanceOf(DocumentContentReplaced.class);
+        return ((DocumentContentReplaced) received).documentId();
     }
 
     private boolean nothingAnnounced() {
