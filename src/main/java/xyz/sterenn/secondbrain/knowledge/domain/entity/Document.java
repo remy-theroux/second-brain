@@ -217,6 +217,15 @@ public class Document {
         this.filename = boundedFilename(filename);
     }
 
+    /**
+     * The name Drive tells, weighed against the one the base holds — on the bounded form, and not
+     * on the raw one: a name with a leading space, or longer than its column, would never be
+     * equal to what was written, and the mirror would rename it at every single round.
+     */
+    public boolean isNamed(String filename) {
+        return this.filename.equals(boundedFilename(filename));
+    }
+
     private static String boundedFilename(String filename) {
         if (filename == null || filename.isBlank()) {
             throw new IllegalArgumentException("A filename is required");

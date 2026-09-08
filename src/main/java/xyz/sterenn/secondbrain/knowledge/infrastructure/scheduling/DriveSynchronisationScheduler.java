@@ -12,8 +12,11 @@ import xyz.sterenn.secondbrain.shared.bus.CommandBus;
  * listener, which consumes one message at a time, so two rounds never overlap — and a scheduled
  * method that synchronised on the spot would hold its thread for the whole round.
  *
- * <p>{@code fixedDelay} and never {@code fixedRate}: the second one starts a round every N minutes
- * even when the previous one is still going.
+ * <p>{@code fixedDelay} therefore keeps nothing from overlapping here, and is no different from a
+ * {@code fixedRate}: this method publishes and hands its thread straight back. What serialises the
+ * rounds is the {@code concurrency: 1} of the listener, and the price of that is a queue: a round
+ * lasting longer than the interval piles requests up without a bound, and the worker then
+ * synchronises without pause.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("worker")

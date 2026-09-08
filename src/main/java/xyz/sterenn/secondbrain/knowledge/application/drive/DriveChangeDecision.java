@@ -65,7 +65,7 @@ public sealed interface DriveChangeDecision {
         if (document.movedInDriveSinceTheImport(file.modifiedTime())) {
             return new Reingest(document, file);
         }
-        if (!file.documentName().equals(document.getFilename())) {
+        if (!document.isNamed(file.documentName())) {
             return new Rename(document, file.documentName());
         }
         return NOTHING;

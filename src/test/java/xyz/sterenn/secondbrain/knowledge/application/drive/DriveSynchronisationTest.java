@@ -63,10 +63,7 @@ class DriveSynchronisationTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
-    /**
-     * A round that changes nothing leaves nothing to wait for: the assertion is made after the
-     * message has had the time to be consumed, and it is the absence of a change that is read.
-     */
+    /** What a round needs to reach its end once its page of changes has been read. */
     private static final Duration LET_THE_ROUND_RUN = Duration.ofSeconds(3);
 
     private static final String EMAIL = "alice@exemple.fr";
@@ -266,16 +263,24 @@ class DriveSynchronisationTest {
         assertThat(fakeGoogleDrive.readPageTokens()).containsExactly(KEPT_TOKEN);
     }
 
+    /** The Drive falls over after the page of changes was read, so the round is known to have run. */
     @Test
     void keeps_the_previous_page_token_when_the_round_failed() {
         aDocumentImportedFrom("f1", "rapport.md", DocumentFormat.MARKDOWN, FakeGoogleDrive.MODIFIED_TIME);
-        fakeGoogleDrive.willBeUnavailable();
+        fakeGoogleDrive.putFile("a1", "f1", "rapport.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.willHaveBeenModifiedAt("f1", EDITED_LATER);
+        fakeGoogleDrive.willReportChanges(fakeGoogleDrive.changeOn("f1", "a1"));
+        fakeGoogleDrive.willBecomeUnavailableAfter(0);
 
         requestASynchronisation();
-        letTheRoundRun();
+        letTheChangePageBeRead();
 
         assertThat(keptPageToken()).contains(KEPT_TOKEN);
-        assertThat(documents()).hasSize(1);
+        assertThat(documents())
+                .singleElement()
+                .extracting(document -> document.getDriveProvenance().orElseThrow())
+                .extracting(DriveProvenance::modifiedTime)
+                .isEqualTo(FakeGoogleDrive.MODIFIED_TIME);
     }
 
     /**
@@ -290,7 +295,7 @@ class DriveSynchronisationTest {
         fakeGoogleDrive.willBeUnavailableWhileResolvingParents();
 
         requestASynchronisation();
-        letTheRoundRun();
+        letTheChangePageBeRead();
 
         assertThat(documents())
                 .singleElement()
@@ -391,17 +396,14 @@ class DriveSynchronisationTest {
                 new DriveSynchronisationRequested(alice, Instant.now()));
     }
 
-    private void letTheRoundRun() {
-        await().pollDelay(LET_THE_ROUND_RUN).atMost(TIMEOUT).until(() -> true);
-    }
-
     /**
-     * An absence needs a positive signal to be read at all: without one, a message not yet
-     * consumed would let every assertion below pass on an empty round.
+     * An absence needs a positive signal to be read at all: on a delay alone, a message not yet
+     * consumed would let every assertion below pass on a round that never ran. The page of
+     * changes read is that signal, and the delay only covers what the round does after it.
      */
     private void letTheChangePageBeRead() {
         await().atMost(TIMEOUT).until(() -> !fakeGoogleDrive.readPageTokens().isEmpty());
-        letTheRoundRun();
+        await().pollDelay(LET_THE_ROUND_RUN).atMost(TIMEOUT).until(() -> true);
     }
 
     private void aDocumentImportedFrom(String fileId, String filename, DocumentFormat format, Instant modifiedTime) {

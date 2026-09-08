@@ -195,6 +195,45 @@ class DriveChangeDecisionTest {
     }
 
     /**
+     * The name is compared on the bounded form the column holds: on the raw one, this file would
+     * be renamed at every round, for ever, writing the very same value each time.
+     */
+    @Test
+    void does_nothing_for_a_file_whose_name_the_base_only_holds_trimmed() {
+        Document document = Document.importedFromDrive(
+                OWNER,
+                " rapport.pdf ",
+                DocumentFormat.PDF,
+                CHECKSUM,
+                1024,
+                new DriveProvenance(FILE_ID, LINK, IMPORTED_AT),
+                NOTES);
+
+        DriveChangeDecision decision = DriveChangeDecision.decide(
+                aChangeOn(aBinary(" rapport.pdf ", IMPORTED_AT)), Optional.of(document), inNotes());
+
+        assertThat(decision).isEqualTo(DriveChangeDecision.NOTHING);
+    }
+
+    @Test
+    void does_nothing_for_a_file_whose_name_outgrows_its_column() {
+        String tooLong = "r".repeat(Document.MAX_FILENAME_LENGTH) + "-de-trop.pdf";
+        Document document = Document.importedFromDrive(
+                OWNER,
+                tooLong,
+                DocumentFormat.PDF,
+                CHECKSUM,
+                1024,
+                new DriveProvenance(FILE_ID, LINK, IMPORTED_AT),
+                NOTES);
+
+        DriveChangeDecision decision =
+                DriveChangeDecision.decide(aChangeOn(aBinary(tooLong, IMPORTED_AT)), Optional.of(document), inNotes());
+
+        assertThat(decision).isEqualTo(DriveChangeDecision.NOTHING);
+    }
+
+    /**
      * The costly invariant: an export is rebuilt on every call, so a Doc whose modification time
      * has not moved must not even be exported — paying the transfer to discard it every run.
      */

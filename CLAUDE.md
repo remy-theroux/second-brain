@@ -810,7 +810,7 @@ synchronisations échoueraient en boucle.
 
 **Le jeton de page ne se conserve qu'après un tour complet réussi** — `RecordDriveChangePosition`,
 en dernière étape. Conservé au fil de l'eau, il ferait perdre les changements d'une page dont le
-traitement a échoué. Il vit dans `knowledge_drive_connections.changes_page_token` (V18), en
+traitement a échoué. Il vit dans `knowledge_drive_connections.changes_page_token` (V19), en
 `text` : Google ne documente aucune longueur, et une troncature silencieuse rendrait un jeton
 refusé, donc un balayage complet.
 
@@ -838,12 +838,23 @@ laissait une base vide que rien n'aurait remplie, sous une connexion affichée a
 `RequestDriveSynchronisation`, dont le handler annonce un `DriveSynchronisationRequested` par
 connexion active ; c'est le listener qui synchronise. Deux raisons : le travail appartient à la
 queue du contexte, à `concurrency: 1`, qui sérialise donc les tours ; et une tâche qui
-synchroniserait sur place tiendrait son thread pendant tout le tour. **`fixedDelay` et non
-`fixedRate`** : le second lancerait un tour toutes les N minutes même si le précédent n'est pas
-fini. L'intervalle est `secondbrain.drive.synchronisation-interval`
+synchroniserait sur place tiendrait son thread pendant tout le tour.
+
+**Et `fixedDelay` n'empêche ici aucun chevauchement** — la méthode planifiée publie et rend la
+main aussitôt, donc `fixedDelay` et `fixedRate` y sont strictement équivalents. **Ce qui sérialise
+réellement, c'est `concurrency: 1`**, et le prix en est une file : un tour plus long que
+l'intervalle laisse les demandes s'accumuler **sans borne**, et le worker synchronise alors en
+permanence. Sur un Drive de plusieurs centaines de fichiers, ce n'est pas théorique.
+
+L'intervalle est `secondbrain.drive.synchronisation-interval`
 (`SECONDBRAIN_DRIVE_SYNC_INTERVAL`, 15 minutes par défaut), au format **ISO-8601** — `PT15M` et
 jamais `15m`, que `@Scheduled` lit comme un nombre de millisecondes. Seul le conteneur `worker`
 porte l'horloge : `@Profile("worker")`, et `@EnableScheduling` avec elle.
+
+**Le nom se compare sur la forme bornée**, celle que porte la colonne, jamais sur le nom brut de
+Drive (`Document.isNamed`). Un fichier nommé `" rapport.md"`, ou dont le nom dépasse les 255
+caractères, ne serait sinon jamais égal à ce qui a été écrit : chaque tour dispatcherait un
+renommage qui réécrit la même valeur, indéfiniment.
 
 **`RenameDocument` est la seule commande du contexte sans route HTTP.** Aucune commande existante
 ne savait renommer sans revectoriser — `ReplaceDocumentContent` court-circuite sur empreinte
@@ -865,6 +876,17 @@ renomme un document, ce qui n'est plus vrai. À savoir, pas à corriger.
 Drive elle couvre) et `RecordDriveChangePosition` (le jeton, `null` valant « position perdue,
 un balayage complet est dû »). Le synchroniseur vit hors des bus et n'écrit donc rien lui-même ;
 toute écriture reste une commande, une transaction courte chacune.
+
+**Deux trous du miroir, assumés, qu'il vaut mieux avoir lus.** Un Google Doc dont Drive ne rend
+**pas de `modifiedTime` lisible** n'est plus jamais mis à jour : `movedInDriveSinceTheImport` lit
+une date absente comme une immobilité, définitivement et sans trace. C'est le pendant symétrique
+du document que la base ne date pas, lui toujours ré-ingéré, et le choix se défend — l'inverse
+réexporterait ce Doc à chaque tour, ce que l'invariant coûteux interdit. Mais c'est bien un trou
+dans « ce que je lis et ce que l'agent cite sont la même chose ». Et **supprimer un fichier du
+Drive peut supprimer un document déposé à la main** : un dépôt manuel dont le contenu coïncide
+avec un fichier Drive s'est vu attacher sa provenance à l'import (cas 2 de la section
+précédente), donc il tombe sous la règle du miroir comme les autres. C'est cohérent, ça n'est
+écrit nulle part ailleurs, et c'est une perte de données qui surprendra.
 
 **Deux décisions attendent leur ADR** et sont signalées dans la PR : la synchronisation sur
 horloge, et la règle du miroir elle-même — un fichier retiré du Drive fait disparaître son
@@ -1374,7 +1396,7 @@ famille dans ce cas.
 La connexion à un Drive vit dans `knowledge_drive_connections` — `owner_id` **`UNIQUE`**, ce qui
 pose la règle « une connexion par compte » là où elle ne se contourne pas — et la demande
 d'autorisation en cours dans `knowledge_drive_authorization_requests`. Les deux cascadent à la
-suppression du compte. La connexion porte en plus `changes_page_token` (V18) : où en est la lecture
+suppression du compte. La connexion porte en plus `changes_page_token` (V19) : où en est la lecture
 du flux de changements, écrit **après** un tour de synchronisation complet, `NULL` tant qu'aucun
 n'a eu lieu — auquel cas un balayage complet est dû.
 
