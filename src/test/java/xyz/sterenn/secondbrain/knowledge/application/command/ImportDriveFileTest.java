@@ -211,6 +211,61 @@ class ImportDriveFileTest {
                 .contains(MODIFIED_LATER);
     }
 
+    /**
+     * The guard that keeps a binary out of the drift a Google Doc's export lives in: Drive says
+     * the file moved, its bytes say otherwise, and its bytes are the ones to be believed here.
+     */
+    @Test
+    void re_imports_nothing_of_a_file_whose_date_moved_without_its_content() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        UUID imported = onlyDocument().getId();
+        assertThat(announcement()).isEqualTo(imported);
+
+        commandBus.dispatch(
+                new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT, MODIFIED_LATER), REPORT));
+
+        assertThat(onlyDocument().getChecksum()).isEqualTo(Checksum.of(REPORT));
+        assertThat(nothingAnnounced()).isTrue();
+    }
+
+    @Test
+    void re_imports_a_file_whose_content_moved_with_its_date() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        UUID imported = onlyDocument().getId();
+        assertThat(announcement()).isEqualTo(imported);
+
+        commandBus.dispatch(new ImportDriveFile(
+                alice, NOTES, aDriveFile("f1", "rapport.txt", REVISED_REPORT, MODIFIED_LATER), REVISED_REPORT));
+
+        assertThat(onlyDocument().getChecksum()).isEqualTo(Checksum.of(REVISED_REPORT));
+        assertThat(documentStorage.read(imported)).contains(REVISED_REPORT);
+        assertThat(replacement()).isEqualTo(imported);
+    }
+
+    /**
+     * Read before written, as the manual replacement does: left to the unique constraint, the
+     * refusal would come back as an unexplained « ce fichier n'a pas pu être importé ».
+     */
+    @Test
+    void refuses_a_re_import_whose_new_content_another_document_already_holds() {
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        assertThat(announcement()).isNotNull();
+        commandBus.dispatch(new UploadDocument(alice, "rapport-revu.txt", REVISED_REPORT));
+        assertThat(announcement()).isNotNull();
+
+        assertThatExceptionOfType(DuplicateDriveContentException.class)
+                .isThrownBy(() -> commandBus.dispatch(new ImportDriveFile(
+                        alice,
+                        NOTES,
+                        aDriveFile("f1", "rapport.txt", REVISED_REPORT, MODIFIED_LATER),
+                        REVISED_REPORT)));
+
+        assertThat(documentRepository.findByOwnerIdAndDriveFileId(alice, "f1"))
+                .get()
+                .satisfies(document -> assertThat(document.getChecksum()).isEqualTo(Checksum.of(REPORT)));
+        assertThat(nothingAnnounced()).isTrue();
+    }
+
     @Test
     void refuses_a_content_a_document_already_carries_from_another_drive_file() {
         commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));

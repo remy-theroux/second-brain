@@ -123,6 +123,10 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
             return;
         }
 
+        documentRepository.findByOwnerIdAndChecksum(command.ownerId(), checksum).ifPresent(other -> {
+            throw new DuplicateDriveContentException();
+        });
+
         document.reimported(
                 file.name(),
                 file.format(),
