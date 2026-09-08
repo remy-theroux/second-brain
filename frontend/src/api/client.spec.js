@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   askAgent,
+  browseDriveFolders,
   deleteDocument,
+  disconnectDrive,
   DuplicateDocumentError,
   fetchDocument,
   fetchDocumentContent,
+  fetchDriveConnection,
+  importWatchedFolder,
   listDocuments,
+  listWatchedFolders,
   register,
+  startDriveAuthorization,
   UnauthorizedError,
+  unwatchDriveFolder,
   uploadDocument,
   ValidationError,
+  watchDriveFolder,
 } from '@/api/client'
 
 // Minimal response: only the status and the JSON body matter for this module.
@@ -461,5 +469,383 @@ describe('conversation', () => {
     await expect(
       askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} }),
     ).rejects.toThrow("La conversation n'a pas pu démarrer.")
+  })
+})
+
+describe('Google Drive', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  describe('starting an authorization', () => {
+    it('posts on the authorizations route and returns the consent URL', async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(201, { authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' }),
+      )
+
+      const url = await startDriveAuthorization('jeton-abc')
+
+      const [route, options] = fetch.mock.calls[0]
+      expect(route).toBe('/api/drive/authorizations')
+      expect(options.method).toBe('POST')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(url).toBe('https://accounts.google.com/o/oauth2/v2/auth?x=1')
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(startDriveAuthorization('jeton-perime')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(startDriveAuthorization('jeton-abc')).rejects.toThrow(
+        "La connexion à Google Drive n'a pas pu démarrer.",
+      )
+    })
+  })
+
+  describe('reading the connection', () => {
+    it('reads the connection with the bearer token', async () => {
+      const connection = {
+        googleEmail: 'alice@example.com',
+        status: 'CONNECTED',
+        connectedAt: '2026-09-08T10:00:00Z',
+      }
+      fetch.mockResolvedValue(jsonResponse(200, connection))
+
+      const result = await fetchDriveConnection('jeton-abc')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/connection')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(result).toEqual(connection)
+    })
+
+    // No Drive connected is the state of every new account: raising here would show a
+    // failure message on the first opening of the screen.
+    it('reads a 404 as no Drive connected, not as a failure', async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(404, { message: "Aucun compte Google Drive n'est connecté." }),
+      )
+
+      await expect(fetchDriveConnection('jeton-abc')).resolves.toBeNull()
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(fetchDriveConnection('jeton-perime')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('translates any other failure into a global message', async () => {
+      fetch.mockResolvedValue(jsonResponse(500, null))
+
+      await expect(fetchDriveConnection('jeton-abc')).rejects.toThrow(
+        "La connexion Google Drive n'a pas pu être lue.",
+      )
+    })
+  })
+
+  describe('disconnecting the Drive', () => {
+    it('sends a DELETE on the connection, with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(204, null))
+
+      await disconnectDrive('jeton-abc')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/connection')
+      expect(options.method).toBe('DELETE')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(disconnectDrive('jeton-perime')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it("displays the server's message as is when no connection is there any more", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(404, { message: "Aucun compte Google Drive n'est connecté." }),
+      )
+
+      await expect(disconnectDrive('jeton-abc')).rejects.toThrow(
+        "Aucun compte Google Drive n'est connecté.",
+      )
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(disconnectDrive('jeton-abc')).rejects.toThrow(
+        "Le compte Google Drive n'a pas pu être déconnecté.",
+      )
+    })
+  })
+
+  describe('browsing the folders', () => {
+    it('reads the root when no parent is given', async () => {
+      const folders = [{ id: 'folder-1', name: 'Factures' }]
+      fetch.mockResolvedValue(jsonResponse(200, folders))
+
+      const result = await browseDriveFolders('jeton-abc')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/folders')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(result).toEqual(folders)
+    })
+
+    it('carries the parent as a query parameter, encoded', async () => {
+      fetch.mockResolvedValue(jsonResponse(200, []))
+
+      await browseDriveFolders('jeton-abc', 'a b/c')
+
+      expect(fetch.mock.calls[0][0]).toBe('/api/drive/folders?parent=a%20b%2Fc')
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(browseDriveFolders('jeton-perime')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it("displays the server's message as is when no Drive is connected", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(409, {
+          message: 'Connectez un compte Google Drive pour parcourir vos dossiers.',
+        }),
+      )
+
+      await expect(browseDriveFolders('jeton-abc')).rejects.toThrow(
+        'Connectez un compte Google Drive pour parcourir vos dossiers.',
+      )
+    })
+
+    it("displays the server's message as is when Google is unreachable", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(503, { message: 'Google Drive est momentanément injoignable.' }),
+      )
+
+      await expect(browseDriveFolders('jeton-abc')).rejects.toThrow(
+        'Google Drive est momentanément injoignable.',
+      )
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(browseDriveFolders('jeton-abc')).rejects.toThrow(
+        "Vos dossiers Google Drive n'ont pas pu être parcourus.",
+      )
+    })
+  })
+
+  describe('listing the watched folders', () => {
+    it('reads the list with the bearer token', async () => {
+      const folders = [{ id: 'watched-1', name: 'Factures', documentCount: 3, rejections: [] }]
+      fetch.mockResolvedValue(jsonResponse(200, folders))
+
+      const result = await listWatchedFolders('jeton-abc')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/watched-folders')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(result).toEqual(folders)
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(listWatchedFolders('jeton-perime')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('translates any other failure into a global message', async () => {
+      fetch.mockResolvedValue(jsonResponse(500, null))
+
+      await expect(listWatchedFolders('jeton-abc')).rejects.toThrow(
+        "La liste des dossiers surveillés n'a pas pu être chargée.",
+      )
+    })
+  })
+
+  describe('watching a folder', () => {
+    it('posts the folder identifier as JSON, with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(201, null))
+
+      await watchDriveFolder('jeton-abc', 'folder-1')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/watched-folders')
+      expect(options.method).toBe('POST')
+      expect(options.headers['Content-Type']).toBe('application/json')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(JSON.parse(options.body)).toEqual({ folderId: 'folder-1' })
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(watchDriveFolder('jeton-perime', 'folder-1')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('translates a 422 into per-field errors', async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(422, { errors: { folderId: 'Le dossier à surveiller est obligatoire.' } }),
+      )
+
+      try {
+        await watchDriveFolder('jeton-abc', '')
+        expect.unreachable('the refusal should have been raised')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        expect(error.errors).toEqual({ folderId: 'Le dossier à surveiller est obligatoire.' })
+      }
+    })
+
+    it("displays the server's message as is for a folder already covered", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(409, { message: 'Ce dossier est déjà couvert par un dossier surveillé.' }),
+      )
+
+      await expect(watchDriveFolder('jeton-abc', 'folder-1')).rejects.toThrow(
+        'Ce dossier est déjà couvert par un dossier surveillé.',
+      )
+    })
+
+    it("displays the server's message as is for an unknown folder", async () => {
+      fetch.mockResolvedValue(jsonResponse(404, { message: 'Ce dossier est introuvable.' }))
+
+      await expect(watchDriveFolder('jeton-abc', 'folder-1')).rejects.toThrow(
+        'Ce dossier est introuvable.',
+      )
+    })
+
+    it("displays the server's message as is when Google is unreachable", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(503, { message: 'Google Drive est momentanément injoignable.' }),
+      )
+
+      await expect(watchDriveFolder('jeton-abc', 'folder-1')).rejects.toThrow(
+        'Google Drive est momentanément injoignable.',
+      )
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(watchDriveFolder('jeton-abc', 'folder-1')).rejects.toThrow(
+        "Ce dossier n'a pas pu être surveillé.",
+      )
+    })
+  })
+
+  describe('unwatching a folder', () => {
+    it('sends a DELETE on the watched folder, with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(204, null))
+
+      await unwatchDriveFolder('jeton-abc', 'watched-1')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/watched-folders/watched-1')
+      expect(options.method).toBe('DELETE')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(unwatchDriveFolder('jeton-perime', 'watched-1')).rejects.toThrow(
+        UnauthorizedError,
+      )
+    })
+
+    it("displays the server's message as is for a folder that cannot be found", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(404, { message: 'Ce dossier surveillé est introuvable.' }),
+      )
+
+      await expect(unwatchDriveFolder('jeton-abc', 'watched-1')).rejects.toThrow(
+        'Ce dossier surveillé est introuvable.',
+      )
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(unwatchDriveFolder('jeton-abc', 'watched-1')).rejects.toThrow(
+        "Ce dossier n'a pas pu être retiré de la surveillance.",
+      )
+    })
+  })
+
+  describe('importing a watched folder', () => {
+    it('posts on the import route, with the bearer token', async () => {
+      fetch.mockResolvedValue(jsonResponse(202, null))
+
+      await importWatchedFolder('jeton-abc', 'watched-1')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/drive/watched-folders/watched-1/import')
+      expect(options.method).toBe('POST')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(jsonResponse(401, null))
+
+      await expect(importWatchedFolder('jeton-perime', 'watched-1')).rejects.toThrow(
+        UnauthorizedError,
+      )
+    })
+
+    it("displays the server's message as is for a folder that cannot be found", async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(404, { message: 'Ce dossier surveillé est introuvable.' }),
+      )
+
+      await expect(importWatchedFolder('jeton-abc', 'watched-1')).rejects.toThrow(
+        'Ce dossier surveillé est introuvable.',
+      )
+    })
+
+    it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(importWatchedFolder('jeton-abc', 'watched-1')).rejects.toThrow(
+        "L'import de ce dossier n'a pas pu être demandé.",
+      )
+    })
   })
 })

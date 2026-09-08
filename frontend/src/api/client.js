@@ -260,3 +260,169 @@ export async function askAgent(token, question, { onToken, onSources, signal }) 
   }
   return verdict
 }
+
+/**
+ * Reads the refusal of a Drive route: the server's message when there is one, the caller's
+ * own message otherwise. The body is not guaranteed to be JSON (proxy down, HTML 502…), and a
+ * parse that fails must not replace the business message with a syntax error.
+ */
+async function driveRefusal(response, fallback) {
+  const payload = await response.json().catch(() => null)
+  return new Error(payload?.message ?? fallback)
+}
+
+/**
+ * Opens a Drive authorization and returns the Google consent URL to send the browser to.
+ * The server answers 201 with that single URL: it is what the screen needs, not the envelope.
+ */
+export async function startDriveAuthorization(token) {
+  const response = await fetch('/api/drive/authorizations', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (!response.ok) {
+    throw await driveRefusal(response, "La connexion à Google Drive n'a pas pu démarrer.")
+  }
+  return (await response.json()).authorizationUrl
+}
+
+/**
+ * Reads the connected Drive account, or `null` when there is none. The 404 is not a failure:
+ * having connected no Drive is the ordinary state of an account, and showing an error message
+ * there would greet every new user with one.
+ */
+export async function fetchDriveConnection(token) {
+  const response = await fetch('/api/drive/connection', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (response.status === 404) {
+    return null
+  }
+  if (!response.ok) {
+    throw new Error("La connexion Google Drive n'a pas pu être lue.")
+  }
+  return response.json()
+}
+
+/** Disconnects the Drive account. Returns nothing: the server answers 204. */
+export async function disconnectDrive(token) {
+  const response = await fetch('/api/drive/connection', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.ok) {
+    return
+  }
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  // The 404 carries its own message, displayable as is.
+  throw await driveRefusal(response, "Le compte Google Drive n'a pas pu être déconnecté.")
+}
+
+/**
+ * Lists the Drive folders directly under `parentId`, or under the root when it is omitted.
+ * One level at a time: the whole tree is never walked.
+ */
+export async function browseDriveFolders(token, parentId = '') {
+  const query = parentId ? `?parent=${encodeURIComponent(parentId)}` : ''
+  const response = await fetch(`/api/drive/folders${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (!response.ok) {
+    // The 409 (no Drive connected, or an authorization that no longer holds) and the 503
+    // (Google unreachable) each carry their message, displayable as is.
+    throw await driveRefusal(response, "Vos dossiers Google Drive n'ont pas pu être parcourus.")
+  }
+  return response.json()
+}
+
+/** Lists the watched folders, with the outcome of their last import. */
+export async function listWatchedFolders(token) {
+  const response = await fetch('/api/drive/watched-folders', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (!response.ok) {
+    throw new Error("La liste des dossiers surveillés n'a pas pu être chargée.")
+  }
+  return response.json()
+}
+
+/** Watches a Drive folder. Returns nothing: the server answers 201 without a body. */
+export async function watchDriveFolder(token, folderId) {
+  const response = await fetch('/api/drive/watched-folders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ folderId }),
+  })
+
+  if (response.ok) {
+    return
+  }
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+
+  // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+  // must not replace the business message with a syntax error.
+  const payload = await response.json().catch(() => null)
+
+  if (response.status === 422) {
+    throw new ValidationError(payload?.errors ?? {})
+  }
+  // The 409 (already covered, or no Drive connected), the 404 (unknown folder) and the 503
+  // each carry their message, displayable as is.
+  throw new Error(payload?.message ?? "Ce dossier n'a pas pu être surveillé.")
+}
+
+/** Stops watching a folder. Returns nothing: the server answers 204. */
+export async function unwatchDriveFolder(token, id) {
+  const response = await fetch(`/api/drive/watched-folders/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.ok) {
+    return
+  }
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  throw await driveRefusal(response, "Ce dossier n'a pas pu être retiré de la surveillance.")
+}
+
+/**
+ * Asks for a watched folder to be imported. Returns nothing: the server answers 202, the walk
+ * not having even started when the answer leaves.
+ */
+export async function importWatchedFolder(token, id) {
+  const response = await fetch(`/api/drive/watched-folders/${id}/import`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.ok) {
+    return
+  }
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  throw await driveRefusal(response, "L'import de ce dossier n'a pas pu être demandé.")
+}
