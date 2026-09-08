@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
@@ -56,6 +57,12 @@ public class Document {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // The PUT route can mutate a document the worker is still processing: without this, the
+    // worker's final save would silently write the previous version's content back.
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     protected Document() {}
 
     private Document(UUID ownerId, String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
@@ -72,17 +79,33 @@ public class Document {
         if (ownerId == null) {
             throw new IllegalArgumentException("The document owner is required");
         }
+        return new Document(ownerId, boundedFilename(filename), format, checksum, requirePositive(sizeBytes));
+    }
+
+    public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
+        String bounded = boundedFilename(filename);
+        long size = requirePositive(sizeBytes);
+        this.filename = bounded;
+        this.format = format;
+        this.checksum = checksum;
+        this.sizeBytes = size;
+        this.status = DocumentStatus.PENDING;
+        this.errorMessage = null;
+    }
+
+    private static String boundedFilename(String filename) {
         if (filename == null || filename.isBlank()) {
             throw new IllegalArgumentException("A filename is required");
         }
+        String trimmed = filename.trim();
+        return trimmed.length() > MAX_FILENAME_LENGTH ? trimmed.substring(0, MAX_FILENAME_LENGTH) : trimmed;
+    }
+
+    private static long requirePositive(long sizeBytes) {
         if (sizeBytes <= 0) {
             throw new IllegalArgumentException("An empty document has nothing to bring to the knowledge base");
         }
-        String boundedFilename = filename.trim();
-        if (boundedFilename.length() > MAX_FILENAME_LENGTH) {
-            boundedFilename = boundedFilename.substring(0, MAX_FILENAME_LENGTH);
-        }
-        return new Document(ownerId, boundedFilename, format, checksum, sizeBytes);
+        return sizeBytes;
     }
 
     public void markTextExtracted() {
@@ -140,5 +163,9 @@ public class Document {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

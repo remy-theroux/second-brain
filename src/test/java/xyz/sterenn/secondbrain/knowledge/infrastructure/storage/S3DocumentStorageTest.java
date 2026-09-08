@@ -22,6 +22,8 @@ class S3DocumentStorageTest {
 
     private static final byte[] CONTENT = "le contenu d'origine".getBytes(StandardCharsets.UTF_8);
 
+    private static final byte[] REPLACEMENT = "le contenu suivant".getBytes(StandardCharsets.UTF_8);
+
     @Autowired
     private DocumentStorage documentStorage;
 
@@ -75,5 +77,26 @@ class S3DocumentStorageTest {
 
         assertThatThrownBy(() -> documentStorage.store(document, "autre chose".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void replaces_the_original_of_a_document() {
+        UUID document = UUID.randomUUID();
+        documentStorage.store(document, CONTENT);
+
+        documentStorage.replace(document, REPLACEMENT);
+
+        assertThat(documentStorage.read(document))
+                .hasValueSatisfying(reloaded -> assertThat(reloaded).isEqualTo(REPLACEMENT));
+    }
+
+    @Test
+    void writes_an_original_that_was_not_there() {
+        UUID document = UUID.randomUUID();
+
+        documentStorage.replace(document, REPLACEMENT);
+
+        assertThat(documentStorage.read(document))
+                .hasValueSatisfying(reloaded -> assertThat(reloaded).isEqualTo(REPLACEMENT));
     }
 }

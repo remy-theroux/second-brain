@@ -29,6 +29,11 @@ public class UnavailableDocumentStorageConfiguration {
         }
 
         @Override
+        public void replace(UUID documentId, byte[] content) {
+            throw unavailable();
+        }
+
+        @Override
         public void delete(UUID documentId) {
             throw unavailable();
         }

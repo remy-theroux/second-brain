@@ -43,6 +43,21 @@ class S3DocumentStorage implements DocumentStorage {
         }
     }
 
+    // No existence check, unlike store: PutObject overwrites, which is exactly what is wanted.
+    @Override
+    public void replace(UUID documentId, byte[] content) {
+        try {
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(key(documentId))
+                            .build(),
+                    RequestBody.fromBytes(content));
+        } catch (SdkException e) {
+            throw unavailable("replaced", e);
+        }
+    }
+
     // No catch for absence: DeleteObject returns 204 on a key that does not exist.
     @Override
     public void delete(UUID documentId) {
