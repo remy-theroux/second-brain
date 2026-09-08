@@ -196,6 +196,14 @@ public class Document {
         this.errorMessage = null;
     }
 
+    /**
+     * The name, and nothing else: neither the status — renaming a failed document does not
+     * repair it — nor the checksum, so nothing downstream has anything to redo.
+     */
+    public void rename(String filename) {
+        this.filename = boundedFilename(filename);
+    }
+
     private static String boundedFilename(String filename) {
         if (filename == null || filename.isBlank()) {
             throw new IllegalArgumentException("A filename is required");
