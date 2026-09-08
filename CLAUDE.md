@@ -576,9 +576,27 @@ qu'il doit reconnecter son compte — c'est ce que font déjà les deux contrôl
 cette livraison**. Chaque document importé repart en message distinct, avec son propre budget ;
 l'import ne paie que le balayage, les téléchargements et une écriture par fichier.
 
-**Ce que rien n'expose encore :** ni la provenance d'un document (`DocumentView` et
-`DocumentDetailView` l'ignorent), ni le bilan d'un import, ni ses rejets (`WatchedFolderView` ne
-les porte pas), et aucun écran n'appelle la route — c'est DRIVE-7.
+**Ce que l'API rend de tout ça.** `DocumentView` et `DocumentDetailView` portent la `source`
+(`MANUAL` ou `GOOGLE_DRIVE`) et, quand Drive en a rendu un, le lien d'ouverture — jamais
+l'identifiant du fichier Drive, dont aucun écran ne ferait rien. `WatchedFolderView` porte le
+bilan du dernier import (instant, statut, motif d'échec, absents tant qu'aucun import n'a eu
+lieu), le nombre de documents que le dossier a apportés et **ses rejets**, sans quoi le mot
+« consultables » ci-dessus ne voudrait rien dire. Un rejet ne rend que son nom de fichier et
+son motif, pour la même raison qu'un document ne rend pas son identifiant Drive.
+
+Les rejets voyagent **avec le dossier** plutôt que derrière une route à eux : ils sont chargés
+de toute façon (`@ElementCollection` en `EAGER`), ils se lisent à côté du bilan auquel ils
+appartiennent, et une liste de dossiers surveillés se compte sur les doigts d'une main.
+
+**Un document sait par quel dossier surveillé il est entré** — colonne `watched_folder_id`,
+posée à l'import et jamais après —, et c'est ce qui permet de compter. Le comptage est
+**une seule requête groupée** pour tous les dossiers du propriétaire : un `count` par dossier
+dans la boucle d'affichage serait autant de requêtes que de dossiers. Ce que ça ferme : le
+comptage ne se déduit pas du Drive, qu'il faudrait rebalayer pour savoir quels fichiers sont
+sous quel dossier.
+
+Ce qu'aucun écran ne fait encore : appeler ces routes — c'est DRIVE-7, et il est désormais
+**front seul**.
 
 ### Le flux du dépôt d'un document
 
@@ -628,9 +646,10 @@ mentionnée, et ne le sera pas : les `ON DELETE CASCADE` de ses tables l'emporte
 document, et ce handler n'a pas eu à changer quand elles sont arrivées.
 
 `GET /api/documents/{id}` rend un document **et ce qui en a été extrait** : le nom, le
-format, la typologie, le statut, le motif d'échec le cas échéant, et — quand elle existe —
-l'extraction propre à sa typologie. Une seule requête pour tout l'écran de détail, et non une
-route `/extraction` à part : celle-là aurait rendu `404` sur un document simplement en file
+format, la typologie, le statut, le motif d'échec le cas échéant, sa provenance (voir « Le
+flux de l'import d'un dossier surveillé »), et — quand elle existe — l'extraction propre à sa
+typologie. Une seule requête pour tout l'écran de détail, et non une route `/extraction` à
+part : celle-là aurait rendu `404` sur un document simplement en file
 d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le document
 d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
 rendant un `Optional` — une query ne lève pas.
@@ -1098,10 +1117,14 @@ trace de conversation. `last_import_status` est **`NULL` tant qu'aucun import n'
 dossier mis sous surveillance et jamais importé n'a ni réussi ni échoué, et c'est ce que dit son
 absence.
 
-La provenance d'un document vit dans `knowledge_documents`, en quatre colonnes : `source`
+La provenance d'un document vit dans `knowledge_documents`, en cinq colonnes : `source`
 (`MANUAL` par défaut, ce qui vaut pour toutes les lignes entrées avant l'import Drive),
 `drive_file_id`, `drive_web_view_link` et `drive_modified_time`, cette dernière posée d'avance
-pour DRIVE-5 (voir « Le flux de l'import d'un dossier surveillé »). Une seconde unicité s'y
+pour DRIVE-5 (voir « Le flux de l'import d'un dossier surveillé »). `watched_folder_id`, la
+cinquième, dit par quel dossier surveillé le document est entré : elle **ne porte aucune clé
+étrangère**, parce que cesser de surveiller un dossier ne retire pas ses documents et que
+déconnecter un compte Google emporte ses dossiers surveillés — c'est
+`knowledge_agent_run_sources.document_id` une seconde fois. Une seconde unicité s'y
 ajoute, `UNIQUE (owner_id, drive_file_id)` : elle **ne gêne pas les dépôts manuels**, les `NULL`
 de PostgreSQL étant distincts entre eux, et elle porte le propriétaire pour la même raison que
 `(owner_id, checksum)` — deux comptes qui surveillent le même Drive partagé importent chacun

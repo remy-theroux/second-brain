@@ -71,6 +71,9 @@ public class Document {
     @Column(name = "drive_modified_time")
     private Instant driveModifiedTime;
 
+    @Column(name = "watched_folder_id", columnDefinition = "uuid")
+    private UUID watchedFolderId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -107,9 +110,10 @@ public class Document {
             DocumentFormat format,
             Checksum checksum,
             long sizeBytes,
-            DriveProvenance provenance) {
+            DriveProvenance provenance,
+            UUID watchedFolderId) {
         Document document = upload(ownerId, filename, format, checksum, sizeBytes);
-        document.attachTo(provenance);
+        document.attachTo(provenance, watchedFolderId);
         return document;
     }
 
@@ -117,9 +121,12 @@ public class Document {
      * The content is left exactly as it was: a document already in the base gains its Drive
      * origin without a second copy and without anything to process again.
      */
-    public void attachTo(DriveProvenance provenance) {
+    public void attachTo(DriveProvenance provenance, UUID watchedFolderId) {
         if (provenance == null) {
             throw new IllegalArgumentException("The Drive origin of a document is required");
+        }
+        if (watchedFolderId == null) {
+            throw new IllegalArgumentException("The watched folder a document came through is required");
         }
         if (this.driveFileId != null) {
             throw new IllegalStateException("A document already carries a Drive file: " + this.driveFileId);
@@ -128,6 +135,7 @@ public class Document {
         this.driveFileId = provenance.fileId();
         this.driveWebViewLink = provenance.webViewLink();
         this.driveModifiedTime = provenance.modifiedTime();
+        this.watchedFolderId = watchedFolderId;
     }
 
     public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
@@ -219,6 +227,10 @@ public class Document {
 
     public DocumentSource getSource() {
         return source;
+    }
+
+    public UUID getWatchedFolderId() {
+        return watchedFolderId;
     }
 
     public Optional<DriveProvenance> getDriveProvenance() {

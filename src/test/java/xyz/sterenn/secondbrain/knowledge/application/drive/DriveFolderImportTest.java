@@ -127,6 +127,7 @@ class DriveFolderImportTest {
         assertThat(documents()).allSatisfy(document -> {
             assertThat(document.getSource()).isEqualTo(DocumentSource.GOOGLE_DRIVE);
             assertThat(document.getDriveProvenance()).isPresent();
+            assertThat(document.getWatchedFolderId()).isEqualTo(watchedFolderId);
         });
         assertThat(outcome()).isEqualTo(DriveImportStatus.SUCCEEDED);
     }

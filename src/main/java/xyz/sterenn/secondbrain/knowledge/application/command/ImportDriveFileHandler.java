@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.knowledge.application.command;
 
 import java.time.Clock;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
@@ -48,12 +49,18 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         Checksum checksum = Checksum.of(command.content());
         Optional<Document> sameContent = documentRepository.findByOwnerIdAndChecksum(command.ownerId(), checksum);
         if (sameContent.isPresent()) {
-            attach(sameContent.get(), file);
+            attach(sameContent.get(), file, command.watchedFolderId());
             return;
         }
 
         Document document = documentRepository.save(Document.importedFromDrive(
-                command.ownerId(), file.name(), file.format(), checksum, command.content().length, file.provenance()));
+                command.ownerId(),
+                file.name(),
+                file.format(),
+                checksum,
+                command.content().length,
+                file.provenance(),
+                command.watchedFolderId()));
 
         // The file after the row: see ADR-0020.
         documentStorage.store(document.getId(), command.content());
@@ -62,11 +69,11 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
     }
 
     /** Two Drive files can hold the same bytes: the document keeps the first origin rather than refusing. */
-    private void attach(Document document, DriveFile file) {
+    private void attach(Document document, DriveFile file, UUID watchedFolderId) {
         if (document.getDriveProvenance().isPresent()) {
             return;
         }
-        document.attachTo(file.provenance());
+        document.attachTo(file.provenance(), watchedFolderId);
         documentRepository.save(document);
     }
 }

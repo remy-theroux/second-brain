@@ -19,6 +19,8 @@ class DocumentProvenanceTest {
     private static final Checksum CHECKSUM = Checksum.of("contenu".getBytes(StandardCharsets.UTF_8));
     private static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
 
+    private static final UUID NOTES = UUID.randomUUID();
+
     private static final DriveProvenance PROVENANCE =
             new DriveProvenance("1aBcD", "https://drive.google.com/file/d/1aBcD/view", MODIFIED_TIME);
 
@@ -33,7 +35,7 @@ class DocumentProvenanceTest {
     @Test
     void an_imported_document_carries_its_drive_file_and_link() {
         Document document =
-                Document.importedFromDrive(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L, PROVENANCE);
+                Document.importedFromDrive(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L, PROVENANCE, NOTES);
 
         assertThat(document.getSource()).isEqualTo(DocumentSource.GOOGLE_DRIVE);
         assertThat(document.getDriveProvenance()).contains(PROVENANCE);
@@ -45,7 +47,7 @@ class DocumentProvenanceTest {
         Document document = Document.upload(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L);
         document.markIndexed();
 
-        document.attachTo(PROVENANCE);
+        document.attachTo(PROVENANCE, NOTES);
 
         assertThat(document.getSource()).isEqualTo(DocumentSource.GOOGLE_DRIVE);
         assertThat(document.getDriveProvenance()).contains(PROVENANCE);
@@ -56,11 +58,26 @@ class DocumentProvenanceTest {
     }
 
     @Test
+    void an_imported_document_remembers_the_watched_folder_it_came_through() {
+        Document document =
+                Document.importedFromDrive(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L, PROVENANCE, NOTES);
+
+        assertThat(document.getWatchedFolderId()).isEqualTo(NOTES);
+    }
+
+    @Test
+    void refuses_a_drive_provenance_without_the_folder_it_came_through() {
+        Document document = Document.upload(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L);
+
+        assertThatThrownBy(() -> document.attachTo(PROVENANCE, null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void refuses_to_attach_a_provenance_to_a_document_that_already_has_one() {
         Document document =
-                Document.importedFromDrive(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L, PROVENANCE);
+                Document.importedFromDrive(OWNER, "rapport.pdf", DocumentFormat.PDF, CHECKSUM, 12L, PROVENANCE, NOTES);
 
-        assertThatThrownBy(() -> document.attachTo(new DriveProvenance("2eFgH", null, MODIFIED_TIME)))
+        assertThatThrownBy(() -> document.attachTo(new DriveProvenance("2eFgH", null, MODIFIED_TIME), NOTES))
                 .isInstanceOf(IllegalStateException.class);
     }
 

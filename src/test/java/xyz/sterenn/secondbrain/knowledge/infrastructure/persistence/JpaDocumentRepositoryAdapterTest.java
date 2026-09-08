@@ -39,6 +39,8 @@ class JpaDocumentRepositoryAdapterTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    private static final UUID NOTES = UUID.randomUUID();
+
     private static final DriveProvenance PROVENANCE = new DriveProvenance(
             "1aBcD", "https://drive.google.com/file/d/1aBcD/view", Instant.parse("2026-09-08T10:15:30Z"));
 
@@ -54,7 +56,8 @@ class JpaDocumentRepositoryAdapterTest {
                 DocumentFormat.fromFilename(filename),
                 Checksum.of(bytes),
                 bytes.length,
-                new DriveProvenance(driveFileId, PROVENANCE.webViewLink(), PROVENANCE.modifiedTime()));
+                new DriveProvenance(driveFileId, PROVENANCE.webViewLink(), PROVENANCE.modifiedTime()),
+                NOTES);
     }
 
     private static Document document(UUID ownerId, String filename, String content) {

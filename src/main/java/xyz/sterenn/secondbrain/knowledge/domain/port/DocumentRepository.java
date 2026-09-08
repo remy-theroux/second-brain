@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.domain.port;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
@@ -22,6 +23,13 @@ public interface DocumentRepository {
     Optional<Document> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     List<Document> findAllByOwnerId(UUID ownerId);
+
+    /**
+     * How many documents each watched folder of this owner brought, a folder that brought none
+     * being absent. One read for all of them: counting inside a loop over the folders would make
+     * as many queries as there are folders.
+     */
+    Map<UUID, Long> countDocumentsByWatchedFolder(UUID ownerId);
 
     void delete(Document document);
 }

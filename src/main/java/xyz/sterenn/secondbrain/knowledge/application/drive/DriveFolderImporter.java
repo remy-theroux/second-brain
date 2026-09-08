@@ -102,7 +102,7 @@ public class DriveFolderImporter {
             }
             byte[] content =
                     driveAccess.call(connection, accessToken -> googleDriveFiles.download(accessToken, file.id()));
-            commandBus.dispatch(new ImportDriveFile(connection.getOwnerId(), file, content));
+            commandBus.dispatch(new ImportDriveFile(connection.getOwnerId(), watchedFolder.getId(), file, content));
         }
     }
 

@@ -47,6 +47,8 @@ class ImportDriveFileTest {
 
     private static final String EMAIL = "alice@exemple.fr";
 
+    private static final UUID NOTES = UUID.randomUUID();
+
     private static final String OBSERVATION = "test.observation.import-drive";
 
     private static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
@@ -107,7 +109,7 @@ class ImportDriveFileTest {
 
     @Test
     void imports_a_file_that_the_base_does_not_hold() {
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
 
         Document document = onlyDocument();
         assertThat(document.getFilename()).isEqualTo("rapport.txt");
@@ -125,7 +127,7 @@ class ImportDriveFileTest {
         UUID uploaded = onlyDocument().getId();
         assertThat(announcement()).isEqualTo(uploaded);
 
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
 
         Document document = onlyDocument();
         assertThat(document.getId()).isEqualTo(uploaded);
@@ -139,11 +141,11 @@ class ImportDriveFileTest {
     @Test
     void does_nothing_on_a_second_import_of_the_same_drive_file() {
         DriveFile file = aDriveFile("f1", "rapport.txt", REPORT);
-        commandBus.dispatch(new ImportDriveFile(alice, file, REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, file, REPORT));
         UUID imported = onlyDocument().getId();
         assertThat(announcement()).isEqualTo(imported);
 
-        commandBus.dispatch(new ImportDriveFile(alice, file, REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, file, REPORT));
 
         assertThat(onlyDocument().getId()).isEqualTo(imported);
         assertThat(nothingAnnounced()).isTrue();
@@ -151,10 +153,10 @@ class ImportDriveFileTest {
 
     @Test
     void re_imports_nothing_when_only_the_name_changed() {
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
         assertThat(announcement()).isNotNull();
 
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f1", "rapport-2026.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport-2026.txt", REPORT), REPORT));
 
         assertThat(onlyDocument().getFilename()).isEqualTo("rapport.txt");
         assertThat(nothingAnnounced()).isTrue();
@@ -162,10 +164,10 @@ class ImportDriveFileTest {
 
     @Test
     void leaves_alone_a_document_that_already_carries_another_drive_file() {
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
         assertThat(announcement()).isNotNull();
 
-        commandBus.dispatch(new ImportDriveFile(alice, aDriveFile("f2", "copie.txt", REPORT), REPORT));
+        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f2", "copie.txt", REPORT), REPORT));
 
         assertThat(onlyDocument().getDriveProvenance())
                 .map(DriveProvenance::fileId)
