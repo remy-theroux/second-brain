@@ -159,6 +159,19 @@ public class Document {
     }
 
     /**
+     * Never the checksum: a Google Doc is exported into an archive rebuilt on every call, so two
+     * exports of an untouched document differ, and comparing them would re-ingest the whole Drive
+     * at every run. A time the base does not hold — Drive told none, or told one nothing could
+     * read — is a move too: read as an immobility, it would freeze that document for good.
+     */
+    public boolean movedInDriveSinceTheImport(Instant driveModifiedTime) {
+        if (driveModifiedTime == null) {
+            return false;
+        }
+        return this.driveModifiedTime == null || driveModifiedTime.isAfter(this.driveModifiedTime);
+    }
+
+    /**
      * Drive says the file moved while its content did not: the time alone is written, so the
      * next import weighs it against what Drive tells now rather than against a time the base
      * would otherwise keep for ever.
