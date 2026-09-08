@@ -22,12 +22,15 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachabl
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChanges;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChannels;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelSubscription;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
@@ -45,11 +48,15 @@ public class FakeGoogleDriveConfiguration {
     }
 
     /**
-     * One stub for the four ports of the context: the token exchange, the folders, their files,
-     * and the feed of what moved.
+     * One stub for the five ports of the context: the token exchange, the folders, their files,
+     * the feed of what moved, and the push subscriptions.
      */
     public static class FakeGoogleDrive
-            implements GoogleAccessTokens, GoogleDriveFolders, GoogleDriveFiles, GoogleDriveChanges {
+            implements GoogleAccessTokens,
+                    GoogleDriveFolders,
+                    GoogleDriveFiles,
+                    GoogleDriveChanges,
+                    GoogleDriveChannels {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
@@ -65,6 +72,12 @@ public class FakeGoogleDriveConfiguration {
          */
         public static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
 
+        /**
+         * The deadline this Google hands back, and it is shorter than the seven days of the
+         * documentation on purpose: what counts is the one that comes back, never the maximum.
+         */
+        public static final Duration CHANNEL_LIFETIME = Duration.ofDays(3);
+
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();
 
         private final Map<String, List<StoredFile>> filesByParent = new ConcurrentHashMap<>();
@@ -74,6 +87,13 @@ public class FakeGoogleDriveConfiguration {
         private final List<DriveChange> changes = new CopyOnWriteArrayList<>();
 
         private final List<String> readPageTokens = new CopyOnWriteArrayList<>();
+
+        /** Every channel call in order: what proves the new one is opened before the old is stopped. */
+        private final List<String> channelCalls = new CopyOnWriteArrayList<>();
+
+        private final Map<String, String> openChannels = new ConcurrentHashMap<>();
+
+        private final List<String> notifiedAddresses = new CopyOnWriteArrayList<>();
 
         private volatile String startPageToken = "1789";
 
@@ -175,6 +195,28 @@ public class FakeGoogleDriveConfiguration {
                 throw new DriveChangeTokenExpiredException();
             }
             return new DriveChangePage(List.copyOf(changes), newStartPageToken);
+        }
+
+        @Override
+        public DriveChannelSubscription watch(
+                DriveAccessToken accessToken,
+                String channelId,
+                DriveChannelToken token,
+                String address,
+                String pageToken) {
+            refuseIfUnusable(accessToken);
+            channelCalls.add("watch:" + channelId);
+            notifiedAddresses.add(address);
+            String resourceId = "ressource-" + channelId;
+            openChannels.put(channelId, resourceId);
+            return new DriveChannelSubscription(resourceId, Instant.now().plus(CHANNEL_LIFETIME));
+        }
+
+        @Override
+        public void stop(DriveAccessToken accessToken, String channelId, String resourceId) {
+            refuseIfUnusable(accessToken);
+            channelCalls.add("stop:" + channelId + "/" + resourceId);
+            openChannels.remove(channelId);
         }
 
         /** The stub drops what it cannot read exactly where the adapter does: in the walk, silently. */
@@ -359,9 +401,25 @@ public class FakeGoogleDriveConfiguration {
             return List.copyOf(readPageTokens);
         }
 
+        public List<String> channelCalls() {
+            return List.copyOf(channelCalls);
+        }
+
+        /** The channels Google would still notify, by identifier. */
+        public Set<String> openChannels() {
+            return Set.copyOf(openChannels.keySet());
+        }
+
+        public List<String> notifiedAddresses() {
+            return List.copyOf(notifiedAddresses);
+        }
+
         public void clear() {
             changes.clear();
             readPageTokens.clear();
+            channelCalls.clear();
+            openChannels.clear();
+            notifiedAddresses.clear();
             changeTokenExpired = false;
             ancestorsUnavailable = false;
             foldersByParent.clear();

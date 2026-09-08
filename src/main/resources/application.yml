@@ -191,6 +191,11 @@ secondbrain:
     # and never "15m": @Scheduled reads a bare string as milliseconds unless it parses as a
     # Duration. It is a delay, not a rate — see DriveSynchronisationScheduler.
     synchronisation-interval: ${SECONDBRAIN_DRIVE_SYNC_INTERVAL:PT15M}
+    # How long the worker waits between two rounds of channel renewal. Same ISO-8601 caveat as
+    # above. Far shorter than the deadline it watches — Google caps a subscription at seven days
+    # and DriveChannelPolicy renews within twelve hours of it — because this round is also what
+    # opens the very first channel of a connection that has none.
+    channel-renewal-interval: ${SECONDBRAIN_DRIVE_CHANNEL_RENEWAL_INTERVAL:PT1H}
   jwt:
     # Deliberately without a default value: a default signing secret would be
     # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —
