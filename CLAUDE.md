@@ -407,16 +407,32 @@ d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement
 Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
 
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
-les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
+les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode avancé et
 `custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`, jamais par
 l'URL du composant —, la liste dans un `DataTable`, et la suppression derrière un
 `ConfirmPopup` (d'où `ConfirmationService` dans `main.js`). Le `201` n'ayant pas de corps,
-chaque dépôt et chaque suppression relisent `GET /api/documents`. Le `409` est traduit en
-`DuplicateDocumentError`, dont l'`existingDocumentId` sert à mettre en évidence la ligne du
-doublon plutôt que de laisser l'utilisateur la chercher. Aucun plafond de taille n'est
+chaque dépôt et chaque suppression relisent `GET /api/documents`. Aucun plafond de taille n'est
 posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
 Aucun store : aucun autre écran ne partage cet état, la vue appelle `src/api/` directement,
 et c'est elle qui déconnecte sur un `401`, comme le layout le fait pour le profil.
+
+**Le mode avancé, et non `basic`, parce que l'écran accepte plusieurs fichiers d'un coup** : il
+porte sa propre zone de glisser-déposer, et `@uploader` reçoit toute la fournée. L'envoi est
+**séquentiel** — la route prend un fichier, et une rafale parallèle courrait contre le contrôle
+de doublon qui précède chaque écriture. Chaque refus est donc rendu **sous le nom du fichier
+qu'il vise** : un message global mentirait dès qu'un dépôt sur trois est refusé, et
+`existingDocumentId` des `409` met en évidence **les** lignes des doublons plutôt que de laisser
+l'utilisateur les chercher. Un `401` en cours de série l'arrête net : les fichiers suivants n'y
+récolteraient que d'autres `401`.
+
+**La liste se relit toutes les 2 s tant qu'un document n'est pas dans un statut terminal**, et
+s'arrête dès qu'ils le sont tous — un `setTimeout` réarmé après chaque lecture **réussie**,
+jamais un `setInterval` qui empilerait les requêtes, désarmé à la sortie de l'écran. Ce qui dit
+quels statuts sont terminaux vit dans `documentStatus.js`, **hors du `.vue`** : une horloge qui
+ne s'arrête jamais ne se voit pas à l'écran, elle se voit dans les journaux du serveur six mois
+plus tard, et c'est exactement le genre de logique que ce projet sort d'un composant pour la
+tester — comme `sse.js` et `answerSegments.js`. `DocumentStatusTag` y a suivi ses deux tables de
+libellés : les statuts n'étaient pas énumérés à deux endroits, ils ne le seront pas.
 
 
 `DocumentDetailView` (`/documents/:id`, atteint par l'œil de chaque ligne) montre ce qui a
