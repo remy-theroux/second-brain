@@ -159,6 +159,18 @@ public class Document {
     }
 
     /**
+     * Drive says the file moved while its content did not: the time alone is written, so the
+     * next import weighs it against what Drive tells now rather than against a time the base
+     * would otherwise keep for ever.
+     */
+    public void movedAt(Instant modifiedTime) {
+        if (modifiedTime == null) {
+            throw new IllegalArgumentException("The modification time a Drive file moved to is required");
+        }
+        this.driveModifiedTime = modifiedTime;
+    }
+
+    /**
      * A folder unwatched then watched again is a new row with a new identifier, and the documents
      * it once brought still name the old one: nothing else would ever write it back.
      */

@@ -99,14 +99,16 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
     /**
      * Never the checksum: a Google Doc is exported into an archive rebuilt on every call, so two
      * exports of an untouched document differ, and comparing them would re-ingest the whole Drive
-     * at every import.
+     * at every import. A time the base does not hold — Drive told none, or told one nothing could
+     * read — is a move too: read as an immobility, it would freeze that document for good.
      */
     private static boolean hasMovedSinceTheImport(Document document, DriveFile file) {
+        if (file.modifiedTime() == null) {
+            return false;
+        }
         Instant imported =
                 document.getDriveProvenance().map(DriveProvenance::modifiedTime).orElse(null);
-        return file.modifiedTime() != null
-                && imported != null
-                && file.modifiedTime().isAfter(imported);
+        return imported == null || file.modifiedTime().isAfter(imported);
     }
 
     /** Exactly what {@code ReplaceDocumentContent} does of an upload, from the Drive file instead. */
@@ -114,6 +116,10 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         DriveFile file = command.file();
         Checksum checksum = Checksum.of(command.content());
         if (checksum.equals(document.getChecksum())) {
+            // Above the return: left below it, the time of a binary whose content never moves
+            // would never be written, and the column would drift from Drive for good.
+            document.movedAt(file.modifiedTime());
+            documentRepository.save(document);
             return;
         }
 
