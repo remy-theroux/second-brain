@@ -70,9 +70,12 @@ async function upload({ files }) {
   busy.value = true
   try {
     // Sequentially: the route takes one file, and a burst of parallel uploads would race on
-    // the duplicate check that precedes each write.
+    // the duplicate check that precedes each write. A lost session stops the sequence: the
+    // files that follow would only collect 401s.
     for (const file of files) {
-      await uploadOne(file)
+      if (!(await uploadOne(file))) {
+        return
+      }
     }
     // The 201 has no body: it is the list that gives the complete state of the base.
     await load()
@@ -83,6 +86,7 @@ async function upload({ files }) {
   }
 }
 
+// Answers whether the sequence may go on: a refused file does not stop it, a lost session does.
 async function uploadOne(file) {
   try {
     await uploadDocument(auth.token, file)
@@ -95,8 +99,10 @@ async function uploadOne(file) {
       rejections.value.push({ filename: file.name, message: error.errors.file ?? error.message })
     } else {
       await handle(error)
+      return !(error instanceof UnauthorizedError)
     }
   }
+  return true
 }
 
 function confirmRemoval(event, document) {
@@ -209,6 +215,11 @@ onMounted(load)
 </template>
 
 <style scoped>
+.upload-hint {
+  margin: 0;
+  color: var(--p-text-muted-color);
+}
+
 .document-error {
   margin-top: var(--sb-space-xs);
   font-size: var(--sb-text-small);
