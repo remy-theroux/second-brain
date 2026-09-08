@@ -72,17 +72,31 @@ public class Document {
         if (ownerId == null) {
             throw new IllegalArgumentException("The document owner is required");
         }
+        return new Document(ownerId, boundedFilename(filename), format, checksum, requirePositive(sizeBytes));
+    }
+
+    public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
+        this.filename = boundedFilename(filename);
+        this.format = format;
+        this.checksum = checksum;
+        this.sizeBytes = requirePositive(sizeBytes);
+        this.status = DocumentStatus.PENDING;
+        this.errorMessage = null;
+    }
+
+    private static String boundedFilename(String filename) {
         if (filename == null || filename.isBlank()) {
             throw new IllegalArgumentException("A filename is required");
         }
+        String trimmed = filename.trim();
+        return trimmed.length() > MAX_FILENAME_LENGTH ? trimmed.substring(0, MAX_FILENAME_LENGTH) : trimmed;
+    }
+
+    private static long requirePositive(long sizeBytes) {
         if (sizeBytes <= 0) {
             throw new IllegalArgumentException("An empty document has nothing to bring to the knowledge base");
         }
-        String boundedFilename = filename.trim();
-        if (boundedFilename.length() > MAX_FILENAME_LENGTH) {
-            boundedFilename = boundedFilename.substring(0, MAX_FILENAME_LENGTH);
-        }
-        return new Document(ownerId, boundedFilename, format, checksum, sizeBytes);
+        return sizeBytes;
     }
 
     public void markTextExtracted() {
