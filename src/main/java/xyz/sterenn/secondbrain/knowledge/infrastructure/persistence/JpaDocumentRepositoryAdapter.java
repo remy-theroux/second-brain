@@ -39,6 +39,11 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     }
 
     @Override
+    public Optional<Document> findByOwnerIdAndDriveFileId(UUID ownerId, String driveFileId) {
+        return springDataDocumentRepository.findByOwnerIdAndDriveFileId(ownerId, driveFileId);
+    }
+
+    @Override
     public Optional<Document> findByIdAndOwnerId(UUID id, UUID ownerId) {
         return springDataDocumentRepository.findByIdAndOwnerId(id, ownerId);
     }

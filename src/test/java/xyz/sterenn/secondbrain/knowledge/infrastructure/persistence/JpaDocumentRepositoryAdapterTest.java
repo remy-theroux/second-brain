@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +18,9 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDocumentExcep
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentSource;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveProvenance;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
 import xyz.sterenn.secondbrain.users.domain.port.UserRepository;
 import xyz.sterenn.secondbrain.users.domain.valueobject.Email;
@@ -36,8 +39,22 @@ class JpaDocumentRepositoryAdapterTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    private static final DriveProvenance PROVENANCE = new DriveProvenance(
+            "1aBcD", "https://drive.google.com/file/d/1aBcD/view", Instant.parse("2026-09-08T10:15:30Z"));
+
     private UUID existingAccount(String email) {
         return userRepository.save(User.register(new Email(email), "empreinte")).getId();
+    }
+
+    private static Document imported(UUID ownerId, String filename, String content, String driveFileId) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        return Document.importedFromDrive(
+                ownerId,
+                filename,
+                DocumentFormat.fromFilename(filename),
+                Checksum.of(bytes),
+                bytes.length,
+                new DriveProvenance(driveFileId, PROVENANCE.webViewLink(), PROVENANCE.modifiedTime()));
     }
 
     private static Document document(UUID ownerId, String filename, String content) {
@@ -172,5 +189,68 @@ class JpaDocumentRepositoryAdapterTest {
                     assertThat(reloaded.getErrorMessage())
                             .isEqualTo("Ce document ne contient pas de texte exploitable.");
                 });
+    }
+
+    @Test
+    void lets_every_manually_uploaded_document_share_an_absent_drive_file() {
+        UUID ownerId = existingAccount("gaelle@exemple.fr");
+
+        documentRepository.save(document(ownerId, "premier.pdf", "premier"));
+        documentRepository.save(document(ownerId, "second.pdf", "second"));
+        documentRepository.save(document(ownerId, "troisieme.pdf", "troisieme"));
+
+        assertThat(documentRepository.findAllByOwnerId(ownerId)).hasSize(3);
+    }
+
+    @Test
+    void finds_an_imported_document_by_its_drive_file() {
+        UUID ownerId = existingAccount("helene@exemple.fr");
+        documentRepository.save(imported(ownerId, "rapport.pdf", "contenu", "1aBcD"));
+
+        assertThat(documentRepository.findByOwnerIdAndDriveFileId(ownerId, "1aBcD"))
+                .get()
+                .satisfies(reloaded -> {
+                    assertThat(reloaded.getSource()).isEqualTo(DocumentSource.GOOGLE_DRIVE);
+                    assertThat(reloaded.getDriveProvenance()).contains(PROVENANCE);
+                });
+    }
+
+    @Test
+    void does_not_find_the_imported_document_of_another_account_by_its_drive_file() {
+        UUID alice = existingAccount("alice6@exemple.fr");
+        UUID bob = existingAccount("bob6@exemple.fr");
+        documentRepository.save(imported(alice, "rapport.pdf", "contenu", "1aBcD"));
+
+        assertThat(documentRepository.findByOwnerIdAndDriveFileId(bob, "1aBcD")).isEmpty();
+    }
+
+    @Test
+    void knows_no_document_behind_a_drive_file_that_brought_none() {
+        UUID ownerId = existingAccount("irene@exemple.fr");
+        documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
+
+        assertThat(documentRepository.findByOwnerIdAndDriveFileId(ownerId, "1aBcD"))
+                .isEmpty();
+    }
+
+    @Test
+    void rejects_the_same_drive_file_twice_for_the_same_account() {
+        UUID ownerId = existingAccount("julien@exemple.fr");
+        documentRepository.save(imported(ownerId, "rapport.pdf", "premier", "1aBcD"));
+
+        assertThatThrownBy(() -> documentRepository.save(imported(ownerId, "copie.pdf", "second", "1aBcD")))
+                .isInstanceOf(DuplicateDocumentException.class);
+    }
+
+    @Test
+    void an_uploaded_document_is_manual_until_a_drive_file_brings_it() {
+        UUID ownerId = existingAccount("karim@exemple.fr");
+
+        Document saved = documentRepository.save(document(ownerId, "rapport.pdf", "contenu"));
+
+        assertThat(saved.getSource()).isEqualTo(DocumentSource.MANUAL);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT drive_file_id FROM knowledge_documents WHERE id = ?", String.class, saved.getId()))
+                .isNull();
     }
 }

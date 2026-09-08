@@ -16,6 +16,9 @@ public interface DocumentRepository {
 
     Optional<Document> findByOwnerIdAndChecksum(UUID ownerId, Checksum checksum);
 
+    /** Empty when no Drive file of this owner ever brought a document. */
+    Optional<Document> findByOwnerIdAndDriveFileId(UUID ownerId, String driveFileId);
+
     Optional<Document> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     List<Document> findAllByOwnerId(UUID ownerId);

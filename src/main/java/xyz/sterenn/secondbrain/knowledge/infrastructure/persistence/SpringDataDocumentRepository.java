@@ -11,6 +11,8 @@ interface SpringDataDocumentRepository extends JpaRepository<Document, UUID> {
 
     Optional<Document> findByOwnerIdAndChecksum(UUID ownerId, Checksum checksum);
 
+    Optional<Document> findByOwnerIdAndDriveFileId(UUID ownerId, String driveFileId);
+
     Optional<Document> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     List<Document> findAllByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
