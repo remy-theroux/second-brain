@@ -2,8 +2,10 @@ package xyz.sterenn.secondbrain.knowledge;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +34,9 @@ public class FakeGoogleDriveConfiguration {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
+        /** The same bound as the adapter's, so a programmed cycle fails here the way it would there. */
+        public static final int MAX_ANCESTOR_DEPTH = 50;
+
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();
 
         private volatile boolean unavailable = false;
@@ -51,10 +56,47 @@ public class FakeGoogleDriveConfiguration {
 
         @Override
         public List<DriveFolder> children(DriveAccessToken accessToken, String parentId) {
+            refuseIfUnavailable();
+            return foldersByParent.getOrDefault(parentId, List.of());
+        }
+
+        @Override
+        public Optional<DriveFolder> folder(DriveAccessToken accessToken, String folderId) {
+            refuseIfUnavailable();
+            return foldersByParent.values().stream()
+                    .flatMap(List::stream)
+                    .filter(folder -> folder.id().equals(folderId))
+                    .findFirst();
+        }
+
+        @Override
+        public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+            refuseIfUnavailable();
+            List<String> ancestors = new ArrayList<>();
+            String current = folderId;
+            for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+                Optional<String> parent = parentOf(current);
+                if (parent.isEmpty() || DriveFolder.ROOT.equals(parent.get())) {
+                    return ancestors;
+                }
+                ancestors.add(parent.get());
+                current = parent.get();
+            }
+            throw new GoogleDriveUnavailableException();
+        }
+
+        private Optional<String> parentOf(String folderId) {
+            return foldersByParent.entrySet().stream()
+                    .filter(entry -> entry.getValue().stream()
+                            .anyMatch(folder -> folder.id().equals(folderId)))
+                    .map(Map.Entry::getKey)
+                    .findFirst();
+        }
+
+        private void refuseIfUnavailable() {
             if (unavailable) {
                 throw new GoogleDriveUnavailableException();
             }
-            return foldersByParent.getOrDefault(parentId, List.of());
         }
 
         public void put(String parentId, DriveFolder... folders) {

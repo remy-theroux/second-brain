@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -95,6 +96,63 @@ class GoogleDriveFoldersAdapterTest {
 
         assertThatExceptionOfType(GoogleDriveUnavailableException.class)
                 .isThrownBy(() -> adapter.children(ACCESS_TOKEN, "a1"));
+        server.verify();
+    }
+
+    @Test
+    void reads_one_folder_by_its_identifier() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT + "/a1")))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(record("{\"id\":\"a1\",\"name\":\"Notes\",\"mimeType\":\""
+                        + GoogleDriveFoldersAdapter.FOLDER_MIME_TYPE + "\",\"trashed\":false}"));
+
+        assertThat(adapter.folder(ACCESS_TOKEN, "a1")).contains(new DriveFolder("a1", "Notes"));
+        assertThat(query(0)).contains("fields=id,name,mimeType,trashed");
+        server.verify();
+    }
+
+    @Test
+    void knows_no_folder_behind_an_identifier_google_refuses() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(withResourceNotFound());
+
+        assertThat(adapter.folder(ACCESS_TOKEN, "inconnu")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void knows_no_folder_behind_the_identifier_of_a_file() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{\"id\":\"f1\",\"name\":\"notes.pdf\",\"mimeType\":\"application/pdf\"}"));
+
+        assertThat(adapter.folder(ACCESS_TOKEN, "f1")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void climbs_the_parents_up_to_the_top_of_the_drive() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{\"parents\":[\"b1\"]}"));
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{\"parents\":[\"a1\"]}"));
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{}"));
+
+        assertThat(adapter.ancestors(ACCESS_TOKEN, "c1")).containsExactly("b1", "a1");
+        assertThat(query(0)).contains("fields=parents");
+        server.verify();
+    }
+
+    /** Drive allows several parents per file: a cycle must stop the climb, not the server. */
+    @Test
+    void refuses_to_climb_for_ever_when_the_parents_form_a_cycle() {
+        for (int call = 0; call < GoogleDriveFoldersAdapter.MAX_ANCESTOR_DEPTH; call++) {
+            server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                    .andRespond(record("{\"parents\":[\"a1\"]}"));
+        }
+
+        assertThatExceptionOfType(GoogleDriveUnavailableException.class)
+                .isThrownBy(() -> adapter.ancestors(ACCESS_TOKEN, "a1"));
         server.verify();
     }
 

@@ -3,9 +3,11 @@ package xyz.sterenn.secondbrain.knowledge.infrastructure.drive;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -23,6 +25,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
 
     /** A page token that never runs out would hang a request for good: it is bounded rather than trusted. */
     static final int MAX_PAGES = 100;
+
+    /** Drive allows several parents per file, so a cycle is conceivable: bounded for the same reason. */
+    static final int MAX_ANCESTOR_DEPTH = 50;
 
     private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveFoldersAdapter.class);
 
@@ -56,6 +61,53 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
         throw new GoogleDriveUnavailableException();
     }
 
+    @Override
+    public Optional<DriveFolder> folder(DriveAccessToken accessToken, String folderId) {
+        return get(accessToken, folderId, "id,name,mimeType,trashed")
+                .filter(file -> FOLDER_MIME_TYPE.equals(file.mimeType()))
+                .filter(file -> !Boolean.TRUE.equals(file.trashed()))
+                .map(file -> new DriveFolder(file.id(), file.name()));
+    }
+
+    @Override
+    public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+        List<String> ancestors = new ArrayList<>();
+        String current = folderId;
+        for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+            Optional<String> parent = get(accessToken, current, "parents")
+                    .map(GoogleFileResponse::parents)
+                    .filter(parents -> !parents.isEmpty())
+                    .map(List::getFirst);
+            if (parent.isEmpty()) {
+                return ancestors;
+            }
+            ancestors.add(parent.get());
+            current = parent.get();
+        }
+        LOG.error("The parents of a Drive folder kept climbing past {} levels", MAX_ANCESTOR_DEPTH);
+        throw new GoogleDriveUnavailableException();
+    }
+
+    private Optional<GoogleFileResponse> get(DriveAccessToken accessToken, String fileId, String fields) {
+        try {
+            return Optional.ofNullable(restClient
+                    .get()
+                    .uri(fileUri(fileId, fields))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken.value())
+                    .retrieve()
+                    .body(GoogleFileResponse.class));
+        } catch (RestClientResponseException refusal) {
+            if (refusal.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+                return Optional.empty();
+            }
+            LOG.error("Google refused a folder read: {}", describe(refusal));
+            throw new GoogleDriveUnavailableException(refusal);
+        } catch (RestClientException failure) {
+            LOG.error("Google refused a folder read: {}", describe(failure));
+            throw new GoogleDriveUnavailableException(failure);
+        }
+    }
+
     private GoogleFileListResponse listOnePage(DriveAccessToken accessToken, String parentId, String pageToken) {
         try {
             return restClient
@@ -81,6 +133,15 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
             uri.queryParam("pageToken", pageToken);
         }
         return uri.build().encode().toUri();
+    }
+
+    private static URI fileUri(String fileId, String fields) {
+        return UriComponentsBuilder.fromUriString(FILES_ENDPOINT)
+                .pathSegment(fileId)
+                .queryParam("fields", fields)
+                .build()
+                .encode()
+                .toUri();
     }
 
     /** The parent comes from the request, and the Drive query language reads a quote as a delimiter. */

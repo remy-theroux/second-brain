@@ -1,4 +1,6 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.drive;
 
-/** The two fields of {@code files(id,name)} this project asks for. */
-record GoogleFileResponse(String id, String name) {}
+import java.util.List;
+
+/** The union of the {@code fields} this project asks for; a field left out comes back null. */
+record GoogleFileResponse(String id, String name, String mimeType, Boolean trashed, List<String> parents) {}
