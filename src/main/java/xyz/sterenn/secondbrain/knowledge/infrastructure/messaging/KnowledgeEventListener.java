@@ -1,5 +1,6 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.messaging;
 
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitHandler;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.IndexDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
@@ -30,17 +32,27 @@ public class KnowledgeEventListener {
         this.commandBus = commandBus;
     }
 
+    @RabbitHandler
+    public void on(DocumentUploaded event) {
+        extract(event.documentId(), event.ownerId());
+    }
+
+    /** A replaced content re-enters the pipeline exactly where an upload does — same command, same repairs. */
+    @RabbitHandler
+    public void on(DocumentContentReplaced event) {
+        extract(event.documentId(), event.ownerId());
+    }
+
     /**
      * The failure is recorded by a <em>second</em> command, hence a second transaction: the bus
      * has just rolled the first one back, and it would take the status with it. See ADR-0028.
      */
-    @RabbitHandler
-    public void on(DocumentUploaded event) {
+    private void extract(UUID documentId, UUID ownerId) {
         try {
-            commandBus.dispatch(new ExtractDocumentText(event.documentId(), event.ownerId()));
+            commandBus.dispatch(new ExtractDocumentText(documentId, ownerId));
         } catch (RuntimeException failure) {
-            log.error("Extraction of document {} failed", event.documentId(), failure);
-            commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
+            log.error("Extraction of document {} failed", documentId, failure);
+            commandBus.dispatch(new MarkDocumentProcessingFailed(documentId, ownerId, reason(failure)));
         }
     }
 
