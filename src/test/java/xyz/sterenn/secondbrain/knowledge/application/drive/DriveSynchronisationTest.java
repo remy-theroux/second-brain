@@ -197,6 +197,7 @@ class DriveSynchronisationTest {
     @Test
     void removes_a_document_whose_file_left_every_watched_folder() {
         aDocumentImportedFrom("f1", "rapport.md", DocumentFormat.MARKDOWN, FakeGoogleDrive.MODIFIED_TIME);
+        fakeGoogleDrive.put(DriveFolder.ROOT, FakeGoogleDrive.folder("z9", "Archives"));
         fakeGoogleDrive.putFile("z9", "f1", "rapport.md", Fixtures.read(Fixtures.STRUCTURED_MD));
         fakeGoogleDrive.willReportChanges(fakeGoogleDrive.changeOn("f1", "z9"));
 
@@ -297,6 +298,27 @@ class DriveSynchronisationTest {
         assertThat(keptPageToken()).contains(KEPT_TOKEN);
     }
 
+    /**
+     * The same failure mode, and the one the stub reproduced: a climb that stops on a folder
+     * Drive hands back no more reads as an empty chain of ancestors. Read as "under no watched
+     * folder", it removes the document, its chunks and its original.
+     */
+    @Test
+    void erases_nothing_when_the_parents_of_a_file_cannot_be_climbed() {
+        aDocumentImportedFrom("f1", "rapport.md", DocumentFormat.MARKDOWN, FakeGoogleDrive.MODIFIED_TIME);
+        fakeGoogleDrive.putFile("c9", "f1", "rapport.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.willReportChanges(fakeGoogleDrive.changeOn("f1", "c9"));
+
+        requestASynchronisation();
+        letTheChangePageBeRead();
+
+        assertThat(documents())
+                .singleElement()
+                .extracting(Document::getFilename)
+                .isEqualTo("rapport.md");
+        assertThat(keptPageToken()).contains(KEPT_TOKEN);
+    }
+
     /** A token Google no longer knows owes a full scan, never a fresh "from now on". */
     @Test
     void falls_back_on_a_full_scan_when_google_no_longer_knows_the_token() {
@@ -333,6 +355,15 @@ class DriveSynchronisationTest {
 
     private void letTheRoundRun() {
         await().pollDelay(LET_THE_ROUND_RUN).atMost(TIMEOUT).until(() -> true);
+    }
+
+    /**
+     * An absence needs a positive signal to be read at all: without one, a message not yet
+     * consumed would let every assertion below pass on an empty round.
+     */
+    private void letTheChangePageBeRead() {
+        await().atMost(TIMEOUT).until(() -> !fakeGoogleDrive.readPageTokens().isEmpty());
+        letTheRoundRun();
     }
 
     private void aDocumentImportedFrom(String fileId, String filename, DocumentFormat format, Instant modifiedTime) {

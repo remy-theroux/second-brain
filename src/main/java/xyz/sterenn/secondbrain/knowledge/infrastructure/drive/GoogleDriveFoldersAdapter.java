@@ -18,6 +18,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailable
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 
 class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
 
@@ -81,23 +82,30 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
                 .flatMap(GoogleDriveFoldersAdapter::toFolder);
     }
 
+    /**
+     * A folder Google no longer hands back is not the top of the Drive, and telling the two apart
+     * is the whole point: a climb that broke, read as a complete one, says "under no watched
+     * folder" — which the mirror carries out as a removal.
+     */
     @Override
-    public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+    public DriveFolderChain ancestors(DriveAccessToken accessToken, String folderId) {
         if (!isDriveIdentifier(folderId)) {
-            return List.of();
+            return DriveFolderChain.stoppedShort(List.of());
         }
         List<String> ancestors = new ArrayList<>();
         String current = folderId;
         for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
-            Optional<String> parent = get(accessToken, current, "parents")
-                    .map(GoogleFileResponse::parents)
-                    .filter(parents -> !parents.isEmpty())
-                    .map(List::getFirst);
-            if (parent.isEmpty()) {
-                return ancestors;
+            Optional<GoogleFileResponse> folder = get(accessToken, current, "parents");
+            if (folder.isEmpty()) {
+                LOG.warn("The parents of a Drive folder stopped on a folder Google hands back no more");
+                return DriveFolderChain.stoppedShort(ancestors);
             }
-            ancestors.add(parent.get());
-            current = parent.get();
+            List<String> parents = folder.get().parents();
+            if (parents == null || parents.isEmpty()) {
+                return DriveFolderChain.upToTheTop(ancestors);
+            }
+            ancestors.add(parents.getFirst());
+            current = parents.getFirst();
         }
         LOG.error("The parents of a Drive folder kept climbing past {} levels", MAX_ANCESTOR_DEPTH);
         throw new GoogleDriveUnavailableException();

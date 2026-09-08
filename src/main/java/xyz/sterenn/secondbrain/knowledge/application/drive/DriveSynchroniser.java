@@ -31,6 +31,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
 /**
@@ -233,14 +234,24 @@ public class DriveSynchroniser {
         return Optional.empty();
     }
 
+    /**
+     * "Climbed, and under no watched folder" is a removal; "not climbed" is a round that stops.
+     * Confusing the two erases the document, its text, its chunks and its original on a parent
+     * Drive hands back no more — and nothing brings those back.
+     */
     private Optional<UUID> watchedAncestorOf(
             DriveConnection connection, Map<String, UUID> watchedFolders, String folderId) {
-        List<String> ancestors =
+        DriveFolderChain chain =
                 driveAccess.call(connection, accessToken -> googleDriveFolders.ancestors(accessToken, folderId));
-        return ancestors.stream()
+        Optional<UUID> watchedFolder = chain.folders().stream()
                 .map(watchedFolders::get)
                 .filter(Objects::nonNull)
                 .findFirst();
+        if (watchedFolder.isEmpty() && !chain.reachedTheTop()) {
+            LOG.error("The folders above the Drive folder {} could not be climbed: the round stops", folderId);
+            throw new GoogleDriveUnavailableException();
+        }
+        return watchedFolder;
     }
 
     private void keep(UUID ownerId, String newStartPageToken) {

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 
 /** The Drive seen as a tree of folders: no file ever crosses this port, and no content is read. */
 public interface GoogleDriveFolders {
@@ -16,7 +17,9 @@ public interface GoogleDriveFolders {
 
     /**
      * The folders above {@code folderId}, nearest first, up to the top of the Drive — the folder
-     * itself is not one of them.
+     * itself is not one of them. The chain says whether it got there: a climb that broke on a
+     * parent nothing could read hands back what it saw and says so, never a chain a caller could
+     * read as "under no watched folder".
      */
-    List<String> ancestors(DriveAccessToken accessToken, String folderId);
+    DriveFolderChain ancestors(DriveAccessToken accessToken, String folderId);
 }

@@ -69,8 +69,9 @@ public class WatchDriveFolderHandler implements CommandHandler<WatchDriveFolder>
         }
 
         refuse(namesByDriveFolderId.get(folder.id()));
-        for (String ancestor :
-                driveAccess.call(connection, accessToken -> googleDriveFolders.ancestors(accessToken, folder.id()))) {
+        for (String ancestor : driveAccess
+                .call(connection, accessToken -> googleDriveFolders.ancestors(accessToken, folder.id()))
+                .folders()) {
             refuse(namesByDriveFolderId.get(ancestor));
         }
     }

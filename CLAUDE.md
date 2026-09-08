@@ -765,12 +765,22 @@ exports d'un document intact n'ont jamais la même empreinte, et il faut **ne m�
 un Doc dont le `modifiedTime` n'a pas bougé. La décision porte cette règle : un Doc immobile rend
 `NOTHING` avant tout téléchargement.
 
-**Résoudre le dossier surveillé d'un fichier lève en cas d'échec, et ne rend jamais vide.** C'est
-le mode d'échec le plus grave de ce flux : `decide` lit « aucun dossier surveillé » comme un
-retrait, donc un hoquet de Drive au moment de remonter les parents d'un fichier effacerait la
-base. La résolution est écrite **hors** du `catch` qui laisse un changement de côté, une panne
-arrête le tour, et un test l'observe explicitement. Les parents d'un dossier ne sont demandés
-qu'une fois par tour : cent changements dans le même dossier feraient sinon cent allers-retours.
+**Résoudre le dossier surveillé d'un fichier lève en cas d'échec, et une chaîne d'ancêtres qu'on
+n'a pas su remonter n'autorise aucun retrait.** C'est le mode d'échec le plus grave de ce flux :
+`decide` lit « aucun dossier surveillé » comme un retrait, donc un hoquet de Drive au moment de
+remonter les parents d'un fichier effacerait la ligne, ses extractions, ses extraits **et
+l'original dans le stockage objet**. Deux gardes, et il en fallait deux. La résolution est écrite
+**hors** du `catch` qui laisse un changement de côté, donc une panne arrête le tour. Et le port ne
+rend plus une liste mais un `DriveFolderChain`, qui **dit s'il a atteint le haut du Drive** : un
+`files.get` qui rend `404` en cours d'escalade — cohérence éventuelle après un déplacement, dossier
+parent partagé puis départagé, parent à la corbeille, maillon illisible d'une chaîne « partagé avec
+moi » — arrête la remontée sans être le sommet. Un dossier surveillé trouvé dans une chaîne
+incomplète reste une réponse certaine ; son **absence**, non, et le tour s'arrête là plutôt que de
+retirer. Ce n'est pas un cas tordu : un fichier d'un **sous-dossier** d'un dossier surveillé passe
+par cette escalade à chaque tour. Deux tests l'observent, un sur l'adapter et un de bout en bout.
+
+Les parents d'un dossier ne sont demandés qu'une fois par tour : cent changements dans le même
+dossier feraient sinon cent allers-retours.
 
 **Une synchronisation en échec n'efface rien et ne conserve rien.** Elle se signale dans le
 journal et sera rejouée au tour suivant, depuis le même jeton. Une autorisation retirée est le

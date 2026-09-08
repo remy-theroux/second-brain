@@ -30,6 +30,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.GoogleWorkspaceType;
 
 // The bean is shared by the whole context and the test transaction rollback does not
@@ -128,8 +129,9 @@ public class FakeGoogleDriveConfiguration {
                     .findFirst();
         }
 
+        /** A folder this Drive describes nowhere is not the top of it: the climb stops short, as it does in the adapter. */
         @Override
-        public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+        public DriveFolderChain ancestors(DriveAccessToken accessToken, String folderId) {
             refuseIfUnusable(accessToken);
             if (ancestorsUnavailable) {
                 throw new GoogleDriveUnavailableException();
@@ -138,13 +140,25 @@ public class FakeGoogleDriveConfiguration {
             String current = folderId;
             for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
                 Optional<String> parent = parentOf(current);
-                if (parent.isEmpty() || DriveFolder.ROOT.equals(parent.get())) {
-                    return ancestors;
+                if (parent.isEmpty()) {
+                    return isKnownFolder(current)
+                            ? DriveFolderChain.upToTheTop(ancestors)
+                            : DriveFolderChain.stoppedShort(ancestors);
+                }
+                if (DriveFolder.ROOT.equals(parent.get())) {
+                    return DriveFolderChain.upToTheTop(ancestors);
                 }
                 ancestors.add(parent.get());
                 current = parent.get();
             }
             throw new GoogleDriveUnavailableException();
+        }
+
+        private boolean isKnownFolder(String folderId) {
+            return DriveFolder.ROOT.equals(folderId)
+                    || foldersByParent.containsKey(folderId)
+                    || foldersByParent.values().stream().flatMap(List::stream).anyMatch(folder -> folder.id()
+                            .equals(folderId));
         }
 
         @Override
