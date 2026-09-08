@@ -28,7 +28,6 @@ import xyz.sterenn.secondbrain.knowledge.Fixtures;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
 import xyz.sterenn.secondbrain.knowledge.application.command.DisconnectDrive;
-import xyz.sterenn.secondbrain.knowledge.application.command.RenewDriveChannels;
 import xyz.sterenn.secondbrain.knowledge.domain.DriveChannelPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveChannel;
@@ -65,10 +64,15 @@ class DriveChannelRenewalTest {
 
     private static final String EMAIL = "alice-canal@exemple.fr";
 
+    private static final String OTHER_EMAIL = "bob-canal@exemple.fr";
+
     private static final DriveFolder NOTES = new DriveFolder("a1", "Notes");
 
     @Autowired
     private CommandBus commandBus;
+
+    @Autowired
+    private DriveChannelRenewer driveChannelRenewer;
 
     @Autowired
     private FakeGoogleDrive fakeGoogleDrive;
@@ -122,7 +126,7 @@ class DriveChannelRenewalTest {
 
     @AfterEach
     void erase_what_has_been_committed() {
-        jdbcTemplate.update("DELETE FROM users_users WHERE email = ?", EMAIL);
+        jdbcTemplate.update("DELETE FROM users_users WHERE email IN (?, ?)", EMAIL, OTHER_EMAIL);
         KnowledgeFixture.emptyTheOriginals(s3Client, originalsBucket);
     }
 
@@ -134,7 +138,7 @@ class DriveChannelRenewalTest {
     void opens_a_new_channel_before_the_current_one_expires() {
         DriveChannel expiring = aChannelExpiringAt(Instant.now().plus(Duration.ofHours(1)));
 
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         DriveChannel renewed = channel();
         assertThat(renewed.getChannelId()).isNotEqualTo(expiring.getChannelId());
@@ -147,7 +151,7 @@ class DriveChannelRenewalTest {
     void closes_the_channel_it_replaces() {
         DriveChannel expiring = aChannelExpiringAt(Instant.now().plus(Duration.ofHours(1)));
 
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         assertThat(fakeGoogleDrive.channelCalls()).contains(stopOf(expiring));
         assertThat(fakeGoogleDrive.openChannels()).containsExactly(channel().getChannelId());
@@ -158,7 +162,7 @@ class DriveChannelRenewalTest {
     /** Nothing opens a channel at the consent screen: the first round after a connection does. */
     @Test
     void opens_a_channel_for_a_connection_that_has_none() {
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         DriveChannel opened = channel();
         assertThat(opened.getResourceId()).isEqualTo("ressource-" + opened.getChannelId());
@@ -171,7 +175,7 @@ class DriveChannelRenewalTest {
     void leaves_alone_a_channel_that_is_not_due_yet() {
         DriveChannel comfortable = aChannelExpiringAt(Instant.now().plus(Duration.ofDays(3)));
 
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         assertThat(channel().getChannelId()).isEqualTo(comfortable.getChannelId());
         assertThat(fakeGoogleDrive.channelCalls()).isEmpty();
@@ -214,12 +218,29 @@ class DriveChannelRenewalTest {
     }
 
     /**
+     * The round is not one command around every Drive, and this is what that buys: a failure
+     * carries off its own renewal and nothing else. Shared, the transaction would be marked
+     * rollback-only by a repository that threw, and every channel row written earlier in the
+     * round would vanish at commit while the channels stayed open at Google.
+     */
+    @Test
+    void renews_the_other_drives_when_one_of_them_fails() {
+        UUID otherConnectionId = anotherConnectedDrive();
+        fakeGoogleDrive.willBeUnavailableFor(alice);
+
+        driveChannelRenewer.renewAll();
+
+        assertThat(driveChannelRepository.findByConnectionId(connectionId)).isEmpty();
+        assertThat(driveChannelRepository.findByConnectionId(otherConnectionId)).isPresent();
+    }
+
+    /**
      * Asked for, never assumed: a watch that carries no lifetime gets one hour from Google, and
      * the whole renewal schedule was written against seven days.
      */
     @Test
     void asks_google_for_a_channel_that_lasts_as_long_as_google_allows() {
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         assertThat(fakeGoogleDrive.watchRequests()).singleElement().satisfies(request -> {
             assertThat(request.lifetime()).isEqualTo(DriveChannelPolicy.REQUESTED_LIFETIME);
@@ -237,9 +258,9 @@ class DriveChannelRenewalTest {
     void leaves_alone_a_short_lived_channel_it_has_just_opened() {
         fakeGoogleDrive.willGrantChannelsFor(Duration.ofHours(1));
 
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
         DriveChannel opened = channel();
-        commandBus.dispatch(new RenewDriveChannels());
+        driveChannelRenewer.renewAll();
 
         assertThat(channel().getChannelId()).isEqualTo(opened.getChannelId());
         assertThat(fakeGoogleDrive.channelCalls()).containsExactly("watch:" + opened.getChannelId());
@@ -260,6 +281,15 @@ class DriveChannelRenewalTest {
         DriveChannel channel = DriveChannel.open(connectionId, expiresAt.minus(DriveChannelPolicy.REQUESTED_LIFETIME));
         channel.subscribed("ressource-google", expiresAt);
         return driveChannelRepository.save(channel);
+    }
+
+    private UUID anotherConnectedDrive() {
+        UUID bob = userRepository
+                .save(User.register(new Email(OTHER_EMAIL), "empreinte"))
+                .getId();
+        return driveConnectionRepository
+                .save(DriveConnection.connect(bob, "bob@gmail.com", new RefreshToken("1//jeton"), Instant.now()))
+                .getId();
     }
 
     private DriveChannel channel() {

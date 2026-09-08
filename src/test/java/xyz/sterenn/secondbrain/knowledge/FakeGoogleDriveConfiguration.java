@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -78,6 +79,9 @@ public class FakeGoogleDriveConfiguration {
 
         private final Set<String> vanished = ConcurrentHashMap.newKeySet();
 
+        /** The Drive of one owner falls over, the others answer: what isolates one round from another. */
+        private final Set<UUID> unreachableOwners = ConcurrentHashMap.newKeySet();
+
         private final List<DriveChange> changes = new CopyOnWriteArrayList<>();
 
         private final List<String> readPageTokens = new CopyOnWriteArrayList<>();
@@ -116,6 +120,9 @@ public class FakeGoogleDriveConfiguration {
 
         @Override
         public DriveAccessToken forConnection(DriveConnection connection) {
+            if (unreachableOwners.contains(connection.getOwnerId())) {
+                throw new GoogleDriveUnavailableException();
+            }
             if (revoked || (revokedOnRenewal && purged)) {
                 throw new DriveAuthorizationRevokedException();
             }
@@ -344,6 +351,11 @@ public class FakeGoogleDriveConfiguration {
             this.unavailable = true;
         }
 
+        /** Only that Drive falls over: everyone else's calls go through as usual. */
+        public void willBeUnavailableFor(UUID ownerId) {
+            unreachableOwners.add(ownerId);
+        }
+
         public void willReportARevokedAuthorization() {
             this.revoked = true;
         }
@@ -441,6 +453,7 @@ public class FakeGoogleDriveConfiguration {
             foldersByParent.clear();
             filesByParent.clear();
             vanished.clear();
+            unreachableOwners.clear();
             downloads.set(0);
             unavailableAfterDownloads = Integer.MAX_VALUE;
             unavailable = false;

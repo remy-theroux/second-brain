@@ -936,8 +936,19 @@ balayage inutile à chaque renouvellement.
 promesse : `changes.watch` rend une échéance que l'adapter lit, et une réponse sans échéance
 lisible est un échec plutôt qu'un canal dont le renouvellement ne pourrait pas se planifier.
 `DriveChannelPolicy` renouvelle dans les douze heures qui la précèdent, et le tour de
-renouvellement (`RenewDriveChannels`, horloge du worker) est aussi celui qui ouvre le **premier**
-canal d'une connexion qui n'en a pas : rien ne s'abonne à l'écran de consentement.
+renouvellement (horloge du worker) est aussi celui qui ouvre le **premier** canal d'une connexion
+qui n'en a pas : rien ne s'abonne à l'écran de consentement.
+
+**Le tour de renouvellement vit hors des bus**, comme la synchronisation et pour la même raison :
+`DriveChannelRenewer` est un `@Component` que l'ordonnanceur appelle, et il dispatche une
+`RenewDriveChannel` **par connexion**, donc une transaction courte par canal. En une seule
+commande, la transaction du bus aurait tenu une connexion PostgreSQL le temps de jusqu'à trois
+appels HTTP vers Google **par Drive connecté**, et le `catch` par connexion n'aurait rétabli
+**rien du tout** : une exception sortie d'un repository marque la transaction partagée
+`rollback-only`, le `catch` l'avale, et le commit final part en `UnexpectedRollbackException` —
+toutes les lignes de canal du tour disparaissent alors que les canaux correspondants sont ouverts
+chez Google. Découpé, le `catch` redevient ce qu'il prétend être : un Drive qui tombe coûte son
+renouvellement à son propriétaire, à personne d'autre.
 
 **Le renouvellement ouvre le nouveau canal avant de fermer l'ancien.** L'inverse laisserait une
 fenêtre sans abonnement. Les deux coexistent le temps d'un appel, donc une notification peut
