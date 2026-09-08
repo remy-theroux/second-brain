@@ -416,8 +416,11 @@ muet, quel que soit le code — c'est DRIVE-7.
 ### Le flux du choix des dossiers surveillés
 
 Quatre routes, et aucune ne lit le contenu d'un fichier. `GET /api/drive/folders` et
-`GET /api/drive/folders?parent=<id>` parcourent **les dossiers seulement** — la racine s'y
-désigne par le mot-clé `root`, pas par un paramètre vide. `POST /api/drive/watched-folders`
+`GET /api/drive/folders?parent=<id>` parcourent **les dossiers seulement** — sans `parent`,
+c'est la racine qui est parcourue, le handler traduisant l'absence en `root`, mot-clé par
+lequel l'API Google désigne le haut d'un Drive. Un `parent` hors de `[A-Za-z0-9_-]`, qui est
+l'alphabet réel d'un identifiant Drive, ne part pas chez Google : il rend une liste vide,
+comme le ferait un dossier inconnu. `POST /api/drive/watched-folders`
 met un dossier sous surveillance, `GET /api/drive/watched-folders` les liste,
 `DELETE /api/drive/watched-folders/{id}` en retire un **sans toucher aux documents qu'il a
 apportés** — le miroir est l'affaire de DRIVE-5, et le retrait ne fait rien d'autre que
@@ -469,7 +472,7 @@ Google précéderait chaque `files.list`. Une marge de soixante secondes
 Ce cache est **en mémoire de processus** : il n'est donc **pas partagé entre l'app et le
 worker**, et **ne survit pas à un redémarrage**. Sans conséquence — le pire cas est un échange
 de plus —, mais à savoir avant de chercher pourquoi deux processus parlent deux fois au point
-de jeton.
+de jeton. Il se vide à la déconnexion explicite, et à chaque jeton que Google refuse.
 
 **`invalid_grant` est le seul chemin vers une révocation.** C'est le seul signal que Google
 donne d'un accès retiré depuis le compte, et c'est le seul qui fasse passer la connexion en
@@ -480,6 +483,19 @@ L'exception héritant de `RuntimeException`, elle annule la transaction du bus :
 s'écrit donc dans une **seconde** transaction, `MarkDriveConnectionExpired` dispatchée par le
 contrôleur qui a rattrapé le refus, avant de rendre sa réponse. C'est exactement la situation
 d'ADR-0028, et la même réponse.
+
+**Mais rien ne rafraîchit un jeton d'accès encore valide à l'horloge : c'est le `401` de
+Google qui déclenche le rafraîchissement, donc la révocation.** Un accès retiré tue le jeton
+d'accès **immédiatement**, alors que le cache le croit bon pour une heure encore : sans ce
+chemin, le `files.list` prenait un `401` traité comme une panne quelconque, l'utilisateur
+recevait `503` « réessayez plus tard » — un message qui invite à attendre là où il faut
+reconnecter — et la connexion restait `ACTIVE` jusqu'à cinquante-neuf minutes.
+`GoogleDriveFoldersAdapter` distingue donc le `401` (`DriveAccessTokenRejectedException`), et
+`DriveAccess` — par où passe **tout** appel Drive du contexte — purge le jeton et rejoue
+l'appel **une seule fois**. C'est ce rafraîchissement forcé qui produit l'`invalid_grant`.
+Jamais de boucle : un `401` qui survit à un jeton neuf est une vraie anomalie, il rend `503`
+comme le reste — l'exception est fille de `GoogleDriveUnavailableException` pour ça — et
+réessayer sans fin en ferait une tempête d'appels.
 
 Les appels à Google ont lieu **dans la transaction du bus**, `readOnly` pour le parcours : une
 connexion PostgreSQL est tenue le temps des allers-retours, comme elle l'est pour Ollama à

@@ -84,7 +84,7 @@ class GoogleAccessTokensAdapter implements GoogleAccessTokens {
         LOG.error(
                 "The Google token endpoint refused the refresh: HTTP {}",
                 refusal.getStatusCode().value());
-        if (refusal.getStatusCode() == HttpStatus.BAD_REQUEST && REVOKED_ERROR.equals(errorOf(refusal))) {
+        if (refusal.getStatusCode().isSameCodeAs(HttpStatus.BAD_REQUEST) && REVOKED_ERROR.equals(errorOf(refusal))) {
             return new DriveAuthorizationRevokedException(refusal);
         }
         return new GoogleDriveUnavailableException(refusal);
