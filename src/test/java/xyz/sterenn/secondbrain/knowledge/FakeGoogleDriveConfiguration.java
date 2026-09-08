@@ -72,12 +72,6 @@ public class FakeGoogleDriveConfiguration {
          */
         public static final Instant MODIFIED_TIME = Instant.parse("2026-09-08T10:15:30Z");
 
-        /**
-         * The deadline this Google hands back, and it is shorter than the seven days of the
-         * documentation on purpose: what counts is the one that comes back, never the maximum.
-         */
-        public static final Duration CHANNEL_LIFETIME = Duration.ofDays(3);
-
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();
 
         private final Map<String, List<StoredFile>> filesByParent = new ConcurrentHashMap<>();
@@ -93,7 +87,10 @@ public class FakeGoogleDriveConfiguration {
 
         private final Map<String, String> openChannels = new ConcurrentHashMap<>();
 
-        private final List<String> notifiedAddresses = new CopyOnWriteArrayList<>();
+        private final List<WatchRequest> watchRequests = new CopyOnWriteArrayList<>();
+
+        /** What this Google grants at most: null means it grants exactly what the watch asks for. */
+        private volatile Duration grantedLifetime = null;
 
         private volatile String startPageToken = "1789";
 
@@ -197,19 +194,31 @@ public class FakeGoogleDriveConfiguration {
             return new DriveChangePage(List.copyOf(changes), newStartPageToken);
         }
 
+        /**
+         * The deadline is derived from what the watch asks for, never from a constant: a stub that
+         * answered the same lifetime whatever the request would go on passing while the code
+         * stopped asking for one, which is exactly how the hour Google grants by default went
+         * unnoticed.
+         */
         @Override
         public DriveChannelSubscription watch(
                 DriveAccessToken accessToken,
                 String channelId,
                 DriveChannelToken token,
                 String address,
-                String pageToken) {
+                String pageToken,
+                Duration lifetime) {
             refuseIfUnusable(accessToken);
             channelCalls.add("watch:" + channelId);
-            notifiedAddresses.add(address);
+            watchRequests.add(new WatchRequest(channelId, address, token, pageToken, lifetime));
             String resourceId = "ressource-" + channelId;
             openChannels.put(channelId, resourceId);
-            return new DriveChannelSubscription(resourceId, Instant.now().plus(CHANNEL_LIFETIME));
+            return new DriveChannelSubscription(resourceId, Instant.now().plus(granted(lifetime)));
+        }
+
+        private Duration granted(Duration asked) {
+            Duration cap = grantedLifetime;
+            return cap == null || asked.compareTo(cap) < 0 ? asked : cap;
         }
 
         @Override
@@ -410,8 +419,14 @@ public class FakeGoogleDriveConfiguration {
             return Set.copyOf(openChannels.keySet());
         }
 
-        public List<String> notifiedAddresses() {
-            return List.copyOf(notifiedAddresses);
+        /** Everything a watch carried, in order: the address, the token, the position and the lifetime. */
+        public List<WatchRequest> watchRequests() {
+            return List.copyOf(watchRequests);
+        }
+
+        /** Google hands back less than it was asked for, and says nothing about it. */
+        public void willGrantChannelsFor(Duration lifetime) {
+            this.grantedLifetime = lifetime;
         }
 
         public void clear() {
@@ -419,7 +434,8 @@ public class FakeGoogleDriveConfiguration {
             readPageTokens.clear();
             channelCalls.clear();
             openChannels.clear();
-            notifiedAddresses.clear();
+            watchRequests.clear();
+            grantedLifetime = null;
             changeTokenExpired = false;
             ancestorsUnavailable = false;
             foldersByParent.clear();
@@ -433,6 +449,9 @@ public class FakeGoogleDriveConfiguration {
             revokedOnRenewal = false;
             purged = false;
         }
+
+        public record WatchRequest(
+                String channelId, String address, DriveChannelToken token, String pageToken, Duration lifetime) {}
 
         private static final class StoredFile {
 

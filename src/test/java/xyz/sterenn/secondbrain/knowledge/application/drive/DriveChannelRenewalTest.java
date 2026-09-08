@@ -103,6 +103,9 @@ class DriveChannelRenewalTest {
     @Value("${secondbrain.storage.s3.bucket}")
     private String originalsBucket;
 
+    @Value("${secondbrain.drive.webhook-url}")
+    private String webhookUrl;
+
     private UUID alice;
     private UUID connectionId;
 
@@ -210,6 +213,38 @@ class DriveChannelRenewalTest {
                 .isEmpty();
     }
 
+    /**
+     * Asked for, never assumed: a watch that carries no lifetime gets one hour from Google, and
+     * the whole renewal schedule was written against seven days.
+     */
+    @Test
+    void asks_google_for_a_channel_that_lasts_as_long_as_google_allows() {
+        commandBus.dispatch(new RenewDriveChannels());
+
+        assertThat(fakeGoogleDrive.watchRequests()).singleElement().satisfies(request -> {
+            assertThat(request.lifetime()).isEqualTo(DriveChannelPolicy.REQUESTED_LIFETIME);
+            assertThat(request.address()).isEqualTo(webhookUrl);
+            assertThat(request.token()).isEqualTo(channel().getToken());
+        });
+    }
+
+    /**
+     * Google may grant an hour where seven days were asked for. Renewed on a fixed twelve-hour
+     * margin, such a channel would be due the moment it opens: a watch and a stop paid at every
+     * round, for ever, and a renewal that always falls after the deadline it watches.
+     */
+    @Test
+    void leaves_alone_a_short_lived_channel_it_has_just_opened() {
+        fakeGoogleDrive.willGrantChannelsFor(Duration.ofHours(1));
+
+        commandBus.dispatch(new RenewDriveChannels());
+        DriveChannel opened = channel();
+        commandBus.dispatch(new RenewDriveChannels());
+
+        assertThat(channel().getChannelId()).isEqualTo(opened.getChannelId());
+        assertThat(fakeGoogleDrive.channelCalls()).containsExactly("watch:" + opened.getChannelId());
+    }
+
     /** Read rather than awaited, like the synchronisation round: a delay, never a rate. */
     @Test
     void puts_the_renewals_on_a_fixed_delay_clock() {
@@ -217,8 +252,12 @@ class DriveChannelRenewalTest {
                 .isInstanceOf(FixedDelayTask.class));
     }
 
+    /**
+     * Opened a full week before its deadline, because the renewal margin is read against the
+     * lifetime of the channel itself: a channel born one hour before its deadline is not due.
+     */
     private DriveChannel aChannelExpiringAt(Instant expiresAt) {
-        DriveChannel channel = DriveChannel.open(connectionId, Instant.now());
+        DriveChannel channel = DriveChannel.open(connectionId, expiresAt.minus(DriveChannelPolicy.REQUESTED_LIFETIME));
         channel.subscribed("ressource-google", expiresAt);
         return driveChannelRepository.save(channel);
     }

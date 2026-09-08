@@ -1,5 +1,6 @@
 package xyz.sterenn.secondbrain.knowledge.domain.port;
 
+import java.time.Duration;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelSubscription;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChannelToken;
@@ -13,9 +14,16 @@ public interface GoogleDriveChannels {
      *
      * @param pageToken where the feed starts, which Google demands and we never use: a
      *     notification says that something moved, never what.
+     * @param lifetime how long the channel is asked to last. Demanded, never assumed: a watch
+     *     that asks for nothing gets one hour.
      */
     DriveChannelSubscription watch(
-            DriveAccessToken accessToken, String channelId, DriveChannelToken token, String address, String pageToken);
+            DriveAccessToken accessToken,
+            String channelId,
+            DriveChannelToken token,
+            String address,
+            String pageToken,
+            Duration lifetime);
 
     /** Idempotent: a channel Google no longer knows is a channel that is closed. */
     void stop(DriveAccessToken accessToken, String channelId, String resourceId);

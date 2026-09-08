@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import xyz.sterenn.secondbrain.knowledge.domain.DriveChannelPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveChannel;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveChannelRepository;
@@ -56,8 +57,9 @@ public class DriveChannels {
             return Optional.empty();
         }
         DriveChannel channel = DriveChannel.open(connection.getId(), clock.instant());
-        // The position only tells Drive where the feed it watches starts. We never read what a
-        // notification carries, so which position it is has no bearing on what we then do.
+        // The position only tells Drive where the feed it watches starts, and a notification says
+        // nothing of what it carries. Kept on the connection, it would count as a read position
+        // and rob the first synchronisation round of the full scan it owes a new connection.
         channel.subscribed(driveAccess.call(
                 connection,
                 accessToken -> googleDriveChannels.watch(
@@ -67,7 +69,8 @@ public class DriveChannels {
                         webhookUrl,
                         connection
                                 .getChangesPageToken()
-                                .orElseGet(() -> googleDriveChanges.startPageToken(accessToken)))));
+                                .orElseGet(() -> googleDriveChanges.startPageToken(accessToken)),
+                        DriveChannelPolicy.REQUESTED_LIFETIME)));
         return Optional.of(channel);
     }
 

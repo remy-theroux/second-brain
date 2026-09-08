@@ -95,7 +95,7 @@ public class DriveChannel {
     }
 
     public boolean needsRenewal(Instant now) {
-        return expiresAt == null || DriveChannelPolicy.needsRenewal(expiresAt, now);
+        return expiresAt == null || DriveChannelPolicy.needsRenewal(openedAt, expiresAt, now);
     }
 
     public UUID getId() {

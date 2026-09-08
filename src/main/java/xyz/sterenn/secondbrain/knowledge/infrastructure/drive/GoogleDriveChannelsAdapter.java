@@ -2,6 +2,7 @@ package xyz.sterenn.secondbrain.knowledge.infrastructure.drive;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -28,6 +29,9 @@ class GoogleDriveChannelsAdapter implements GoogleDriveChannels {
 
     static final String WEB_HOOK = "web_hook";
 
+    /** Seconds, as a string, and the only way to ask for more than the hour Google grants by default. */
+    static final String TIME_TO_LIVE = "ttl";
+
     private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveChannelsAdapter.class);
 
     private final RestClient restClient;
@@ -38,7 +42,12 @@ class GoogleDriveChannelsAdapter implements GoogleDriveChannels {
 
     @Override
     public DriveChannelSubscription watch(
-            DriveAccessToken accessToken, String channelId, DriveChannelToken token, String address, String pageToken) {
+            DriveAccessToken accessToken,
+            String channelId,
+            DriveChannelToken token,
+            String address,
+            String pageToken,
+            Duration lifetime) {
         GoogleChannelResponse answer;
         try {
             answer = restClient
@@ -46,7 +55,17 @@ class GoogleDriveChannelsAdapter implements GoogleDriveChannels {
                     .uri(watchUri(pageToken))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken.value())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("id", channelId, "type", WEB_HOOK, "address", address, "token", token.value()))
+                    .body(Map.of(
+                            "id",
+                            channelId,
+                            "type",
+                            WEB_HOOK,
+                            "address",
+                            address,
+                            "token",
+                            token.value(),
+                            "params",
+                            Map.of(TIME_TO_LIVE, String.valueOf(lifetime.toSeconds()))))
                     .retrieve()
                     .body(GoogleChannelResponse.class);
         } catch (RestClientResponseException refusal) {
