@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 
 @Configuration(proxyBeanMethods = false)
@@ -41,5 +42,10 @@ class GoogleDriveConfiguration {
     @Bean
     GoogleDriveFolders googleDriveFolders(RestClient.Builder restClientBuilder) {
         return new GoogleDriveFoldersAdapter(restClientBuilder);
+    }
+
+    @Bean
+    GoogleDriveFiles googleDriveFiles(RestClient.Builder restClientBuilder) {
+        return new GoogleDriveFilesAdapter(restClientBuilder);
     }
 }

@@ -1,8 +1,10 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.persistence;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
@@ -39,6 +41,11 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     }
 
     @Override
+    public Optional<Document> findByOwnerIdAndDriveFileId(UUID ownerId, String driveFileId) {
+        return springDataDocumentRepository.findByOwnerIdAndDriveFileId(ownerId, driveFileId);
+    }
+
+    @Override
     public Optional<Document> findByIdAndOwnerId(UUID id, UUID ownerId) {
         return springDataDocumentRepository.findByIdAndOwnerId(id, ownerId);
     }
@@ -46,6 +53,14 @@ public class JpaDocumentRepositoryAdapter implements DocumentRepository {
     @Override
     public List<Document> findAllByOwnerId(UUID ownerId) {
         return springDataDocumentRepository.findAllByOwnerIdOrderByCreatedAtDesc(ownerId);
+    }
+
+    @Override
+    public Map<UUID, Long> countDocumentsByWatchedFolder(UUID ownerId) {
+        return springDataDocumentRepository.countByWatchedFolder(ownerId).stream()
+                .collect(Collectors.toMap(
+                        WatchedFolderDocumentCountRow::getWatchedFolderId,
+                        WatchedFolderDocumentCountRow::getDocumentCount));
     }
 
     @Override

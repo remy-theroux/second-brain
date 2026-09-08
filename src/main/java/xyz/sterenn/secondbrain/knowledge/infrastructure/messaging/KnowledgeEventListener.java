@@ -10,10 +10,12 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.IndexDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
+import xyz.sterenn.secondbrain.knowledge.application.drive.DriveFolderImporter;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
@@ -27,9 +29,11 @@ public class KnowledgeEventListener {
     private static final String UNEXPECTED_FAILURE = "Le traitement de ce document a échoué de façon inattendue.";
 
     private final CommandBus commandBus;
+    private final DriveFolderImporter driveFolderImporter;
 
-    public KnowledgeEventListener(CommandBus commandBus) {
+    public KnowledgeEventListener(CommandBus commandBus, DriveFolderImporter driveFolderImporter) {
         this.commandBus = commandBus;
+        this.driveFolderImporter = driveFolderImporter;
     }
 
     @RabbitHandler
@@ -65,6 +69,15 @@ public class KnowledgeEventListener {
             log.error("Indexing of document {} failed", event.documentId(), failure);
             commandBus.dispatch(new MarkDocumentProcessingFailed(event.documentId(), event.ownerId(), reason(failure)));
         }
+    }
+
+    /**
+     * The only handler that does not dispatch a command: the importer holds the delivery for the
+     * whole walk, and dispatches one command per file so as not to hold one transaction for it.
+     */
+    @RabbitHandler
+    public void on(DriveFolderImportRequested event) {
+        driveFolderImporter.importFolder(event.ownerId(), event.watchedFolderId());
     }
 
     /**

@@ -504,6 +504,162 @@ l'indexation et à la recherche. Une application mono-utilisateur le supporte.
 **Ce que le front ne fait pas encore :** aucun écran n'appelle ces quatre routes — c'est
 DRIVE-7.
 
+### Le flux de l'import d'un dossier surveillé
+
+`POST /api/drive/watched-folders/{id}/import` répond **`202`** : le balayage n'a pas commencé
+quand la réponse part, et rien n'a été créé — c'est exactement ce que `202` dit, là où `201`
+promettrait une ressource. Un dossier inconnu ou d'autrui rend `404`, comme partout. La route
+ne fait que publier `DriveFolderImportRequested` ; le worker balaie, télécharge et importe.
+
+**La boucle vit hors des bus et sans transaction.** `DriveFolderImporter` est un composant
+d'`application/`, appelé directement par le listener, comme `ConversationAgent` : un
+`CommandHandler` tournerait dans la transaction du bus, donc tiendrait une connexion
+PostgreSQL ouverte le temps de cinq cents fichiers. Pire, c'est cette transaction unique qui
+rendrait faux « les documents déjà entrés restent dans ma base » — un Drive qui tombe à
+mi-parcours emporterait tout ce qui est entré avant lui. La boucle dispatche donc **une
+commande `ImportDriveFile` par fichier**, soit une transaction courte chacune, et un échec
+n'annule que le fichier en cours.
+
+**L'unicité de contenu s'assouplit — c'est le seul endroit où ce flux change une règle
+existante**, et cette décision **attend son ADR**. `ImportDriveFileHandler` traite trois cas,
+dans cet ordre :
+
+1. un document existe déjà pour `(propriétaire, fichier Drive)` → **rien à importer**, c'est un
+   second import du même fichier ; la seule écriture possible est celle de son dossier
+   surveillé, ci-dessous ;
+2. sinon, un document existe pour `(propriétaire, empreinte)` → on lui **rattache** sa
+   provenance Drive, sans créer de second document — sauf s'il en porte déjà une, auquel cas le
+   fichier est **rejeté** avec son motif : deux fichiers Drive au même contenu, c'est
+   `rapport.pdf` et sa copie `rapport (1).pdf` ;
+3. sinon → création avec provenance, original conservé, `DocumentUploaded` publié.
+
+**Le cas 2 ne relance rien** : ni événement, ni extraction, ni revectorisation. Le contenu n'a
+pas bougé, seule son origine est apprise. Sans cette règle, la première synchronisation d'un
+Drive revectoriserait toute la base — c'est le point à ne pas casser, et un test l'observe.
+
+**Un dossier retiré de la surveillance puis remis est un `WatchedFolder` neuf**, avec un
+identifiant neuf, et les documents qu'il avait apportés portent l'ancien. C'est la seule écriture
+du cas 1 : le dossier surveillé du document est remis à jour quand il diffère, **sans rien
+publier**, ce qui préserve la propriété du paragraphe précédent. Sans elle, l'écran lirait
+« 0 document » à côté d'un import réussi, et pour toujours.
+
+**`UploadDocument` n'a donc pas été réutilisée**, contrairement à ce que le ticket suggérait :
+elle lève `DuplicateDocumentException` au cas 2, qui est précisément le cas nominal d'un
+premier import. Un drapeau `boolean fromDrive` glissé dans l'ancienne aurait fait diverger deux
+comportements sous un seul nom ; une commande distincte est plus honnête.
+
+**La provenance entre dans le document lui-même** — `source` (`MANUAL` ou `GOOGLE_DRIVE`),
+l'identifiant Drive, le lien d'ouverture — et un document ne vient jamais de deux fichiers
+Drive : `attachTo` refuse d'écraser une provenance existante. La quatrième colonne,
+`drive_modified_time`, **ne sert à rien avant DRIVE-5** et est posée maintenant : c'est par elle
+qu'un Google Doc natif se comparera, jamais par son empreinte, et l'ajouter plus tard obligerait
+à rebalayer tout le Drive pour les documents déjà importés.
+
+**Le plafond se contrôle avant le téléchargement.** `files.list` rend déjà `size` ; payer le
+transfert d'un fichier qu'on va refuser n'a aucun sens. `ImportPolicy.MAX_FILE_SIZE` vaut
+exactement ce que vaut le dépôt manuel (20 Mo, `spring.servlet.multipart.max-file-size`) : deux
+chemins d'entrée dans la même base ne doivent pas avoir deux plafonds. `size` arrive en
+**chaîne** dans le JSON de Drive et **manque** aux Google Docs natifs — l'adapter le lit comme
+tel plutôt que de laisser Jackson échouer.
+
+**Trois sorts pour un fichier, et un seul est muet.** Il est *ignoré sans trace* quand son
+format n'est pas pris en charge — un Drive est plein d'images et de vidéos, les faire figurer
+noierait les fichiers dont le propriétaire peut réellement faire quelque chose. Il est *rejeté
+avec un motif consultable* quand il dépasse le plafond, quand Drive refuse de le rendre, ou
+quand son contenu est déjà dans la base par un autre fichier Drive. Sinon, il est *importé*. Et
+**les rejets sont remplacés à chaque import, jamais cumulés** : un fichier réparé doit quitter
+la liste, et une liste qui grossit à chaque passage ne se lit plus au bout de trois.
+
+**Ce qui arrête l'import, et ce qui ne l'arrête pas.** Seuls un Drive injoignable et une
+autorisation retirée l'arrêtent, et le bilan porte alors leur message ; **tout le reste écarte
+un fichier et continue** — un `404` au téléchargement (supprimé entre le balayage et le
+téléchargement), un hoquet du stockage objet, une écriture concurrente sur la même ligne. C'est
+pourquoi l'adapter distingue ces codes d'une vraie panne : mappés sur « Google Drive est
+injoignable », un fichier disparu une minute plus tôt laisserait les quatre cents suivants
+dehors, sous un bilan « échec inattendu ».
+
+**Un `403`, lui, ne se lit pas à son code : c'est le motif que Google met dans son corps qui
+départage.** `error.errors[].reason` vaut `rateLimitExceeded`, `userRateLimitExceeded`,
+`dailyLimitExceeded`, `backendError` ou `sharingRateLimitExceeded` → c'est un **plafonnement**,
+donc une indisponibilité transitoire : l'import s'arrête et sera rejoué. Tout autre motif
+(`insufficientFilePermissions`, `appNotAuthorizedToFile`, `forbidden`…) est un partage retiré :
+on écarte ce fichier et on continue. Sans cette distinction, un plafonnement à mi-parcours
+écrirait un rejet consultable pour chacun des quatre cents fichiers restants — quatre cents
+motifs faux disant « fichier inaccessible » pour des fichiers sains, sous un import annoncé
+« réussi ». **Un corps illisible penche vers le rejet** : c'est le choix le moins destructeur,
+puisqu'il fait entrer les autres fichiers plutôt que de tout bloquer, et le rejet reste
+consultable. Le corps est **lu, jamais journalisé** et jamais recopié dans un message affichable
+— c'est la même raison qui interdit à l'adapter de journaliser `getMessage()` : un corps peut
+porter un secret. Le `404` ne change pas : un fichier disparu est sans ambiguïté.
+
+**Le balayage complet précède le premier téléchargement** : le port rend la liste de tout le
+dossier et de ses sous-dossiers avant qu'un octet de contenu soit demandé. Une panne pendant le
+listing — la phase la plus longue sur un gros Drive — ne laisse donc **rien** entrer du tout. La
+promesse « les documents déjà entrés restent dans ma base » ne couvre que la seconde moitié de
+la fenêtre.
+
+**`files.list` se pagine ici comme au parcours des dossiers** : cent entrées par défaut et un
+`nextPageToken`. Un dossier de plus de cent fichiers en perdrait la moitié **en silence** — le
+pire mode d'échec possible pour un import dont personne ne relit le contenu.
+
+**Une panne arrête la boucle et écrit le bilan par une seconde commande** (`SUCCEEDED` ou
+`FAILED`, l'instant, le motif) : le balayage a annulé sa propre transaction, celle du bilan doit
+donc être une autre, c'est la situation d'ADR-0028 et la même réponse. Une **autorisation
+retirée** en cours d'import emprunte le même chemin et fait **deux** commandes : le bilan, et
+`MarkDriveConnectionExpired`, sans quoi l'utilisateur verrait un import en échec sans savoir
+qu'il doit reconnecter son compte — c'est ce que font déjà les deux contrôleurs Drive.
+
+**Une panne avant le balayage n'écrit aucun bilan.** Les deux lectures d'entrée — la connexion,
+le dossier — sont hors de ce `try`, et la route est asynchrone : un `DELETE` du dossier ou une
+déconnexion entre la demande et le balayage fait sortir l'exception jusqu'au listener, le message
+est rejeté sans remise en file, et le dossier garde le statut de l'import précédent, parfois
+« réussi ». Rien ne **peut** être écrit sur un dossier disparu ; ce qui manquait était la trace,
+et un `LOG.error` englobant la pose.
+
+**Il n'y a pas de statut « en cours ».** Pendant tout le balayage, l'écran lit le bilan de
+l'import précédent : rien n'y distingue un import qui travaille d'un import qui n'a pas commencé.
+
+**Le worker tient la livraison AMQP pendant tout l'import**, et les deux heures de
+`consumer_timeout` posées pour la vectorisation suffisent : **la vectorisation n'est pas dans
+cette livraison**. Chaque document importé repart en message distinct, avec son propre budget ;
+l'import ne paie que le balayage, les téléchargements et une écriture par fichier.
+
+**Pendant ce temps, le listener ne consomme rien d'autre** : la queue du contexte n'a qu'un
+consommateur, donc un seul message à la fois, et l'extraction comme l'indexation des documents
+que l'import vient de créer font la queue derrière le balayage complet. Sur cinq cents fichiers,
+c'est un silence long, et il ne signale aucune panne.
+
+**Un document en échec rattaché à un fichier Drive n'est plus relançable par l'import** : le
+cas 1 court-circuite pour toujours, quel que soit le motif de l'échec. Il faut le supprimer et le
+redéposer. C'est le pendant exact du document resté `EXTRACTED` de la section « découpage et
+vectorisation », et il se réglera au même endroit.
+
+**Ce que l'API rend de tout ça.** `DocumentView` et `DocumentDetailView` portent la `source`
+(`MANUAL` ou `GOOGLE_DRIVE`) et, quand Drive en a rendu un, le lien d'ouverture — jamais
+l'identifiant du fichier Drive, dont aucun écran ne ferait rien. `WatchedFolderView` porte le
+bilan du dernier import (instant, statut, motif d'échec, absents tant qu'aucun import n'a eu
+lieu), le nombre de documents que le dossier a apportés et **ses rejets**, sans quoi le mot
+« consultables » ci-dessus ne voudrait rien dire. Un rejet ne rend que son nom de fichier et
+son motif, pour la même raison qu'un document ne rend pas son identifiant Drive.
+
+Les rejets voyagent **avec le dossier** plutôt que derrière une route à eux : ils sont chargés
+de toute façon (`@ElementCollection` en `EAGER`), ils se lisent à côté du bilan auquel ils
+appartiennent, et une liste de dossiers surveillés se compte sur les doigts d'une main. Le prix
+est un **1 + N** : cet `EAGER` fait une requête de rejets par dossier, là où le comptage des
+documents ci-dessous, lui, est bien groupé en une seule. L'écran entier ne tient donc pas en une
+requête.
+
+**Un document sait par quel dossier surveillé il est entré** — colonne `watched_folder_id`,
+posée à l'import et réécrite au seul cas du dossier ré-surveillé, ci-dessus —, et c'est ce qui
+permet de compter. Le comptage est
+**une seule requête groupée** pour tous les dossiers du propriétaire : un `count` par dossier
+dans la boucle d'affichage serait autant de requêtes que de dossiers. Ce que ça ferme : le
+comptage ne se déduit pas du Drive, qu'il faudrait rebalayer pour savoir quels fichiers sont
+sous quel dossier.
+
+Ce qu'aucun écran ne fait encore : appeler ces routes — c'est DRIVE-7, et il est désormais
+**front seul**.
+
 ### Le flux du dépôt d'un document
 
 `POST /api/documents` reçoit un multipart (`file`), dispatche `UploadDocument` et répond
@@ -552,9 +708,10 @@ mentionnée, et ne le sera pas : les `ON DELETE CASCADE` de ses tables l'emporte
 document, et ce handler n'a pas eu à changer quand elles sont arrivées.
 
 `GET /api/documents/{id}` rend un document **et ce qui en a été extrait** : le nom, le
-format, la typologie, le statut, le motif d'échec le cas échéant, et — quand elle existe —
-l'extraction propre à sa typologie. Une seule requête pour tout l'écran de détail, et non une
-route `/extraction` à part : celle-là aurait rendu `404` sur un document simplement en file
+format, la typologie, le statut, le motif d'échec le cas échéant, sa provenance (voir « Le
+flux de l'import d'un dossier surveillé »), et — quand elle existe — l'extraction propre à sa
+typologie. Une seule requête pour tout l'écran de détail, et non une route `/extraction` à
+part : celle-là aurait rendu `404` sur un document simplement en file
 d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le document
 d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
 rendant un `Optional` — une query ne lève pas.
@@ -1013,6 +1170,27 @@ en enfilade — déconnecter un compte Google emporte ses dossiers surveillés, 
 emporte la connexion, donc les dossiers avec elle. **Ni l'une ni l'autre n'emporte les documents
 que ces dossiers ont apportés**, c'est la promesse de DRIVE-1 et elle tient parce que rien ne relie
 un document à un dossier surveillé.
+
+Le bilan du dernier import vit sur le dossier surveillé lui-même (`last_import_at`,
+`last_import_status`, `last_import_error`) et les fichiers qu'il a laissés dehors dans
+`knowledge_drive_import_rejections`, une `@ElementCollection` ordonnée par `rejection_position`
+— d'où la clé primaire composite et l'absence d'identifiant propre, comme les sources d'une
+trace de conversation. `last_import_status` est **`NULL` tant qu'aucun import n'a eu lieu** : un
+dossier mis sous surveillance et jamais importé n'a ni réussi ni échoué, et c'est ce que dit son
+absence.
+
+La provenance d'un document vit dans `knowledge_documents`, en cinq colonnes : `source`
+(`MANUAL` par défaut, ce qui vaut pour toutes les lignes entrées avant l'import Drive),
+`drive_file_id`, `drive_web_view_link` et `drive_modified_time`, cette dernière posée d'avance
+pour DRIVE-5 (voir « Le flux de l'import d'un dossier surveillé »). `watched_folder_id`, la
+cinquième, dit par quel dossier surveillé le document est entré : elle **ne porte aucune clé
+étrangère**, parce que cesser de surveiller un dossier ne retire pas ses documents et que
+déconnecter un compte Google emporte ses dossiers surveillés — c'est
+`knowledge_agent_run_sources.document_id` une seconde fois. Une seconde unicité s'y
+ajoute, `UNIQUE (owner_id, drive_file_id)` : elle **ne gêne pas les dépôts manuels**, les `NULL`
+de PostgreSQL étant distincts entre eux, et elle porte le propriétaire pour la même raison que
+`(owner_id, checksum)` — deux comptes qui surveillent le même Drive partagé importent chacun
+leur document.
 
 Le texte extrait d'un document vit dans **deux tables**, `knowledge_text_extractions` (une
 ligne par document, `document_id` `UNIQUE`) et `knowledge_text_blocks` (ses blocs, une

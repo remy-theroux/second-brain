@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,9 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveProvenance;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 import xyz.sterenn.secondbrain.users.AccountFixture;
 import xyz.sterenn.secondbrain.users.RecordingNotificationSenderConfiguration;
@@ -139,6 +143,35 @@ class ListDocumentsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("FAILED"))
                 .andExpect(jsonPath("$[0].errorMessage").value("Ce document ne contient pas de texte exploitable."));
+    }
+
+    @Test
+    void announces_a_document_uploaded_by_hand_without_a_drive_link() throws Exception {
+        upload(aliceToken, "rapport.pdf", "contenu");
+
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].source").value("MANUAL"))
+                .andExpect(jsonPath("$[0].driveLink").doesNotExist());
+    }
+
+    @Test
+    void announces_the_drive_origin_and_the_link_of_an_imported_document() throws Exception {
+        byte[] content = "contenu importé".getBytes(StandardCharsets.UTF_8);
+        documentRepository.save(Document.importedFromDrive(
+                alice,
+                "notes.md",
+                DocumentFormat.MARKDOWN,
+                Checksum.of(content),
+                content.length,
+                new DriveProvenance(
+                        "f1", "https://drive.google.com/file/d/f1/view", Instant.parse("2026-09-08T10:15:30Z")),
+                UUID.randomUUID()));
+
+        mockMvc.perform(get("/api/documents").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].source").value("GOOGLE_DRIVE"))
+                .andExpect(jsonPath("$[0].driveLink").value("https://drive.google.com/file/d/f1/view"));
     }
 
     @Test

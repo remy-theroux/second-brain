@@ -10,11 +10,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentSource;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveProvenance;
 
 /** See ADR-0002: the deviation that allows JPA annotations in the domain. */
 @Entity
@@ -53,6 +56,24 @@ public class Document {
     @Column(name = "error_message", length = MAX_ERROR_MESSAGE_LENGTH)
     private String errorMessage;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private DocumentSource source;
+
+    @Column(name = "drive_file_id", length = DriveProvenance.MAX_FILE_ID_LENGTH)
+    private String driveFileId;
+
+    @Column(name = "drive_web_view_link", columnDefinition = "text")
+    private String driveWebViewLink;
+
+    // Nothing reads it before DRIVE-5: it is stored now because a column added later would
+    // mean walking the whole Drive again for the documents already imported.
+    @Column(name = "drive_modified_time")
+    private Instant driveModifiedTime;
+
+    @Column(name = "watched_folder_id", columnDefinition = "uuid")
+    private UUID watchedFolderId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -72,6 +93,7 @@ public class Document {
         this.checksum = checksum;
         this.sizeBytes = sizeBytes;
         this.status = DocumentStatus.PENDING;
+        this.source = DocumentSource.MANUAL;
     }
 
     public static Document upload(
@@ -80,6 +102,53 @@ public class Document {
             throw new IllegalArgumentException("The document owner is required");
         }
         return new Document(ownerId, boundedFilename(filename), format, checksum, requirePositive(sizeBytes));
+    }
+
+    public static Document importedFromDrive(
+            UUID ownerId,
+            String filename,
+            DocumentFormat format,
+            Checksum checksum,
+            long sizeBytes,
+            DriveProvenance provenance,
+            UUID watchedFolderId) {
+        Document document = upload(ownerId, filename, format, checksum, sizeBytes);
+        document.attachTo(provenance, watchedFolderId);
+        return document;
+    }
+
+    /**
+     * The content is left exactly as it was: a document already in the base gains its Drive
+     * origin without a second copy and without anything to process again.
+     */
+    public void attachTo(DriveProvenance provenance, UUID watchedFolderId) {
+        if (provenance == null) {
+            throw new IllegalArgumentException("The Drive origin of a document is required");
+        }
+        UUID watchedFolder = requireWatchedFolder(watchedFolderId);
+        if (this.driveFileId != null) {
+            throw new IllegalStateException("A document already carries a Drive file: " + this.driveFileId);
+        }
+        this.source = DocumentSource.GOOGLE_DRIVE;
+        this.driveFileId = provenance.fileId();
+        this.driveWebViewLink = provenance.webViewLink();
+        this.driveModifiedTime = provenance.modifiedTime();
+        this.watchedFolderId = watchedFolder;
+    }
+
+    /**
+     * A folder unwatched then watched again is a new row with a new identifier, and the documents
+     * it once brought still name the old one: nothing else would ever write it back.
+     */
+    public void cameThrough(UUID watchedFolderId) {
+        this.watchedFolderId = requireWatchedFolder(watchedFolderId);
+    }
+
+    private static UUID requireWatchedFolder(UUID watchedFolderId) {
+        if (watchedFolderId == null) {
+            throw new IllegalArgumentException("The watched folder a document came through is required");
+        }
+        return watchedFolderId;
     }
 
     public void replaceContent(String filename, DocumentFormat format, Checksum checksum, long sizeBytes) {
@@ -167,5 +236,18 @@ public class Document {
 
     public long getVersion() {
         return version;
+    }
+
+    public DocumentSource getSource() {
+        return source;
+    }
+
+    public UUID getWatchedFolderId() {
+        return watchedFolderId;
+    }
+
+    public Optional<DriveProvenance> getDriveProvenance() {
+        return Optional.ofNullable(driveFileId)
+                .map(fileId -> new DriveProvenance(fileId, driveWebViewLink, driveModifiedTime));
     }
 }

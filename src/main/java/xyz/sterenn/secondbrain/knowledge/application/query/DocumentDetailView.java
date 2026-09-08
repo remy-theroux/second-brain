@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentSource;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentType;
 
@@ -15,6 +16,8 @@ public record DocumentDetailView(
         DocumentType type,
         DocumentStatus status,
         @JsonInclude(JsonInclude.Include.NON_NULL) String errorMessage,
+        DocumentSource source,
+        @JsonInclude(JsonInclude.Include.NON_NULL) String driveLink,
         long sizeBytes,
         Instant createdAt,
         @JsonInclude(JsonInclude.Include.NON_NULL) TextExtractionView extraction) {
@@ -27,6 +30,8 @@ public record DocumentDetailView(
                 document.getFormat().type(),
                 document.getStatus(),
                 document.getErrorMessage(),
+                document.getSource(),
+                DocumentView.driveLinkOf(document),
                 document.getSizeBytes(),
                 document.getCreatedAt(),
                 extraction);

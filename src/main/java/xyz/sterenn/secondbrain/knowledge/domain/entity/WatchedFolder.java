@@ -1,14 +1,25 @@
 package xyz.sterenn.secondbrain.knowledge.domain.entity;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveImportRejection;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveImportStatus;
 
 /** See ADR-0002: the deviation that allows JPA annotations in the domain. */
 @Entity
@@ -18,6 +29,8 @@ public class WatchedFolder {
     public static final int MAX_DRIVE_FOLDER_ID_LENGTH = 255;
 
     public static final int MAX_NAME_LENGTH = 255;
+
+    public static final int MAX_IMPORT_STATUS_LENGTH = 16;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -35,6 +48,23 @@ public class WatchedFolder {
 
     @Column(name = "watched_at", nullable = false)
     private Instant watchedAt;
+
+    @Column(name = "last_import_at")
+    private Instant lastImportAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_import_status", length = MAX_IMPORT_STATUS_LENGTH)
+    private DriveImportStatus lastImportStatus;
+
+    @Column(name = "last_import_error", columnDefinition = "text")
+    private String lastImportError;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "knowledge_drive_import_rejections",
+            joinColumns = @JoinColumn(name = "watched_folder_id", nullable = false))
+    @OrderColumn(name = "rejection_position")
+    private List<DriveImportRejection> rejections = new ArrayList<>();
 
     protected WatchedFolder() {}
 
@@ -71,6 +101,22 @@ public class WatchedFolder {
         return name.length() > MAX_NAME_LENGTH ? name.substring(0, MAX_NAME_LENGTH) : name;
     }
 
+    /**
+     * The rejections of the previous import go away with it: a file repaired between two
+     * imports must leave the list rather than stay there forever.
+     */
+    public void recordImport(
+            Instant importedAt, DriveImportStatus status, String error, List<DriveImportRejection> rejections) {
+        if (importedAt == null || status == null) {
+            throw new IllegalArgumentException("The outcome of an import carries its instant and its status");
+        }
+        this.lastImportAt = importedAt;
+        this.lastImportStatus = status;
+        this.lastImportError = error;
+        this.rejections.clear();
+        this.rejections.addAll(rejections);
+    }
+
     public UUID getId() {
         return id;
     }
@@ -89,5 +135,21 @@ public class WatchedFolder {
 
     public Instant getWatchedAt() {
         return watchedAt;
+    }
+
+    public Instant getLastImportAt() {
+        return lastImportAt;
+    }
+
+    public DriveImportStatus getLastImportStatus() {
+        return lastImportStatus;
+    }
+
+    public String getLastImportError() {
+        return lastImportError;
+    }
+
+    public List<DriveImportRejection> getRejections() {
+        return List.copyOf(rejections);
     }
 }

@@ -3,6 +3,7 @@ package xyz.sterenn.secondbrain.knowledge.domain.valueobject;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnsupportedDocumentFormatException;
 
@@ -39,11 +40,15 @@ public enum DocumentFormat {
     }
 
     public static DocumentFormat fromFilename(String filename) {
+        return forFilename(filename).orElseThrow(() -> new UnsupportedDocumentFormatException(acceptedExtensions()));
+    }
+
+    /** For the callers that walk a folder they do not own: an unreadable file is a skip, not a refusal. */
+    public static Optional<DocumentFormat> forFilename(String filename) {
         String normalised = filename == null ? "" : filename.trim().toLowerCase(Locale.ROOT);
         return Arrays.stream(values())
                 .filter(format -> normalised.endsWith(format.extension))
-                .findFirst()
-                .orElseThrow(() -> new UnsupportedDocumentFormatException(acceptedExtensions()));
+                .findFirst();
     }
 
     public static String acceptedExtensions() {
