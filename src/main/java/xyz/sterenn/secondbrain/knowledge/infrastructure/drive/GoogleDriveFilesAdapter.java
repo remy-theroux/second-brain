@@ -1,11 +1,8 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.drive;
 
 import java.net.URI;
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -22,7 +19,6 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenReject
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
-import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.GoogleWorkspaceType;
@@ -152,66 +148,7 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
             }
             return;
         }
-        toFile(entry).ifPresent(files::add);
-    }
-
-    /** Every field of the response is nullable: one unreadable entry drops out rather than failing the walk. */
-    private static Optional<DriveFile> toFile(GoogleFileResponse entry) {
-        if (isBlank(entry.id()) || isBlank(entry.name())) {
-            LOG.warn("Google handed back a file without an identifier or a name: dropped");
-            return Optional.empty();
-        }
-        Optional<GoogleWorkspaceType> workspaceType = GoogleWorkspaceType.forMimeType(entry.mimeType());
-        if (workspaceType.isPresent()) {
-            return toExportedFile(entry, workspaceType.get());
-        }
-        Optional<DocumentFormat> format = DocumentFormat.forFilename(entry.name());
-        if (format.isEmpty()) {
-            return Optional.empty();
-        }
-        return sizeOf(entry)
-                .map(size -> DriveFile.downloaded(
-                        entry.id(), entry.name(), format.get(), size, entry.webViewLink(), modifiedTimeOf(entry)));
-    }
-
-    /** A sheet, a slide deck or a drawing drops out like an image: each would want its own typology. */
-    private static Optional<DriveFile> toExportedFile(GoogleFileResponse entry, GoogleWorkspaceType workspaceType) {
-        if (workspaceType.exportedFormat().isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(DriveFile.exported(
-                workspaceType, entry.id(), entry.name(), entry.webViewLink(), modifiedTimeOf(entry)));
-    }
-
-    /** Drive hands the size back as a string, and hands none at all back for a native Google Doc. */
-    private static Optional<Long> sizeOf(GoogleFileResponse entry) {
-        if (isBlank(entry.size())) {
-            LOG.warn("Google told no size for the file {}: dropped", entry.id());
-            return Optional.empty();
-        }
-        try {
-            long size = Long.parseLong(entry.size().trim());
-            if (size <= 0) {
-                LOG.warn("Google told an empty size for the file {}: dropped", entry.id());
-                return Optional.empty();
-            }
-            return Optional.of(size);
-        } catch (NumberFormatException unreadable) {
-            LOG.warn("Google told an unreadable size for the file {}: dropped", entry.id());
-            return Optional.empty();
-        }
-    }
-
-    private static Instant modifiedTimeOf(GoogleFileResponse entry) {
-        if (isBlank(entry.modifiedTime())) {
-            return null;
-        }
-        try {
-            return Instant.parse(entry.modifiedTime());
-        } catch (DateTimeParseException unreadable) {
-            LOG.warn("Google told an unreadable modification time for the file {}", entry.id());
-            return null;
-        }
+        GoogleFiles.toFile(entry).ifPresent(files::add);
     }
 
     private GoogleFileListResponse listOnePage(DriveAccessToken accessToken, String folderId, String pageToken) {
@@ -263,10 +200,6 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
                 .build()
                 .encode()
                 .toUri();
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     private static boolean isDriveIdentifier(String folderId) {
