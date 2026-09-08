@@ -1,6 +1,8 @@
 // The only front module that knows HTTP: URLs, headers, error codes and the shape of
 // bodies live here, and nowhere else.
 
+import { readServerSentEvents } from '@/api/sse'
+
 /** The server refused the token: it is expired, revoked, or no longer designates anyone. */
 export class UnauthorizedError extends Error {
   constructor() {
@@ -206,4 +208,55 @@ export async function deleteDocument(token, id) {
 
   const payload = await response.json().catch(() => null)
   throw new Error(payload?.message ?? "Le document n'a pas pu être supprimé.")
+}
+
+/**
+ * Asks the agent a question and consumes its stream, resolving on the verdict once the
+ * conversation is closed.
+ *
+ * `POST` + SSE cannot be read with `EventSource`, which only does `GET`: the body is read by
+ * hand. `signal` aborts the request, and that abort is what stops generation server-side.
+ */
+export async function askAgent(token, question, { onToken, onSources, signal }) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ question }),
+    signal,
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (!response.ok) {
+    // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+    // must not replace the business message with a syntax error.
+    const payload = await response.json().catch(() => null)
+
+    if (response.status === 422) {
+      throw new ValidationError(payload?.errors ?? {})
+    }
+    throw new Error(payload?.message ?? "La conversation n'a pas pu démarrer.")
+  }
+
+  let verdict = null
+
+  for await (const { event, data } of readServerSentEvents(response.body)) {
+    if (event === 'token') {
+      onToken(data)
+    } else if (event === 'sources') {
+      onSources(JSON.parse(data))
+    } else if (event === 'done') {
+      verdict = JSON.parse(data).verdict
+    } else if (event === 'error') {
+      // `error` comes INSTEAD of `sources` and `done`: nothing else will follow.
+      throw new Error(JSON.parse(data).message)
+    }
+  }
+
+  // Loose on purpose: a `done` payload carrying no `verdict` field leaves it undefined.
+  if (verdict == null) {
+    throw new Error("La conversation s'est interrompue avant la fin de la réponse.")
+  }
+  return verdict
 }

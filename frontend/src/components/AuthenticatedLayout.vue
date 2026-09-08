@@ -15,6 +15,7 @@ const errorMessage = ref('')
 const menuItems = [
   { label: 'Accueil', icon: 'pi pi-home', route: { name: 'home' } },
   { label: 'Documents', icon: 'pi pi-file', route: { name: 'documents' } },
+  { label: 'Conversation', icon: 'pi pi-comments', route: { name: 'chat' } },
 ]
 
 // The guard let this through on the strength of the expiration remembered by the browser; this

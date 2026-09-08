@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import DocumentsView from '@/views/DocumentsView.vue'
 import DocumentDetailView from '@/views/DocumentDetailView.vue'
+import ChatView from '@/views/ChatView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import DesignSystemView from '@/views/DesignSystemView.vue'
@@ -23,6 +24,7 @@ export const routes = [
     component: DocumentDetailView,
     meta: { requiresAuth: true },
   },
+  { path: '/chat', name: 'chat', component: ChatView, meta: { requiresAuth: true } },
   // Catalogue of the tokens and shared components, for the human pass in a browser.
   // Development only: the conditional spread removes the route AND the view from the
   // production bundle, rather than a guard that would leave the code shipped. Neither

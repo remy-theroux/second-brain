@@ -219,127 +219,6 @@ parallèle, c'est un modèle de plus téléchargé et un Ollama de plus qui tour
 Architecture **hexagonale par bounded context**, avec un **CQRS minimal** posé sur
 deux bus synchrones.
 
-```
-xyz.sterenn.secondbrain
-├── config/                  SecurityConfig, JwtConfiguration, OpenApiConfig,
-│                            ClockConfiguration — transverse
-├── shared/
-│   ├── bus/                 socle CQRS, aucune dépendance métier
-│   ├── event/               DomainEvent, port DomainEventPublisher — sans Spring
-│   │   └── amqp/            ADAPTER RabbitMQ : publication après commit, nommage,
-│   │                        convertisseur JSON, exchange
-│   └── web/                 formes d'erreur communes à toutes les routes
-│                            (ErrorResponse, ValidationErrorResponse)
-├── knowledge/               bounded context — base de connaissance
-│   ├── domain/
-│   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
-│   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
-│   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
-│   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
-│   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
-│   │   ├── DocumentAgent    la moitié Java de l'agent documentaire : outil, budget, température
-│   │   ├── GroundingPolicy  décide le verdict d'une réponse — sourcée, conversationnelle,
-│   │   │                    sans source, ou budget dépassé
-│   │   ├── CitationPolicy   l'unique syntaxe de citation `[n]`, un seul endroit qui la connaisse
-│   │   ├── PromptBuilder    message système de l'agent, mise en forme d'un résultat de recherche
-│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
-│   │   │                    TextChunk (un extrait et son vecteur), AgentRun (la trace d'une
-│   │   │                    conversation : question, réponse, recherches, sources citées)
-│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
-│   │   │                    document se découpe — déduit du format), DocumentStatus,
-│   │   │                    TextBlock + ExtractedText (le format du texte extrait),
-│   │   │                    Embedding (le vecteur produit par le service de vectorisation),
-│   │   │                    Chunk (un extrait, avant qu'il soit rangé),
-│   │   │                    Question (la question posée, non vide),
-│   │   │                    ChunkMatch (un extrait retrouvé et son score),
-│   │   │                    Agent (nom, version, prompt système, outils, budget, température),
-│   │   │                    AgentRefusals (les messages figés d'un aveu d'ignorance),
-│   │   │                    ExecutionBudget (tours et durée maximum d'une conversation),
-│   │   │                    LlmMessage + LlmRequest + LlmTurn (le dialogue avec le service de
-│   │   │                    génération), ToolSpecification + ToolParameter + ToolCall (un outil
-│   │   │                    déclaré à l'agent, et un appel que le modèle en fait),
-│   │   │                    SourceCandidate + SourceCatalogue + Absorption (les extraits
-│   │   │                    retrouvés par une recherche, et leur numérotation cumulative),
-│   │   │                    Source + CitedSource (une source numérotée dans la réponse, puis
-│   │   │                    sa forme persistée dans la trace),
-│   │   │                    Answer + AnswerVerdict (la réponse rendue, et son verdict)
-│   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
-│   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
-│   │   │                    TextChunkRepository, LlmPort (le service de génération),
-│   │   │                    AgentRunRepository (les traces de conversation, par propriétaire)
-│   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
-│   │   │                    et ses deux filles (Unreadable…, Unextractable…),
-│   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
-│   │   │                    InvalidQuestionException, LlmUnavailableException,
-│   │   │                    MissingDocumentContentException,
-│   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
-│   │   │                    c'est elle que le worker interroge)
-│   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
-│   ├── application/
-│   │   ├── agent/           ConversationAgent (la boucle qui décide, hors des bus et sans
-│   │   │                    transaction), ConversationOutcome (son résultat : réponse,
-│   │   │                    recherches, tours, durée), DocumentSearchTool (l'outil que l'agent
-│   │   │                    appelle, par le QueryBus), CitationBuffer (retient les tokens
-│   │   │                    jusqu'à la première citation valide)
-│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
-│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
-│   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
-│   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
-│   │                        + TextExtractionView, SearchChunks + ChunkMatchView,
-│   │                        FindDocumentContent + DocumentContentView
-│   └── infrastructure/
-│       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
-│       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
-│       ├── storage/         ADAPTER S3 du port DocumentStorage + S3ClientConfiguration (le client)
-│       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
-│       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
-│       │                    JtokkitTokenCounter, et ADAPTER du port LlmPort :
-│       │                    LangChain4jLlmAdapter + OllamaChatConfiguration — seul endroit du
-│       │                    dépôt où `dev.langchain4j.*` peut être importé
-│       ├── agent/           AgentConfiguration (le bean Agent et l'exécuteur de la
-│       │                    conversation), AgentDefinitionLoader (charge et valide la prose
-│       │                    de l'agent au démarrage)
-│       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
-│       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
-│                            KnowledgeEventListener (profil worker), catalogue des
-│                            événements
-└── users/                   bounded context (gabarit pour les suivants)
-    ├── domain/              règles métier pures et transverses (PasswordPolicy,
-    │   │                    AccessTokenPolicy)
-    │   ├── entity/          agrégats (User, VerificationToken)
-    │   ├── valueobject/     valeurs validées et normalisées (Email, RawVerificationToken,
-    │   │                    AccessToken, Notification et ses implémentations)
-    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher,
-    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender,
-    │   │                    AccessTokenIssuer)
-    │   └── exception/       refus métier, messages affichables tels quels
-    ├── application/
-    │   ├── command/         une commande + son handler par intention d'écriture
-    │   └── query/           une query + son handler + son modèle de lecture
-    └── infrastructure/
-        ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
-        ├── security/        ADAPTERS des ports PasswordHasher, TokenHasher, AccessTokenIssuer
-        ├── email/           ADAPTER du port NotificationSender
-        └── web/             ADAPTERS entrants (un contrôleur par route, requête et
-                             réponses en records)
-
-frontend/                    application Vue 3, hors build Gradle, construite et servie
-│                            en autonomie
-├── Dockerfile               build npm puis nginx qui sert dist
-├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
-├── src/assets/main.css      reset, police, tokens du projet (--sb-*), classes partagées
-├── src/api/                 seul module qui parle HTTP
-├── src/stores/              état partagé (pinia) : jeton, expiration, profil
-├── src/router/              routes et garde d'authentification
-├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
-│                            DocumentStatusTag (libellé et sévérité d'un statut),
-│                            DownloadDocumentButton (le geste de retélécharger un original)
-└── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
-                             DocumentsView, DocumentDetailView,
-                             DesignSystemView — catalogue, développement
-                             seulement)
-```
 
 `src/main/resources/templates/` n'existe plus : **aucune vue n'est rendue par le
 serveur.** L'application Java expose des routes d'API, plus `GET /verification` qui répond
@@ -746,6 +625,40 @@ totale :**
 Conséquence pour le premier client de la route : **`POST` + SSE ne se consomme pas avec
 `EventSource`** côté navigateur, qui ne fait que du `GET` — il faut un `fetch` et la lecture
 manuelle de son `ReadableStream`.
+
+Ce client est `ChatView` (`/chat`, entrée « Conversation » de la barre latérale, sous le
+layout connecté). Les échanges vivent dans l'état de la page et **rien n'est persisté** : un
+F5 vide le fil, et les traces de `knowledge_agent_runs` ne sont lisibles par aucune route.
+À ne pas confondre avec un oubli d'affichage : **chaque question part seule**, l'agent n'a
+aucune mémoire du tour précédent. Le fil à l'écran est un empilement d'échanges
+indépendants, pas une conversation qui se souvient.
+
+Quatre couches, et la frontière est motivée. `src/api/sse.js` ne connaît que le format de
+trame — ni route, ni en-tête, ni nom d'événement. `askAgent`, dans `src/api/client.js`,
+connaît la route, ses refus et ses noms d'événements. `AnswerText` et `AnswerSources` rendent
+une réponse et ses sources, un `[n]` du texte dépliant la source correspondante. `ChatView`
+empile les échanges. **Les deux morceaux qui peuvent casser en silence — la lecture des
+trames et le découpage sur les `[n]` — vivent hors des `.vue` précisément pour être testés
+unitairement** : c'est la réponse de ce projet à ADR-0016, qui renonce aux tests de rendu.
+
+**`sse.js` existe pour deux pièges du fil**, tous deux du ressort de
+`SseEmitter.SseEventBuilderImpl`. Un fragment qui porte un saut de ligne est découpé en
+plusieurs lignes `data:` — `writeStringData` appelle `appendEscaped(content, "\ndata:")` —
+et le lecteur les recolle avec un `\n`, sans quoi une réponse multi-ligne arriverait en
+morceaux. Et Spring écrit `data:` **sans espace à lui** : le client ne retire donc pas
+l'espace de tête que la spécification SSE dit de retirer, ce qui souderait le dernier mot
+d'un fragment sur le premier du suivant.
+
+L'indicateur d'attente n'est pas décoratif : le flux reste muet jusqu'à la première citation
+valide, et une réponse conversationnelle arrive d'un bloc à la fin, donc c'est le seul retour
+visible pendant plusieurs dizaines de secondes. Quitter l'écran annule la requête, et c'est
+cette annulation qui arrête la génération côté serveur — avec la réserve déjà écrite plus
+haut : l'abandon n'atteint le serveur qu'à son **envoi suivant**, donc il peut mettre autant
+de temps à mordre tant que le tampon de citation est fermé.
+
+Enfin, « base interrogeable » se juge sur les documents `READY`, pas sur leur nombre : un
+document extrait mais pas encore indexé n'est pas cherchable, et c'est ce qui empêche
+l'invitation à déposer de mentir sur une base pleine de fichiers en attente.
 
 ### Les deux bus (`shared/bus`)
 

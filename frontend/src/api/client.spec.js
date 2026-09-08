@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  askAgent,
   deleteDocument,
   DuplicateDocumentError,
   fetchDocument,
@@ -340,5 +341,125 @@ describe('knowledge base', () => {
         "Le fichier n'a pas pu être téléchargé.",
       )
     })
+  })
+})
+
+describe('conversation', () => {
+  // Builds the response a streaming route returns: a status, and a body that hands the
+  // given SSE text over as bytes.
+  function streamResponse(status, text) {
+    const encoder = new TextEncoder()
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(text))
+          controller.close()
+        },
+      }),
+    }
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('posts the question as JSON, bearing the token', async () => {
+    fetch.mockResolvedValue(
+      streamResponse(200, 'event:done\ndata:{"verdict":"CONVERSATIONAL"}\n\n'),
+    )
+
+    await askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} })
+
+    const [url, options] = fetch.mock.calls[0]
+    expect(url).toBe('/api/chat')
+    expect(options.method).toBe('POST')
+    expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+    expect(JSON.parse(options.body)).toEqual({ question: 'Quel est le délai ?' })
+  })
+
+  it('hands over each fragment, then the sources, then the verdict', async () => {
+    fetch.mockResolvedValue(
+      streamResponse(
+        200,
+        'event:token\ndata:Quatorze\n\n' +
+          'event:token\ndata: jours [1].\n\n' +
+          'event:sources\ndata:[{"number":1,"documentId":"doc-1","filename":"rapport.pdf","position":3,"heading":"Rétractation","text":"Le délai est de quatorze jours."}]\n\n' +
+          'event:done\ndata:{"verdict":"GROUNDED"}\n\n',
+      ),
+    )
+    const fragments = []
+    let received = null
+
+    const verdict = await askAgent('jeton-abc', 'Quel est le délai ?', {
+      onToken: (fragment) => fragments.push(fragment),
+      onSources: (sources) => {
+        received = sources
+      },
+    })
+
+    expect(fragments.join('')).toBe('Quatorze jours [1].')
+    expect(received).toHaveLength(1)
+    expect(received[0].filename).toBe('rapport.pdf')
+    expect(verdict).toBe('GROUNDED')
+  })
+
+  it('raises the message the server put in its error event', async () => {
+    fetch.mockResolvedValue(
+      streamResponse(200, 'event:error\ndata:{"message":"La conversation a échoué."}\n\n'),
+    )
+
+    await expect(
+      askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} }),
+    ).rejects.toThrow('La conversation a échoué.')
+  })
+
+  it('raises when the stream stops before the end of the conversation', async () => {
+    // A proxy that cuts, a server that dies: the events simply stop. Resolving here would
+    // leave a half-written answer looking finished.
+    fetch.mockResolvedValue(streamResponse(200, 'event:token\ndata:Quatorze\n\n'))
+
+    await expect(
+      askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} }),
+    ).rejects.toThrow("La conversation s'est interrompue avant la fin de la réponse.")
+  })
+
+  it('translates a 401 into an expired session', async () => {
+    fetch.mockResolvedValue({ ok: false, status: 401, json: () => Promise.resolve(null) })
+
+    await expect(
+      askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} }),
+    ).rejects.toThrow(UnauthorizedError)
+  })
+
+  it('translates a 422 into a refusal on the question field', async () => {
+    fetch.mockResolvedValue(
+      jsonResponse(422, { errors: { question: 'La question ne peut pas être vide.' } }),
+    )
+
+    try {
+      await askAgent('jeton-abc', '   ', { onToken: () => {}, onSources: () => {} })
+      expect.unreachable('the refusal should have been raised')
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError)
+      expect(error.errors).toEqual({ question: 'La question ne peut pas être vide.' })
+    }
+  })
+
+  it('does not replace the failure with a syntax error when the body is not JSON', async () => {
+    fetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+    })
+
+    await expect(
+      askAgent('jeton-abc', 'Quel est le délai ?', { onToken: () => {}, onSources: () => {} }),
+    ).rejects.toThrow("La conversation n'a pas pu démarrer.")
   })
 })
