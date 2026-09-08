@@ -64,6 +64,18 @@ public class DriveFolderImporter {
     }
 
     public void importFolder(UUID ownerId, UUID watchedFolderId) {
+        try {
+            walkAndRecord(ownerId, watchedFolderId);
+        } catch (RuntimeException unrecorded) {
+            // Nothing can be written onto a folder or a connection that has gone between the
+            // request and the walk; what would otherwise be missing is the trace, the message
+            // being rejected without requeue and the previous outcome staying on screen.
+            LOG.error("Import of the watched folder {} left no outcome behind", watchedFolderId, unrecorded);
+            throw unrecorded;
+        }
+    }
+
+    private void walkAndRecord(UUID ownerId, UUID watchedFolderId) {
         DriveConnection connection =
                 driveConnectionRepository.findByOwnerId(ownerId).orElseThrow(DriveNotConnectedException::new);
         WatchedFolder watchedFolder = watchedFolderRepository

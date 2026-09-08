@@ -524,15 +524,24 @@ n'annule que le fichier en cours.
 existante**, et cette décision **attend son ADR**. `ImportDriveFileHandler` traite trois cas,
 dans cet ordre :
 
-1. un document existe déjà pour `(propriétaire, fichier Drive)` → **rien**, c'est un second
-   import du même fichier ;
+1. un document existe déjà pour `(propriétaire, fichier Drive)` → **rien à importer**, c'est un
+   second import du même fichier ; la seule écriture possible est celle de son dossier
+   surveillé, ci-dessous ;
 2. sinon, un document existe pour `(propriétaire, empreinte)` → on lui **rattache** sa
-   provenance Drive, sans créer de second document ;
+   provenance Drive, sans créer de second document — sauf s'il en porte déjà une, auquel cas le
+   fichier est **rejeté** avec son motif : deux fichiers Drive au même contenu, c'est
+   `rapport.pdf` et sa copie `rapport (1).pdf` ;
 3. sinon → création avec provenance, original conservé, `DocumentUploaded` publié.
 
 **Le cas 2 ne relance rien** : ni événement, ni extraction, ni revectorisation. Le contenu n'a
 pas bougé, seule son origine est apprise. Sans cette règle, la première synchronisation d'un
 Drive revectoriserait toute la base — c'est le point à ne pas casser, et un test l'observe.
+
+**Un dossier retiré de la surveillance puis remis est un `WatchedFolder` neuf**, avec un
+identifiant neuf, et les documents qu'il avait apportés portent l'ancien. C'est la seule écriture
+du cas 1 : le dossier surveillé du document est remis à jour quand il diffère, **sans rien
+publier**, ce qui préserve la propriété du paragraphe précédent. Sans elle, l'écran lirait
+« 0 document » à côté d'un import réussi, et pour toujours.
 
 **`UploadDocument` n'a donc pas été réutilisée**, contrairement à ce que le ticket suggérait :
 elle lève `DuplicateDocumentException` au cas 2, qui est précisément le cas nominal d'un
@@ -553,12 +562,27 @@ chemins d'entrée dans la même base ne doivent pas avoir deux plafonds. `size` 
 **chaîne** dans le JSON de Drive et **manque** aux Google Docs natifs — l'adapter le lit comme
 tel plutôt que de laisser Jackson échouer.
 
-**Un format non pris en charge est ignoré en silence, un fichier trop gros produit un rejet
-consultable.** Un Drive est plein d'images et de vidéos : les faire figurer noierait les
-fichiers dont le propriétaire peut réellement faire quelque chose. Seul le plafond écrit une
-ligne, avec son motif affichable. Et **les rejets sont remplacés à chaque import, jamais
-cumulés** : un fichier réparé doit quitter la liste, et une liste qui grossit à chaque passage
-ne se lit plus au bout de trois.
+**Trois sorts pour un fichier, et un seul est muet.** Il est *ignoré sans trace* quand son
+format n'est pas pris en charge — un Drive est plein d'images et de vidéos, les faire figurer
+noierait les fichiers dont le propriétaire peut réellement faire quelque chose. Il est *rejeté
+avec un motif consultable* quand il dépasse le plafond, quand Drive refuse de le rendre, ou
+quand son contenu est déjà dans la base par un autre fichier Drive. Sinon, il est *importé*. Et
+**les rejets sont remplacés à chaque import, jamais cumulés** : un fichier réparé doit quitter
+la liste, et une liste qui grossit à chaque passage ne se lit plus au bout de trois.
+
+**Ce qui arrête l'import, et ce qui ne l'arrête pas.** Seuls un Drive injoignable et une
+autorisation retirée l'arrêtent, et le bilan porte alors leur message ; **tout le reste écarte
+un fichier et continue** — un `404` ou un `403` au téléchargement (supprimé, ou partage retiré
+entre le balayage et le téléchargement), un hoquet du stockage objet, une écriture concurrente
+sur la même ligne. C'est pourquoi l'adapter distingue ces deux codes d'une vraie panne :
+mappés sur « Google Drive est injoignable », un fichier disparu une minute plus tôt laisserait
+les quatre cents suivants dehors, sous un bilan « échec inattendu ».
+
+**Le balayage complet précède le premier téléchargement** : le port rend la liste de tout le
+dossier et de ses sous-dossiers avant qu'un octet de contenu soit demandé. Une panne pendant le
+listing — la phase la plus longue sur un gros Drive — ne laisse donc **rien** entrer du tout. La
+promesse « les documents déjà entrés restent dans ma base » ne couvre que la seconde moitié de
+la fenêtre.
 
 **`files.list` se pagine ici comme au parcours des dossiers** : cent entrées par défaut et un
 `nextPageToken`. Un dossier de plus de cent fichiers en perdrait la moitié **en silence** — le
@@ -571,10 +595,30 @@ retirée** en cours d'import emprunte le même chemin et fait **deux** commandes
 `MarkDriveConnectionExpired`, sans quoi l'utilisateur verrait un import en échec sans savoir
 qu'il doit reconnecter son compte — c'est ce que font déjà les deux contrôleurs Drive.
 
+**Une panne avant le balayage n'écrit aucun bilan.** Les deux lectures d'entrée — la connexion,
+le dossier — sont hors de ce `try`, et la route est asynchrone : un `DELETE` du dossier ou une
+déconnexion entre la demande et le balayage fait sortir l'exception jusqu'au listener, le message
+est rejeté sans remise en file, et le dossier garde le statut de l'import précédent, parfois
+« réussi ». Rien ne **peut** être écrit sur un dossier disparu ; ce qui manquait était la trace,
+et un `LOG.error` englobant la pose.
+
+**Il n'y a pas de statut « en cours ».** Pendant tout le balayage, l'écran lit le bilan de
+l'import précédent : rien n'y distingue un import qui travaille d'un import qui n'a pas commencé.
+
 **Le worker tient la livraison AMQP pendant tout l'import**, et les deux heures de
 `consumer_timeout` posées pour la vectorisation suffisent : **la vectorisation n'est pas dans
 cette livraison**. Chaque document importé repart en message distinct, avec son propre budget ;
 l'import ne paie que le balayage, les téléchargements et une écriture par fichier.
+
+**Pendant ce temps, le listener ne consomme rien d'autre** : la queue du contexte n'a qu'un
+consommateur, donc un seul message à la fois, et l'extraction comme l'indexation des documents
+que l'import vient de créer font la queue derrière le balayage complet. Sur cinq cents fichiers,
+c'est un silence long, et il ne signale aucune panne.
+
+**Un document en échec rattaché à un fichier Drive n'est plus relançable par l'import** : le
+cas 1 court-circuite pour toujours, quel que soit le motif de l'échec. Il faut le supprimer et le
+redéposer. C'est le pendant exact du document resté `EXTRACTED` de la section « découpage et
+vectorisation », et il se réglera au même endroit.
 
 **Ce que l'API rend de tout ça.** `DocumentView` et `DocumentDetailView` portent la `source`
 (`MANUAL` ou `GOOGLE_DRIVE`) et, quand Drive en a rendu un, le lien d'ouverture — jamais
@@ -586,10 +630,14 @@ son motif, pour la même raison qu'un document ne rend pas son identifiant Drive
 
 Les rejets voyagent **avec le dossier** plutôt que derrière une route à eux : ils sont chargés
 de toute façon (`@ElementCollection` en `EAGER`), ils se lisent à côté du bilan auquel ils
-appartiennent, et une liste de dossiers surveillés se compte sur les doigts d'une main.
+appartiennent, et une liste de dossiers surveillés se compte sur les doigts d'une main. Le prix
+est un **1 + N** : cet `EAGER` fait une requête de rejets par dossier, là où le comptage des
+documents ci-dessous, lui, est bien groupé en une seule. L'écran entier ne tient donc pas en une
+requête.
 
 **Un document sait par quel dossier surveillé il est entré** — colonne `watched_folder_id`,
-posée à l'import et jamais après —, et c'est ce qui permet de compter. Le comptage est
+posée à l'import et réécrite au seul cas du dossier ré-surveillé, ci-dessus —, et c'est ce qui
+permet de compter. Le comptage est
 **une seule requête groupée** pour tous les dossiers du propriétaire : un `count` par dossier
 dans la boucle d'affichage serait autant de requêtes que de dossiers. Ce que ça ferme : le
 comptage ne se déduit pas du Drive, qu'il faudrait rebalayer pour savoir quels fichiers sont
