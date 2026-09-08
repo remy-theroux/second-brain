@@ -17,6 +17,8 @@ import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import AnswerText from '@/components/AnswerText.vue'
 import AnswerSources from '@/components/AnswerSources.vue'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
+import DriveSourceCard from '@/components/DriveSourceCard.vue'
+import DriveFolderPicker from '@/components/DriveFolderPicker.vue'
 
 // Static catalogue: everything that is shared — tokens, project components, PrimeVue
 // components as we use them — in each of its states. Mostly no store, no network call —
@@ -31,6 +33,7 @@ const PROJECT_TOKENS = [
   '--sb-space-xl',
   '--sb-sidebar-width',
   '--sb-guest-width',
+  '--sb-picker-max-height',
   '--sb-title-size',
   '--sb-section-title-size',
   '--sb-text-small',
@@ -44,6 +47,7 @@ const THEME_TOKENS = [
   '--p-text-color',
   '--p-text-muted-color',
   '--p-primary-color',
+  '--p-content-border-radius',
 ]
 
 const BUTTON_SEVERITIES = ['primary', 'secondary', 'success', 'info', 'warn', 'danger', 'contrast']
@@ -97,6 +101,50 @@ const ANSWER_SOURCES = [
     position: 0,
     heading: 'Remboursement',
     text: 'Le remboursement intervient au plus tard trente jours après le retour.',
+  },
+]
+
+// The four states of a watched folder. The one that never ran carries NEITHER `lastImportAt`,
+// NOR `lastImportStatus`, NOR `lastImportError`: the API leaves the three out, and it is their
+// absence that says so — the fixture must be missing them, not carry them null.
+const WATCHED_FOLDERS = [
+  {
+    id: '1',
+    name: 'Notes de réunion',
+    watchedAt: '2026-09-07T08:00:00Z',
+    documentCount: 0,
+    rejections: [],
+  },
+  {
+    id: '2',
+    name: 'Contrats',
+    watchedAt: '2026-09-01T08:00:00Z',
+    lastImportAt: '2026-09-08T07:30:00Z',
+    lastImportStatus: 'SUCCEEDED',
+    documentCount: 12,
+    rejections: [],
+  },
+  {
+    id: '3',
+    name: 'Photos de chantier',
+    watchedAt: '2026-09-02T08:00:00Z',
+    lastImportAt: '2026-09-08T07:31:00Z',
+    lastImportStatus: 'SUCCEEDED',
+    documentCount: 3,
+    rejections: [
+      { filename: 'facade.jpg', reason: "Ce format de fichier n'est pas accepté." },
+      { filename: 'plan.dwg', reason: "Ce format de fichier n'est pas accepté." },
+    ],
+  },
+  {
+    id: '4',
+    name: 'Archives 2019',
+    watchedAt: '2026-09-03T08:00:00Z',
+    lastImportAt: '2026-09-08T07:32:00Z',
+    lastImportStatus: 'FAILED',
+    lastImportError: 'Google Drive est momentanément injoignable.',
+    documentCount: 5,
+    rejections: [],
   },
 ]
 
@@ -182,7 +230,14 @@ onMounted(() => {
               <code>{{ token }}</code>
             </th>
             <td>{{ tokenValues[token] }}</td>
-            <td><span class="color-sample" :style="{ background: `var(${token})` }" /></td>
+            <td>
+              <span
+                v-if="token.endsWith('-radius')"
+                class="radius-sample"
+                :style="{ borderRadius: `var(${token})` }"
+              />
+              <span v-else class="color-sample" :style="{ background: `var(${token})` }" />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -366,6 +421,33 @@ onMounted(() => {
     </section>
 
     <section>
+      <h2>Dossier surveillé — DriveSourceCard</h2>
+      <p class="muted">
+        Un dossier Drive, le bilan de son dernier import et ses deux gestes. Un dossier
+        <strong>jamais synchronisé</strong> se reconnaît à l'<em>absence</em> des trois champs de
+        bilan, pas à une valeur nulle. Le motif d'un échec et la raison d'un fichier écarté viennent
+        du serveur et s'affichent tels quels ; l'état, lui, est un code que l'écran traduit —
+        ADR-0022. Les boutons émettent, la vue garde les confirmations et la déconnexion : ici, ils
+        ne font rien.
+      </p>
+      <div class="stack">
+        <DriveSourceCard v-for="folder in WATCHED_FOLDERS" :key="folder.id" :folder="folder" />
+        <DriveSourceCard :folder="WATCHED_FOLDERS[1]" busy />
+      </div>
+    </section>
+
+    <section>
+      <h2>Choix d'un dossier — DriveFolderPicker</h2>
+      <p class="muted">
+        Un fil d'Ariane, pas un arbre : le parcours se fait par appels successifs, un niveau à la
+        fois. Seuls des dossiers y sont listés. Comme le bouton de téléchargement ci-dessus, le
+        composant appelle vraiment <code>src/api/</code> : sans Drive connecté, c'est son état de
+        refus qui s'affiche ici — l'état chargé se regarde sur l'écran des sources.
+      </p>
+      <DriveFolderPicker />
+    </section>
+
+    <section>
       <h2>Tableau — DataTable</h2>
       <p class="muted">
         La liste des documents (<code>DocumentsView</code>). La ligne en gras, soulignée à gauche
@@ -513,6 +595,15 @@ code {
 
 .space-sample {
   display: inline-block;
+  background: var(--p-primary-color);
+  vertical-align: middle;
+}
+
+.radius-sample {
+  display: inline-block;
+  width: 3rem;
+  height: 1.5rem;
+  border: 1px solid var(--p-content-border-color);
   background: var(--p-primary-color);
   vertical-align: middle;
 }

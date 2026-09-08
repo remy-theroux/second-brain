@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
@@ -10,16 +10,25 @@ import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
+import DriveFolderPicker from '@/components/DriveFolderPicker.vue'
+import DriveSourceCard from '@/components/DriveSourceCard.vue'
 import { hasUnsettled } from '@/components/documentStatus'
 import { driveMessage } from '@/components/driveMessages'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import {
   deleteDocument,
+  disconnectDrive,
   DuplicateDocumentError,
+  fetchDriveConnection,
+  importWatchedFolder,
   listDocuments,
+  listWatchedFolders,
+  startDriveAuthorization,
   UnauthorizedError,
+  unwatchDriveFolder,
   uploadDocument,
   ValidationError,
+  watchDriveFolder,
 } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
@@ -44,7 +53,13 @@ const uploader = useTemplateRef('uploader')
 // slower than the interval would otherwise pile requests up.
 const REFRESH_DELAY = 2000
 
+// Nothing is unsettled when an import is requested: the walk has not even started when the 202
+// leaves. The clock is armed for a bounded number of cycles, so that the first documents and
+// the outcome of the walk appear without an F5.
+const IMPORT_REFRESHES = 15
+
 let refreshTimer = null
+let remainingImportRefreshes = 0
 // A `clearTimeout` on an already-fired timer clears nothing: a read in flight when the screen
 // closes would resolve and rearm the clock, on a component nobody watches any more.
 let mounted = true
@@ -62,13 +77,27 @@ const rejections = ref([])
 const duplicateIds = ref([])
 // The outcome of a Google authorization, read once from the URL then erased from it.
 const driveOutcome = ref(null)
+// `null` while no Drive is connected, which is the ordinary state of a new account.
+const driveConnection = ref(null)
+const watchedFolders = ref([])
+const picking = ref(false)
 
-// The server prevails: a 401 on any call signs out, whatever the browser thinks. Any
-// other failure is displayed, without signing out.
+const needsReconnection = computed(() => driveConnection.value?.status === 'NEEDS_RECONNECTION')
+
+// The server prevails: a 401 on any call signs out, whatever the browser thinks. Answers
+// whether it did, so that a caller who shows the message itself does not show it twice.
+async function signOutIfRejected(error) {
+  if (!(error instanceof UnauthorizedError)) {
+    return false
+  }
+  auth.logout()
+  await router.push({ name: 'login' })
+  return true
+}
+
+// Any failure other than a lost session is displayed, without signing out.
 async function handle(error) {
-  if (error instanceof UnauthorizedError) {
-    auth.logout()
-    await router.push({ name: 'login' })
+  if (await signOutIfRejected(error)) {
     return
   }
   rejections.value.push({ filename: null, message: error.message })
@@ -89,7 +118,12 @@ function readDriveOutcome() {
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer)
-  if (!mounted || !hasUnsettled(documents.value)) {
+  if (!mounted) {
+    return
+  }
+  if (remainingImportRefreshes > 0) {
+    remainingImportRefreshes -= 1
+  } else if (!hasUnsettled(documents.value)) {
     return
   }
   refreshTimer = setTimeout(load, REFRESH_DELAY)
@@ -98,11 +132,117 @@ function scheduleRefresh() {
 async function load() {
   try {
     documents.value = await listDocuments(auth.token)
+    // The folders travel with the documents: an import in flight moves their count and their
+    // outcome at the same pace as the list.
+    if (driveConnection.value) {
+      watchedFolders.value = await listWatchedFolders(auth.token)
+    }
     scheduleRefresh()
   } catch (error) {
     await handle(error)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadDrive() {
+  try {
+    driveConnection.value = await fetchDriveConnection(auth.token)
+    watchedFolders.value = driveConnection.value ? await listWatchedFolders(auth.token) : []
+  } catch (error) {
+    await handle(error)
+  }
+}
+
+// Also the way back: an authorization that no longer holds is repaired by the same round trip.
+async function connect() {
+  busy.value = true
+  try {
+    // The browser leaves for Google: on the nominal path, nothing below this line runs.
+    window.location.href = await startDriveAuthorization(auth.token)
+  } catch (error) {
+    busy.value = false
+    await handle(error)
+  }
+}
+
+function confirmDisconnection(event) {
+  confirm.require({
+    target: event.currentTarget,
+    message:
+      'Déconnecter ce compte Google Drive ? Les dossiers ne seront plus surveillés ; les documents déjà importés restent dans votre base.',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
+    acceptProps: { label: 'Déconnecter', severity: 'danger' },
+    accept: () => disconnect(),
+  })
+}
+
+async function disconnect() {
+  rejections.value = []
+  busy.value = true
+  try {
+    await disconnectDrive(auth.token)
+    driveConnection.value = null
+    watchedFolders.value = []
+    picking.value = false
+  } catch (error) {
+    await handle(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function watchFolder(folder) {
+  rejections.value = []
+  busy.value = true
+  try {
+    // The 201 has no body: it is the list of folders that gives their complete state.
+    await watchDriveFolder(auth.token, folder.id)
+    picking.value = false
+    watchedFolders.value = await listWatchedFolders(auth.token)
+  } catch (error) {
+    await handle(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+function confirmUnwatch(event, folder) {
+  confirm.require({
+    target: event.currentTarget,
+    message: `Ne plus surveiller « ${folder.name} » ? Les documents déjà importés restent dans votre base.`,
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Annuler', severity: 'secondary', outlined: true },
+    acceptProps: { label: 'Retirer', severity: 'danger' },
+    accept: () => unwatch(folder),
+  })
+}
+
+async function unwatch(folder) {
+  rejections.value = []
+  busy.value = true
+  try {
+    await unwatchDriveFolder(auth.token, folder.id)
+    watchedFolders.value = await listWatchedFolders(auth.token)
+  } catch (error) {
+    await handle(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function importFolder(folder) {
+  rejections.value = []
+  busy.value = true
+  try {
+    await importWatchedFolder(auth.token, folder.id)
+    remainingImportRefreshes = IMPORT_REFRESHES
+    await load()
+  } catch (error) {
+    await handle(error)
+  } finally {
+    busy.value = false
   }
 }
 
@@ -191,6 +331,7 @@ function formatDate(isoInstant) {
 
 onMounted(async () => {
   readDriveOutcome()
+  await loadDrive()
   await load()
 })
 onUnmounted(() => {
@@ -201,29 +342,112 @@ onUnmounted(() => {
 
 <template>
   <section class="documents">
-    <PageTitle>Documents</PageTitle>
+    <PageTitle>Sources et documents</PageTitle>
 
-    <div>
-      <FileUpload
-        ref="uploader"
-        name="file"
-        :accept="ACCEPTED_EXTENSIONS"
-        :invalid-file-type-message="INVALID_FORMAT_MESSAGE"
-        multiple
-        custom-upload
-        auto
-        :show-upload-button="false"
-        :show-cancel-button="false"
-        choose-label="Déposer des documents"
-        choose-icon="pi pi-upload"
-        :disabled="busy"
-        @uploader="upload"
-      >
-        <template #empty>
-          <p class="upload-hint">Glissez vos fichiers ici, ou cliquez pour les choisir.</p>
+    <section class="sources">
+      <div class="source">
+        <h3 class="source-name"><i class="pi pi-upload" /> Dépôt manuel</h3>
+        <FileUpload
+          ref="uploader"
+          name="file"
+          :accept="ACCEPTED_EXTENSIONS"
+          :invalid-file-type-message="INVALID_FORMAT_MESSAGE"
+          multiple
+          custom-upload
+          auto
+          :show-upload-button="false"
+          :show-cancel-button="false"
+          choose-label="Déposer des documents"
+          choose-icon="pi pi-upload"
+          :disabled="busy"
+          @uploader="upload"
+        >
+          <template #empty>
+            <p class="source-hint">Glissez vos fichiers ici, ou cliquez pour les choisir.</p>
+          </template>
+        </FileUpload>
+      </div>
+
+      <div class="source">
+        <header class="source-header">
+          <h3 class="source-name"><i class="pi pi-google" /> Google Drive</h3>
+          <Button
+            v-if="driveConnection"
+            type="button"
+            label="Déconnecter"
+            icon="pi pi-sign-out"
+            text
+            severity="danger"
+            size="small"
+            :disabled="busy"
+            @click="confirmDisconnection"
+          />
+        </header>
+
+        <template v-if="driveConnection">
+          <p class="source-hint">Compte connecté : {{ driveConnection.googleEmail }}.</p>
+
+          <Message v-if="needsReconnection" severity="warn">
+            L'autorisation Google Drive n'est plus valide. Reconnectez le compte pour que les
+            dossiers surveillés reprennent.
+          </Message>
+
+          <DriveSourceCard
+            v-for="folder in watchedFolders"
+            :key="folder.id"
+            :folder="folder"
+            :busy="busy"
+            @import="importFolder(folder)"
+            @unwatch="confirmUnwatch($event, folder)"
+          />
+          <p v-if="watchedFolders.length === 0" class="source-hint">
+            Aucun dossier surveillé pour l'instant.
+          </p>
+
+          <DriveFolderPicker
+            v-if="picking"
+            :busy="busy"
+            @select="watchFolder"
+            @close="picking = false"
+            @error="signOutIfRejected"
+          />
+          <div v-else class="source-buttons">
+            <Button
+              type="button"
+              label="Ajouter un dossier"
+              icon="pi pi-plus"
+              text
+              :disabled="busy"
+              @click="picking = true"
+            />
+            <Button
+              v-if="needsReconnection"
+              type="button"
+              label="Reconnecter le compte"
+              icon="pi pi-google"
+              :disabled="busy"
+              @click="connect"
+            />
+          </div>
         </template>
-      </FileUpload>
-    </div>
+
+        <template v-else>
+          <p class="source-hint">
+            Aucun compte connecté. Connectez-en un pour qu'un dossier alimente votre base tout seul
+            — le dépôt manuel reste disponible.
+          </p>
+          <div class="source-buttons">
+            <Button
+              type="button"
+              label="Connecter un compte Google Drive"
+              icon="pi pi-google"
+              :disabled="busy"
+              @click="connect"
+            />
+          </div>
+        </template>
+      </div>
+    </section>
 
     <Message v-if="driveOutcome" :severity="driveOutcome.severity" closable>
       {{ driveOutcome.text }}
@@ -280,9 +504,42 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.upload-hint {
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space-md);
+}
+
+.source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sb-space-sm);
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sb-space-sm);
+}
+
+.source-name {
+  margin: 0;
+  font-size: var(--sb-section-title-size);
+  display: flex;
+  align-items: center;
+  gap: var(--sb-space-xs);
+}
+
+.source-hint {
   margin: 0;
   color: var(--p-text-muted-color);
+}
+
+.source-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sb-space-sm);
 }
 
 .document-error {
