@@ -48,6 +48,10 @@ class GoogleAccessTokensAdapter implements GoogleAccessTokens {
         return new DriveAccessToken(token.accessToken(), clock.instant().plus(Duration.ofSeconds(token.expiresIn())));
     }
 
+    /** Nothing is kept at this end: the cache in front of the exchange is the one that forgets. */
+    @Override
+    public void invalidate(DriveConnection connection) {}
+
     private GoogleTokenResponse requestToken(DriveConnection connection) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id", clientId);

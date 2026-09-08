@@ -2,12 +2,11 @@ package xyz.sterenn.secondbrain.knowledge.application.query;
 
 import java.util.List;
 import org.springframework.stereotype.Component;
+import xyz.sterenn.secondbrain.knowledge.application.drive.DriveAccess;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveNotConnectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
-import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
-import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
 import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
 
@@ -15,15 +14,15 @@ import xyz.sterenn.secondbrain.shared.bus.QueryHandler;
 public class BrowseDriveFoldersHandler implements QueryHandler<BrowseDriveFolders, List<DriveFolderView>> {
 
     private final DriveConnectionRepository driveConnectionRepository;
-    private final GoogleAccessTokens googleAccessTokens;
+    private final DriveAccess driveAccess;
     private final GoogleDriveFolders googleDriveFolders;
 
     public BrowseDriveFoldersHandler(
             DriveConnectionRepository driveConnectionRepository,
-            GoogleAccessTokens googleAccessTokens,
+            DriveAccess driveAccess,
             GoogleDriveFolders googleDriveFolders) {
         this.driveConnectionRepository = driveConnectionRepository;
-        this.googleAccessTokens = googleAccessTokens;
+        this.driveAccess = driveAccess;
         this.googleDriveFolders = googleDriveFolders;
     }
 
@@ -33,8 +32,9 @@ public class BrowseDriveFoldersHandler implements QueryHandler<BrowseDriveFolder
         DriveConnection connection =
                 driveConnectionRepository.findByOwnerId(query.ownerId()).orElseThrow(DriveNotConnectedException::new);
 
-        DriveAccessToken accessToken = googleAccessTokens.forConnection(connection);
-        return googleDriveFolders.children(accessToken, parentOf(query)).stream()
+        return driveAccess
+                .call(connection, accessToken -> googleDriveFolders.children(accessToken, parentOf(query)))
+                .stream()
                 .map(DriveFolderView::of)
                 .toList();
     }

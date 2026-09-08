@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
@@ -34,6 +35,9 @@ public class FakeGoogleDriveConfiguration {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
+        /** What the cache still hands out after the access was withdrawn: alive by the clock, dead to Drive. */
+        public static final String STALE_ACCESS_TOKEN = "ya29.jeton-d-acces-perime";
+
         /** The same bound as the adapter's, so a programmed cycle fails here the way it would there. */
         public static final int MAX_ANCESTOR_DEPTH = 50;
 
@@ -43,26 +47,38 @@ public class FakeGoogleDriveConfiguration {
 
         private volatile boolean revoked = false;
 
+        private volatile boolean staleAccessToken = false;
+
+        private volatile boolean revokedOnRenewal = false;
+
+        private volatile boolean purged = false;
+
         @Override
         public DriveAccessToken forConnection(DriveConnection connection) {
-            if (revoked) {
+            if (revoked || (revokedOnRenewal && purged)) {
                 throw new DriveAuthorizationRevokedException();
             }
             if (unavailable) {
                 throw new GoogleDriveUnavailableException();
             }
-            return new DriveAccessToken(ACCESS_TOKEN, Instant.now().plus(Duration.ofHours(1)));
+            String value = staleAccessToken && !purged ? STALE_ACCESS_TOKEN : ACCESS_TOKEN;
+            return new DriveAccessToken(value, Instant.now().plus(Duration.ofHours(1)));
+        }
+
+        @Override
+        public void invalidate(DriveConnection connection) {
+            purged = true;
         }
 
         @Override
         public List<DriveFolder> children(DriveAccessToken accessToken, String parentId) {
-            refuseIfUnavailable();
+            refuseIfUnusable(accessToken);
             return foldersByParent.getOrDefault(parentId, List.of());
         }
 
         @Override
         public Optional<DriveFolder> folder(DriveAccessToken accessToken, String folderId) {
-            refuseIfUnavailable();
+            refuseIfUnusable(accessToken);
             return foldersByParent.values().stream()
                     .flatMap(List::stream)
                     .filter(folder -> folder.id().equals(folderId))
@@ -71,7 +87,7 @@ public class FakeGoogleDriveConfiguration {
 
         @Override
         public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
-            refuseIfUnavailable();
+            refuseIfUnusable(accessToken);
             List<String> ancestors = new ArrayList<>();
             String current = folderId;
             for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
@@ -93,9 +109,12 @@ public class FakeGoogleDriveConfiguration {
                     .findFirst();
         }
 
-        private void refuseIfUnavailable() {
+        private void refuseIfUnusable(DriveAccessToken accessToken) {
             if (unavailable) {
                 throw new GoogleDriveUnavailableException();
+            }
+            if (STALE_ACCESS_TOKEN.equals(accessToken.value())) {
+                throw new DriveAccessTokenRejectedException(new IllegalStateException("HTTP 401"));
             }
         }
 
@@ -115,10 +134,24 @@ public class FakeGoogleDriveConfiguration {
             this.revoked = true;
         }
 
+        /** Drive refuses the cached token, and the renewal that follows still works. */
+        public void willRejectTheCachedAccessToken() {
+            this.staleAccessToken = true;
+        }
+
+        /** The access was withdrawn from the Google account: the cached token dies, its renewal too. */
+        public void willHaveHadItsAccessWithdrawn() {
+            this.staleAccessToken = true;
+            this.revokedOnRenewal = true;
+        }
+
         public void clear() {
             foldersByParent.clear();
             unavailable = false;
             revoked = false;
+            staleAccessToken = false;
+            revokedOnRenewal = false;
+            purged = false;
         }
     }
 }

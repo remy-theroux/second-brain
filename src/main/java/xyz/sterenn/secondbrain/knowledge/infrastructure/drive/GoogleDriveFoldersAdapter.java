@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
@@ -101,7 +102,7 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
                 return Optional.empty();
             }
             LOG.error("Google refused a folder read: {}", describe(refusal));
-            throw new GoogleDriveUnavailableException(refusal);
+            throw translate(refusal);
         } catch (RestClientException failure) {
             LOG.error("Google refused a folder read: {}", describe(failure));
             throw new GoogleDriveUnavailableException(failure);
@@ -116,6 +117,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken.value())
                     .retrieve()
                     .body(GoogleFileListResponse.class);
+        } catch (RestClientResponseException refusal) {
+            LOG.error("Google refused a folder listing: {}", describe(refusal));
+            throw translate(refusal);
         } catch (RestClientException failure) {
             LOG.error("Google refused a folder listing: {}", describe(failure));
             throw new GoogleDriveUnavailableException(failure);
@@ -147,6 +151,13 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
     /** The parent comes from the request, and the Drive query language reads a quote as a delimiter. */
     private static String escape(String parentId) {
         return parentId.replace("\\", "\\\\").replace("'", "\\'");
+    }
+
+    /** A rejected token is not an outage: it is the one refusal a fresh token can settle. */
+    private static GoogleDriveUnavailableException translate(RestClientResponseException refusal) {
+        return refusal.getStatusCode().isSameCodeAs(HttpStatus.UNAUTHORIZED)
+                ? new DriveAccessTokenRejectedException(refusal)
+                : new GoogleDriveUnavailableException(refusal);
     }
 
     /** Status and type, never {@code getMessage()}, which would echo the response body into the log. */

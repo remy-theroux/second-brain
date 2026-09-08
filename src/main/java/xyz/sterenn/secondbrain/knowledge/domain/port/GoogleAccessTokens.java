@@ -12,4 +12,7 @@ public interface GoogleAccessTokens {
      *     only signal it gives of an access withdrawn from the account.
      */
     DriveAccessToken forConnection(DriveConnection connection);
+
+    /** Drops whatever token is kept for this connection: the next call buys a fresh one. */
+    void invalidate(DriveConnection connection);
 }

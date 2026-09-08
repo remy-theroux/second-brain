@@ -79,6 +79,31 @@ class CachingGoogleAccessTokensTest {
     }
 
     @Test
+    void exchanges_again_once_the_kept_token_has_been_invalidated() {
+        DriveConnection connection = connectionOf("alice@gmail.com", "1//jeton-alice");
+
+        DriveAccessToken first = accessTokens.forConnection(connection);
+        accessTokens.invalidate(connection);
+        DriveAccessToken second = accessTokens.forConnection(connection);
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(exchange.exchanges()).hasSize(2);
+    }
+
+    @Test
+    void invalidates_the_token_of_one_connection_only() {
+        DriveConnection alice = connectionOf("alice@gmail.com", "1//jeton-alice");
+        DriveConnection bob = connectionOf("bob@gmail.com", "1//jeton-bob");
+        DriveAccessToken aliceToken = accessTokens.forConnection(alice);
+        DriveAccessToken bobToken = accessTokens.forConnection(bob);
+
+        accessTokens.invalidate(alice);
+
+        assertThat(accessTokens.forConnection(alice)).isNotEqualTo(aliceToken);
+        assertThat(accessTokens.forConnection(bob)).isEqualTo(bobToken);
+    }
+
+    @Test
     void exchanges_again_once_a_reconnection_has_changed_the_refresh_token() {
         DriveConnection connection = connectionOf("alice@gmail.com", "1//jeton-alice");
 
@@ -109,6 +134,9 @@ class CachingGoogleAccessTokensTest {
             return new DriveAccessToken(
                     "jeton-d-acces-" + exchanges.size(), clock.instant().plus(GOOGLE_LIFETIME));
         }
+
+        @Override
+        public void invalidate(DriveConnection connection) {}
 
         private List<RefreshToken> exchanges() {
             return List.copyOf(exchanges);

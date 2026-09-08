@@ -22,6 +22,7 @@ import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveConfiguration.FakeGoogleDrive;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveNotConnectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveConnectionStatus;
@@ -120,6 +121,34 @@ class DriveFolderBrowsingTest {
         assertThat(driveConnectionRepository.findByOwnerId(alice)).get().satisfies(connection -> assertThat(
                         connection.getStatus())
                 .isEqualTo(DriveConnectionStatus.NEEDS_RECONNECTION));
+    }
+
+    @Test
+    void marks_the_connection_as_needing_a_reconnection_when_the_renewal_of_a_refused_token_reveals_it()
+            throws Exception {
+        connectADrive();
+        fakeGoogleDrive.put(DriveFolder.ROOT, folder("a1", "Notes"));
+        fakeGoogleDrive.willHaveHadItsAccessWithdrawn();
+
+        mockMvc.perform(get("/api/drive/folders").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(DriveAuthorizationRevokedException.MESSAGE));
+
+        assertThat(driveConnectionRepository.findByOwnerId(alice)).get().satisfies(connection -> assertThat(
+                        connection.getStatus())
+                .isEqualTo(DriveConnectionStatus.NEEDS_RECONNECTION));
+    }
+
+    @Test
+    void browses_again_with_a_token_bought_after_the_refusal_of_the_kept_one() throws Exception {
+        connectADrive();
+        fakeGoogleDrive.put(DriveFolder.ROOT, folder("a1", "Notes"));
+        fakeGoogleDrive.willRejectTheCachedAccessToken();
+
+        mockMvc.perform(get("/api/drive/folders").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Notes"));
     }
 
     @Test

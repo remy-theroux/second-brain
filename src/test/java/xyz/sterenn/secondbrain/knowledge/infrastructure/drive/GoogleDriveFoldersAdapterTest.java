@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 import java.net.URI;
 import java.net.URLDecoder;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.ResponseCreator;
 import org.springframework.web.client.RestClient;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
@@ -96,6 +98,26 @@ class GoogleDriveFoldersAdapterTest {
 
         assertThatExceptionOfType(GoogleDriveUnavailableException.class)
                 .isThrownBy(() -> adapter.children(ACCESS_TOKEN, "a1"));
+        server.verify();
+    }
+
+    @Test
+    void tells_a_refused_access_token_apart_from_an_outage_when_listing() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(withUnauthorizedRequest());
+
+        assertThatExceptionOfType(DriveAccessTokenRejectedException.class)
+                .isThrownBy(() -> adapter.children(ACCESS_TOKEN, "a1"));
+        server.verify();
+    }
+
+    @Test
+    void tells_a_refused_access_token_apart_from_an_unknown_folder() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(withUnauthorizedRequest());
+
+        assertThatExceptionOfType(DriveAccessTokenRejectedException.class)
+                .isThrownBy(() -> adapter.folder(ACCESS_TOKEN, "a1"));
         server.verify();
     }
 

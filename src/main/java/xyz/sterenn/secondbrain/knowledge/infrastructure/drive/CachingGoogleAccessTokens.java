@@ -37,6 +37,11 @@ class CachingGoogleAccessTokens implements GoogleAccessTokens {
         return exchanged;
     }
 
+    @Override
+    public void invalidate(DriveConnection connection) {
+        tokens.remove(connection.getOwnerId());
+    }
+
     private record CachedToken(RefreshToken source, DriveAccessToken token) {
 
         /** A reconnection replaces the refresh token in place: the token it bought is stale. */
