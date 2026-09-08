@@ -22,11 +22,15 @@ import {
 } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
-// Filter of the file picker, not a rule: it is the server that refuses a format (415) and
-// its message states the list that prevails, built from `DocumentFormat`. This copy only
-// serves the comfort of the picker and may diverge without a test seeing it — same nature
-// of copy as `VERIFICATION_MESSAGES` in LoginView — ADR-0022.
+// The list that prevails is the server's, built from `DocumentFormat` and stated by its 415 —
+// this is a copy, of the same nature as `VERIFICATION_MESSAGES` in LoginView (ADR-0022). But in
+// advanced mode it is no longer only the picker's filter: `FileUpload` refuses a dropped file
+// on it, so a divergence now withholds a format the server would have accepted.
 const ACCEPTED_EXTENSIONS = '.pdf,.md,.txt,.docx'
+
+// `FileUpload` has this message in English and hard-coded — it is a prop, not a locale entry,
+// so `primelocale/fr` does not carry it. `{0}` is the file, `{1}` the accepted extensions.
+const INVALID_FORMAT_MESSAGE = "« {0} » n'est pas d'un format accepté. Formats acceptés : {1}."
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -39,6 +43,9 @@ const uploader = useTemplateRef('uploader')
 const REFRESH_DELAY = 2000
 
 let refreshTimer = null
+// A `clearTimeout` on an already-fired timer clears nothing: a read in flight when the screen
+// closes would resolve and rearm the clock, on a component nobody watches any more.
+let mounted = true
 
 const documents = ref([])
 // Only the first read draws the table's veil: a refresh every two seconds must not make the
@@ -65,7 +72,7 @@ async function handle(error) {
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer)
-  if (!hasUnsettled(documents.value)) {
+  if (!mounted || !hasUnsettled(documents.value)) {
     return
   }
   refreshTimer = setTimeout(load, REFRESH_DELAY)
@@ -99,6 +106,12 @@ async function upload({ files }) {
     await load()
   } finally {
     busy.value = false
+    // `clear()` empties the component's messages along with its files, and those messages name
+    // files that never left: they are drained into ours first, so that one list carries every
+    // refusal. They already carry the filename, hence no `filename` of our own.
+    for (const message of uploader.value?.messages ?? []) {
+      rejections.value.push({ filename: null, message })
+    }
     // Resets the component, so that the same files can be selected again.
     uploader.value?.clear()
   }
@@ -115,9 +128,12 @@ async function uploadOne(file) {
     } else if (error instanceof ValidationError) {
       // A single field in this form: its message is the file's message.
       rejections.value.push({ filename: file.name, message: error.errors.file ?? error.message })
-    } else {
+    } else if (error instanceof UnauthorizedError) {
       await handle(error)
-      return !(error instanceof UnauthorizedError)
+      return false
+    } else {
+      // A 413 or a 415: the message is the server's and is displayed as is, under its file.
+      rejections.value.push({ filename: file.name, message: error.message })
     }
   }
   return true
@@ -157,7 +173,10 @@ function formatDate(isoInstant) {
 }
 
 onMounted(load)
-onUnmounted(() => clearTimeout(refreshTimer))
+onUnmounted(() => {
+  mounted = false
+  clearTimeout(refreshTimer)
+})
 </script>
 
 <template>
@@ -169,9 +188,12 @@ onUnmounted(() => clearTimeout(refreshTimer))
         ref="uploader"
         name="file"
         :accept="ACCEPTED_EXTENSIONS"
+        :invalid-file-type-message="INVALID_FORMAT_MESSAGE"
         multiple
         custom-upload
         auto
+        :show-upload-button="false"
+        :show-cancel-button="false"
         choose-label="Déposer des documents"
         choose-icon="pi pi-upload"
         :disabled="busy"
@@ -183,7 +205,7 @@ onUnmounted(() => clearTimeout(refreshTimer))
       </FileUpload>
     </div>
 
-    <Message v-for="(rejection, index) in rejections" :key="index" severity="error">
+    <Message v-for="(rejection, index) in rejections" :key="index" severity="error" closable>
       <span v-if="rejection.filename">« {{ rejection.filename }} » — </span>{{ rejection.message }}
     </Message>
 
