@@ -4,6 +4,7 @@ import {
   deleteDocument,
   DuplicateDocumentError,
   fetchDocument,
+  fetchDocumentContent,
   listDocuments,
   register,
   UnauthorizedError,
@@ -17,6 +18,15 @@ function jsonResponse(status, body) {
     ok: status >= 200 && status < 300,
     status,
     json: () => Promise.resolve(body),
+  }
+}
+
+// A binary response: only the status and the blob matter for this module.
+function blobResponse(status, blob) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    blob: () => Promise.resolve(blob),
   }
 }
 
@@ -287,6 +297,48 @@ describe('knowledge base', () => {
 
       await expect(deleteDocument('jeton-abc', 'doc-1')).rejects.toThrow(
         "Le document n'a pas pu être supprimé.",
+      )
+    })
+  })
+
+  describe('downloading the original file', () => {
+    it('reads the content route with the bearer token', async () => {
+      const file = new Blob(['bonjour'], { type: 'text/plain' })
+      fetch.mockResolvedValue(blobResponse(200, file))
+
+      const result = await fetchDocumentContent('jeton-abc', 'doc-1')
+
+      const [url, options] = fetch.mock.calls[0]
+      expect(url).toBe('/api/documents/doc-1/content')
+      expect(options.headers.Authorization).toBe('Bearer jeton-abc')
+      expect(result).toBe(file)
+    })
+
+    it('translates a 401 into an expired session', async () => {
+      fetch.mockResolvedValue(blobResponse(401, null))
+
+      await expect(fetchDocumentContent('jeton-perime', 'doc-1')).rejects.toThrow(UnauthorizedError)
+    })
+
+    it('surfaces the message of a vanished original', async () => {
+      fetch.mockResolvedValue(
+        jsonResponse(404, { message: "L'original de ce document n'est plus disponible." }),
+      )
+
+      await expect(fetchDocumentContent('jeton-abc', 'doc-1')).rejects.toThrow(
+        "L'original de ce document n'est plus disponible.",
+      )
+    })
+
+    it('falls back to its own message when the body is not JSON', async () => {
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      })
+
+      await expect(fetchDocumentContent('jeton-abc', 'doc-1')).rejects.toThrow(
+        "Le fichier n'a pas pu être téléchargé.",
       )
     })
   })

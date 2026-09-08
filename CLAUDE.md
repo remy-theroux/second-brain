@@ -219,127 +219,6 @@ parallèle, c'est un modèle de plus téléchargé et un Ollama de plus qui tour
 Architecture **hexagonale par bounded context**, avec un **CQRS minimal** posé sur
 deux bus synchrones.
 
-```
-xyz.sterenn.secondbrain
-├── config/                  SecurityConfig, JwtConfiguration, OpenApiConfig,
-│                            ClockConfiguration — transverse
-├── shared/
-│   ├── bus/                 socle CQRS, aucune dépendance métier
-│   ├── event/               DomainEvent, port DomainEventPublisher — sans Spring
-│   │   └── amqp/            ADAPTER RabbitMQ : publication après commit, nommage,
-│   │                        convertisseur JSON, exchange
-│   └── web/                 formes d'erreur communes à toutes les routes
-│                            (ErrorResponse, ValidationErrorResponse)
-├── knowledge/               bounded context — base de connaissance
-│   ├── domain/
-│   │   ├── ExtractionPolicy plancher de caractères sous lequel un document est inexploitable
-│   │   ├── EmbeddingPolicy  dimension du vecteur, contrat entre le modèle, la colonne et l'index
-│   │   ├── ChunkingPolicy   cible, plafond et recouvrement d'un extrait, en tokens
-│   │   ├── RecursiveChunker le découpage lui-même : sections, paragraphes, phrases
-│   │   ├── SearchPolicy     nombre d'extraits rendus par une recherche
-│   │   ├── DocumentAgent    la moitié Java de l'agent documentaire : outil, budget, température
-│   │   ├── GroundingPolicy  décide le verdict d'une réponse — sourcée, conversationnelle,
-│   │   │                    sans source, ou budget dépassé
-│   │   ├── CitationPolicy   l'unique syntaxe de citation `[n]`, un seul endroit qui la connaisse
-│   │   ├── PromptBuilder    message système de l'agent, mise en forme d'un résultat de recherche
-│   │   ├── entity/          Document, TextExtraction (le texte extrait, agrégat à part),
-│   │   │                    TextChunk (un extrait et son vecteur), AgentRun (la trace d'une
-│   │   │                    conversation : question, réponse, recherches, sources citées)
-│   │   ├── valueobject/     Checksum (SHA-256), DocumentFormat, DocumentType (comment un
-│   │   │                    document se découpe — déduit du format), DocumentStatus,
-│   │   │                    TextBlock + ExtractedText (le format du texte extrait),
-│   │   │                    Embedding (le vecteur produit par le service de vectorisation),
-│   │   │                    Chunk (un extrait, avant qu'il soit rangé),
-│   │   │                    Question (la question posée, non vide),
-│   │   │                    ChunkMatch (un extrait retrouvé et son score),
-│   │   │                    Agent (nom, version, prompt système, outils, budget, température),
-│   │   │                    AgentRefusals (les messages figés d'un aveu d'ignorance),
-│   │   │                    ExecutionBudget (tours et durée maximum d'une conversation),
-│   │   │                    LlmMessage + LlmRequest + LlmTurn (le dialogue avec le service de
-│   │   │                    génération), ToolSpecification + ToolParameter + ToolCall (un outil
-│   │   │                    déclaré à l'agent, et un appel que le modèle en fait),
-│   │   │                    SourceCandidate + SourceCatalogue + Absorption (les extraits
-│   │   │                    retrouvés par une recherche, et leur numérotation cumulative),
-│   │   │                    Source + CitedSource (une source numérotée dans la réponse, puis
-│   │   │                    sa forme persistée dans la trace),
-│   │   │                    Answer + AnswerVerdict (la réponse rendue, et son verdict)
-│   │   ├── port/            DocumentRepository, DocumentStorage, TextExtractionRepository,
-│   │   │                    DocumentTextExtractor, EmbeddingPort, TokenCounter,
-│   │   │                    TextChunkRepository, LlmPort (le service de génération),
-│   │   │                    AgentRunRepository (les traces de conversation, par propriétaire)
-│   │   ├── exception/       DuplicateDocumentException, DocumentNotFoundException,
-│   │   │                    UnsupportedDocumentFormatException, DocumentExtractionException
-│   │   │                    et ses deux filles (Unreadable…, Unextractable…),
-│   │   │                    EmbeddingUnavailableException, DocumentStorageUnavailableException,
-│   │   │                    InvalidQuestionException, LlmUnavailableException,
-│   │   │                    DocumentProcessingException (mère de tous les refus de traitement,
-│   │   │                    c'est elle que le worker interroge)
-│   │   └── event/           DocumentUploaded, DocumentTextExtracted, DocumentTextIndexed
-│   ├── application/
-│   │   ├── agent/           ConversationAgent (la boucle qui décide, hors des bus et sans
-│   │   │                    transaction), ConversationOutcome (son résultat : réponse,
-│   │   │                    recherches, tours, durée), DocumentSearchTool (l'outil que l'agent
-│   │   │                    appelle, par le QueryBus), CitationBuffer (retient les tokens
-│   │   │                    jusqu'à la première citation valide)
-│   │   ├── command/         UploadDocument, DeleteDocument, ExtractDocumentText,
-│   │   │                    IndexDocumentText, MarkDocumentProcessingFailed, RecordAgentRun
-│   │   │                    (la trace d'une conversation, écrite après la fermeture du flux)
-│   │   └── query/           ListDocuments + DocumentView, FindDocument + DocumentDetailView
-│   │                        + TextExtractionView, SearchChunks + ChunkMatchView
-│   └── infrastructure/
-│       ├── persistence/     ADAPTER JPA + ChecksumAttributeConverter
-│       ├── extraction/      ADAPTERS du port DocumentTextExtractor, un par format
-│       ├── storage/         ADAPTER S3 du port DocumentStorage + S3ClientConfiguration (le client)
-│       ├── ai/              ADAPTER du port EmbeddingPort : OllamaEmbeddingAdapter, écrit
-│       │                    à la main plutôt que Spring AI, par lots et avec tentatives,
-│       │                    JtokkitTokenCounter, et ADAPTER du port LlmPort :
-│       │                    LangChain4jLlmAdapter + OllamaChatConfiguration — seul endroit du
-│       │                    dépôt où `dev.langchain4j.*` peut être importé
-│       ├── agent/           AgentConfiguration (le bean Agent et l'exécuteur de la
-│       │                    conversation), AgentDefinitionLoader (charge et valide la prose
-│       │                    de l'agent au démarrage)
-│       ├── web/             ADAPTERS entrants + JwtSubject (lecture du `sub`)
-│       └── messaging/       ADAPTER entrant : queue domain.knowledge.events, listener
-│                            KnowledgeEventListener (profil worker), catalogue des
-│                            événements
-└── users/                   bounded context (gabarit pour les suivants)
-    ├── domain/              règles métier pures et transverses (PasswordPolicy,
-    │   │                    AccessTokenPolicy)
-    │   ├── entity/          agrégats (User, VerificationToken)
-    │   ├── valueobject/     valeurs validées et normalisées (Email, RawVerificationToken,
-    │   │                    AccessToken, Notification et ses implémentations)
-    │   ├── port/            interfaces vers l'extérieur (UserRepository, PasswordHasher,
-    │   │                    TokenHasher, VerificationTokenRepository, NotificationSender,
-    │   │                    AccessTokenIssuer)
-    │   └── exception/       refus métier, messages affichables tels quels
-    ├── application/
-    │   ├── command/         une commande + son handler par intention d'écriture
-    │   └── query/           une query + son handler + son modèle de lecture
-    └── infrastructure/
-        ├── persistence/     ADAPTERS JPA des ports de stockage + mapping (EmailAttributeConverter)
-        ├── security/        ADAPTERS des ports PasswordHasher, TokenHasher, AccessTokenIssuer
-        ├── email/           ADAPTER du port NotificationSender
-        └── web/             ADAPTERS entrants (un contrôleur par route, requête et
-                             réponses en records)
-
-frontend/                    application Vue 3, hors build Gradle, construite et servie
-│                            en autonomie
-├── Dockerfile               build npm puis nginx qui sert dist
-├── nginx.conf               repli SPA (try_files) — sans lui, F5 sur /login rend 404
-├── src/assets/main.css      reset, police, tokens du projet (--sb-*), classes partagées
-├── src/api/                 seul module qui parle HTTP, sauf sse.js qui ne connaît que
-│                            le format de trame des Server-Sent Events
-├── src/stores/              état partagé (pinia) : jeton, expiration, profil
-├── src/router/              routes et garde d'authentification
-├── src/components/          partagé entre vues : les deux layouts, FormField, PageTitle,
-│                            DocumentStatusTag (libellé et sévérité d'un statut),
-│                            AnswerText et AnswerSources (une réponse et ses sources),
-│                            answerSegments (le découpage d'un texte sur ses citations)
-└── src/views/               un composant par écran (LoginView, RegisterView, HomeView,
-                             DocumentsView, DocumentDetailView, ChatView,
-                             DesignSystemView — catalogue, développement
-                             seulement)
-```
 
 `src/main/resources/templates/` n'existe plus : **aucune vue n'est rendue par le
 serveur.** L'application Java expose des routes d'API, plus `GET /verification` qui répond
@@ -510,6 +389,23 @@ d'attente. Le cloisonnement est le même que partout (`findByIdAndOwnerId`) : le
 d'autrui est introuvable, jamais interdit. Le vide devient `404` dans le contrôleur, la query
 rendant un `Optional` — une query ne lève pas.
 
+`GET /api/documents/{id}/content` rend le fichier **tel qu'il a été déposé**, sous son nom
+d'origine — `Content-Disposition: attachment`, nom encodé en RFC 5987 parce qu'un accent
+dans un en-tête HTTP sans encodage est un octet non spécifié. Le `Content-Type` vient de
+`DocumentFormat.mediaType()` : le type MIME est une propriété du format, au même titre que
+son extension, et non le `Content-Type` du multipart, qui n'a jamais été stocké. La route ne
+regarde **jamais le statut** : un document dont l'extraction a échoué n'a plus que son
+original, c'est précisément ce qu'on vient y chercher.
+
+Deux absences, deux messages, un seul code. Le document inconnu rend le `404` habituel ; un
+document bien présent dont l'objet a disparu du stockage rend `404 {"message": "L'original
+de ce document n'est plus disponible."}` — dire « document introuvable » mentirait, l'écran
+le montre. Et cette seconde absence est la seule query du contexte qui **lève là où un
+`Optional` vide serait attendu** : une ligne
+`knowledge_documents` sans son objet n'est pas un résultat vide, c'est une rupture
+d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement, décision 6).
+Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
+
 Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
 les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode `basic` et
 `custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`, jamais par
@@ -530,6 +426,14 @@ survit à un F5, ce qu'une modale sur la liste n'aurait pas offert. C'est `docum
 typologie, qui décide du rendu : une typologie sans affichage le dit plutôt que de rendre une
 page vide. `DocumentStatusTag` porte le libellé et la sévérité d'un statut pour les deux
 écrans — le motif était copié, il est devenu un composant.
+
+Les deux écrans portent le même bouton de téléchargement, `DownloadDocumentButton` : le jeton
+voyageant en en-tête, un `<a href>` ne rapporterait qu'un `401`, et le fichier est donc lu par
+`fetchDocumentContent` puis remis au navigateur par une ancre `download` fabriquée, cliquée et
+révoquée. Le composant porte l'appel et son état occupé mais **pas la déconnexion** : il émet
+son erreur, et chaque vue la passe à son propre `handle`. Le nom du fichier lui est passé en
+prop plutôt que décodé du `Content-Disposition` — les deux valeurs viennent de la réponse que
+l'écran affiche déjà.
 
 ### Le flux de l'extraction du texte
 

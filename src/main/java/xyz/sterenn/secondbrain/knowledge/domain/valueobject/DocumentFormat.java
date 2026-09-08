@@ -7,21 +7,27 @@ import java.util.stream.Collectors;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.UnsupportedDocumentFormatException;
 
 public enum DocumentFormat {
-    PDF(".pdf", DocumentType.TEXTUAL),
-    MARKDOWN(".md", DocumentType.TEXTUAL),
-    TEXT(".txt", DocumentType.TEXTUAL),
-    DOCX(".docx", DocumentType.TEXTUAL);
+    PDF(".pdf", "application/pdf", DocumentType.TEXTUAL),
+    MARKDOWN(".md", "text/markdown", DocumentType.TEXTUAL),
+    TEXT(".txt", "text/plain", DocumentType.TEXTUAL),
+    DOCX(".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", DocumentType.TEXTUAL);
 
     private final String extension;
+    private final String mediaType;
     private final DocumentType type;
 
-    DocumentFormat(String extension, DocumentType type) {
+    DocumentFormat(String extension, String mediaType, DocumentType type) {
         this.extension = extension;
+        this.mediaType = mediaType;
         this.type = type;
     }
 
     public String extension() {
         return extension;
+    }
+
+    public String mediaType() {
+        return mediaType;
     }
 
     public DocumentType type() {

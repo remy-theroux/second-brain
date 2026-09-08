@@ -10,6 +10,7 @@ import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
+import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import {
   deleteDocument,
   DuplicateDocumentError,
@@ -161,6 +162,12 @@ onMounted(load)
       </Column>
       <Column class="table-actions">
         <template #body="{ data }">
+          <DownloadDocumentButton
+            :document-id="data.id"
+            :filename="data.filename"
+            :disabled="busy"
+            @error="handle"
+          />
           <Button
             type="button"
             icon="pi pi-eye"

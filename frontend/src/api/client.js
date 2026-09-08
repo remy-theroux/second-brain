@@ -132,6 +132,29 @@ export async function fetchDocument(token, id) {
 }
 
 /**
+ * Reads the original file of a document, as it was uploaded. Returns a `Blob`: handing it to
+ * the browser is a screen matter, this module only knows the call.
+ */
+export async function fetchDocumentContent(token, id) {
+  const response = await fetch(`/api/documents/${id}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (response.status === 401) {
+    throw new UnauthorizedError()
+  }
+  if (response.ok) {
+    return response.blob()
+  }
+
+  // The body is not guaranteed to be JSON (proxy down, HTML 502…): a parse that fails
+  // must not replace the business message with a syntax error.
+  const payload = await response.json().catch(() => null)
+  // The two 404 and the 503 each carry their message, displayable as is.
+  throw new Error(payload?.message ?? "Le fichier n'a pas pu être téléchargé.")
+}
+
+/**
  * Uploads a document. Returns nothing on success: the server answers 201 without a body, and
  * it is the list that gives the complete state of the base.
  *

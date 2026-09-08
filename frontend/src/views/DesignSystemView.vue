@@ -16,10 +16,12 @@ import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
 import AnswerText from '@/components/AnswerText.vue'
 import AnswerSources from '@/components/AnswerSources.vue'
+import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 
 // Static catalogue: everything that is shared — tokens, project components, PrimeVue
-// components as we use them — in each of its states. No store, no network call: the page
-// is looked at, it does nothing. A component that does not appear here is not shared.
+// components as we use them — in each of its states. Mostly no store, no network call —
+// the download button below is the one exception, and it really fetches. A component that
+// does not appear here is not shared.
 
 const PROJECT_TOKENS = [
   '--sb-space-xs',
@@ -338,6 +340,28 @@ onMounted(() => {
       </p>
       <div class="row">
         <DocumentStatusTag v-for="status in DOCUMENT_STATUSES" :key="status" :status="status" />
+      </div>
+    </section>
+
+    <section>
+      <h2>Téléchargement d'un original — DownloadDocumentButton</h2>
+      <p class="muted">
+        Le même geste pour la liste et pour le détail : le jeton voyageant en en-tête, un lien ne
+        peut rien télécharger — le fichier est lu par <code>src/api/</code> puis remis au navigateur
+        par une ancre temporaire. Le bouton porte son état occupé ; il émet ses erreurs, la vue
+        garde la déconnexion. Ici, le clic part vraiment et échoue sans conséquence : le catalogue
+        n'écoute pas l'événement.
+      </p>
+      <div class="row">
+        <DownloadDocumentButton
+          document-id="00000000-0000-0000-0000-000000000000"
+          filename="rapport.pdf"
+        />
+        <DownloadDocumentButton
+          document-id="00000000-0000-0000-0000-000000000000"
+          filename="rapport.pdf"
+          disabled
+        />
       </div>
     </section>
 
