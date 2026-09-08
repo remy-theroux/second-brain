@@ -58,6 +58,7 @@ class ReplaceDocumentContentControllerTest {
     private static final String PASSWORD = "chevalpile42";
     private static final byte[] FIRST = "le contenu du rapport".getBytes(StandardCharsets.UTF_8);
     private static final byte[] SECOND = "le contenu revu du rapport".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] SENTINEL = "le temoin laisse dans le stockage".getBytes(StandardCharsets.UTF_8);
     private static final String PREVIOUS_TEXT =
             "Le texte qu'avait rendu la version precedente de ce document, assez long pour etre exploitable.";
 
@@ -172,12 +173,18 @@ class ReplaceDocumentContentControllerTest {
         indexed.markIndexed();
         documentRepository.save(indexed);
 
+        // A sentinel in place of the original: the stored bytes being the ones sent, only a
+        // marker distinguishes an untouched object from one rewritten with the same content.
+        documentStorage.replace(document, SENTINEL);
+
         mockMvc.perform(multipart(HttpMethod.PUT, "/api/documents/{id}", document)
                         .file(file("rapport.pdf", FIRST))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk());
 
         assertThat(reload(document, alice).getStatus()).isEqualTo(DocumentStatus.READY);
+        assertThat(documentStorage.read(document))
+                .hasValueSatisfying(stored -> assertThat(stored).isEqualTo(SENTINEL));
     }
 
     @Test
