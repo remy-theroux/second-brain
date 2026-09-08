@@ -30,6 +30,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
@@ -181,6 +182,22 @@ class DriveFolderImportTest {
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(outcome()).isEqualTo(DriveImportStatus.FAILED));
         assertThat(reloadTheConnection().getStatus()).isEqualTo(DriveConnectionStatus.NEEDS_RECONNECTION);
         assertThat(reloadTheFolder().getLastImportError()).isEqualTo(DriveAuthorizationRevokedException.MESSAGE);
+    }
+
+    @Test
+    void leaves_out_a_file_that_vanished_between_the_listing_and_its_download() {
+        fakeGoogleDrive.putFile("a1", "f1", "disparu.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.putFile("a1", "f2", "brut.txt", Fixtures.read(Fixtures.RAW_TXT));
+        fakeGoogleDrive.willVanishAtDownload("f1");
+
+        requestTheImport();
+
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(outcome()).isEqualTo(DriveImportStatus.SUCCEEDED));
+        assertThat(documents()).extracting(Document::getFilename).containsExactly("brut.txt");
+        assertThat(reloadTheFolder().getRejections()).singleElement().satisfies(rejection -> {
+            assertThat(rejection.getFilename()).isEqualTo("disparu.md");
+            assertThat(rejection.getReason()).isEqualTo(DriveContentUnreachableException.MESSAGE);
+        });
     }
 
     @Test

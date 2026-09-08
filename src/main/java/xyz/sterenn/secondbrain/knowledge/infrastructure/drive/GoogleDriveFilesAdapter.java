@@ -11,11 +11,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
@@ -212,11 +214,20 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
         return folderId.replace("\\", "\\\\").replace("'", "\\'");
     }
 
-    /** A rejected token is not an outage: it is the one refusal a fresh token can settle. */
-    private static GoogleDriveUnavailableException translate(RestClientResponseException refusal) {
-        return refusal.getStatusCode().isSameCodeAs(HttpStatus.UNAUTHORIZED)
-                ? new DriveAccessTokenRejectedException(refusal)
-                : new GoogleDriveUnavailableException(refusal);
+    /**
+     * Three refusals, three meanings, and the middle one is the whole point: a file deleted or
+     * unshared between the listing and its download is the everyday accident of a walk, not an
+     * outage — read as one, it would stop an import over one missing file.
+     */
+    private static RuntimeException translate(RestClientResponseException refusal) {
+        HttpStatusCode status = refusal.getStatusCode();
+        if (status.isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
+            return new DriveAccessTokenRejectedException(refusal);
+        }
+        if (status.isSameCodeAs(HttpStatus.NOT_FOUND) || status.isSameCodeAs(HttpStatus.FORBIDDEN)) {
+            return new DriveContentUnreachableException(refusal);
+        }
+        return new GoogleDriveUnavailableException(refusal);
     }
 
     /** Status and type, never {@code getMessage()}, which would echo the response body into the log. */

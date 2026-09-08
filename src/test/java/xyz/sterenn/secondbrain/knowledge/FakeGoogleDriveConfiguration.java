@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.Primary;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
@@ -52,6 +54,8 @@ public class FakeGoogleDriveConfiguration {
         private final Map<String, List<DriveFolder>> foldersByParent = new ConcurrentHashMap<>();
 
         private final Map<String, List<StoredFile>> filesByParent = new ConcurrentHashMap<>();
+
+        private final Set<String> vanished = ConcurrentHashMap.newKeySet();
 
         private final AtomicInteger downloads = new AtomicInteger();
 
@@ -135,12 +139,15 @@ public class FakeGoogleDriveConfiguration {
                 unavailable = true;
             }
             refuseIfUnusable(accessToken);
+            if (vanished.contains(fileId)) {
+                throw new DriveContentUnreachableException();
+            }
             return filesByParent.values().stream()
                     .flatMap(List::stream)
                     .filter(file -> file.id().equals(fileId))
                     .findFirst()
                     .map(StoredFile::content)
-                    .orElseThrow(GoogleDriveUnavailableException::new);
+                    .orElseThrow(DriveContentUnreachableException::new);
         }
 
         private Optional<String> parentOf(String folderId) {
@@ -202,6 +209,11 @@ public class FakeGoogleDriveConfiguration {
             this.revokedOnRenewal = true;
         }
 
+        /** The file was deleted or unshared between the listing and its download: a 404, never an outage. */
+        public void willVanishAtDownload(String fileId) {
+            vanished.add(fileId);
+        }
+
         /** The Drive falls over once {@code downloads} files have gone through: what is in stays in. */
         public void willBecomeUnavailableAfter(int downloads) {
             this.unavailableAfterDownloads = downloads;
@@ -210,6 +222,7 @@ public class FakeGoogleDriveConfiguration {
         public void clear() {
             foldersByParent.clear();
             filesByParent.clear();
+            vanished.clear();
             downloads.set(0);
             unavailableAfterDownloads = Integer.MAX_VALUE;
             unavailable = false;

@@ -14,6 +14,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.ImportPolicy;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveImportRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveNotConnectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.WatchedFolderNotFoundException;
@@ -37,6 +38,8 @@ public class DriveFolderImporter {
     private static final Logger LOG = LoggerFactory.getLogger(DriveFolderImporter.class);
 
     private static final String UNEXPECTED_FAILURE = "L'import de ce dossier a échoué de façon inattendue.";
+
+    private static final String FILE_FAILURE = "Ce fichier n'a pas pu être importé.";
 
     private final CommandBus commandBus;
     private final DriveConnectionRepository driveConnectionRepository;
@@ -100,9 +103,29 @@ public class DriveFolderImporter {
                 rejections.add(DriveImportRejection.of(file, ImportPolicy.tooLargeReason()));
                 continue;
             }
+            importOne(connection, watchedFolder, file, rejections);
+        }
+    }
+
+    /**
+     * Only a Drive that is really down and a withdrawn authorization stop the walk: everything
+     * else — a file gone since the listing, a hiccup of the object storage, a row written under
+     * this one — leaves that one file out and lets the next five hundred in.
+     */
+    private void importOne(
+            DriveConnection connection,
+            WatchedFolder watchedFolder,
+            DriveFile file,
+            List<DriveImportRejection> rejections) {
+        try {
             byte[] content =
                     driveAccess.call(connection, accessToken -> googleDriveFiles.download(accessToken, file.id()));
             commandBus.dispatch(new ImportDriveFile(connection.getOwnerId(), watchedFolder.getId(), file, content));
+        } catch (GoogleDriveUnavailableException | DriveAuthorizationRevokedException outage) {
+            throw outage;
+        } catch (RuntimeException leftOut) {
+            LOG.warn("The file {} of the watched folder {} was left out", file.id(), watchedFolder.getId(), leftOut);
+            rejections.add(DriveImportRejection.of(file, rejectionReason(leftOut)));
         }
     }
 
@@ -116,8 +139,12 @@ public class DriveFolderImporter {
     }
 
     private static String reason(RuntimeException failure) {
-        return failure instanceof GoogleDriveUnavailableException unreachable
-                ? unreachable.getMessage()
+        return failure instanceof GoogleDriveUnavailableException || failure instanceof DriveImportRejectedException
+                ? failure.getMessage()
                 : UNEXPECTED_FAILURE;
+    }
+
+    private static String rejectionReason(RuntimeException failure) {
+        return failure instanceof DriveImportRejectedException refusal ? refusal.getMessage() : FILE_FAILURE;
     }
 }

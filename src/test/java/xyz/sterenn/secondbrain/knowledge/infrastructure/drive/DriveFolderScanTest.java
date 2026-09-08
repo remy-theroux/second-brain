@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
@@ -23,11 +24,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.ResponseCreator;
 import org.springframework.web.client.RestClient;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
@@ -201,6 +204,36 @@ class DriveFolderScanTest {
                 .andRespond(withServerError());
 
         assertThatExceptionOfType(GoogleDriveUnavailableException.class)
+                .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
+        server.verify();
+    }
+
+    @Test
+    void tells_a_folder_google_no_longer_hands_back_apart_from_an_outage() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatExceptionOfType(DriveContentUnreachableException.class)
+                .isThrownBy(() -> adapter.filesUnder(ACCESS_TOKEN, "a1"));
+        server.verify();
+    }
+
+    @Test
+    void tells_a_file_that_vanished_apart_from_an_outage_when_downloading() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatExceptionOfType(DriveContentUnreachableException.class)
+                .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
+        server.verify();
+    }
+
+    @Test
+    void tells_a_file_it_may_no_longer_read_apart_from_an_outage_when_downloading() {
+        server.expect(requestTo(startsWith(GoogleDriveFilesAdapter.FILES_ENDPOINT)))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatExceptionOfType(DriveContentUnreachableException.class)
                 .isThrownBy(() -> adapter.download(ACCESS_TOKEN, "f1"));
         server.verify();
     }
