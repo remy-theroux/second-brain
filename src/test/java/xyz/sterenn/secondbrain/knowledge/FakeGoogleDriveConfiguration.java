@@ -135,18 +135,19 @@ public class FakeGoogleDriveConfiguration {
             return files;
         }
 
+        /** Drive refuses to hand back the bytes of a native Doc, which holds none: it has to be exported. */
         @Override
         public byte[] download(DriveAccessToken accessToken, String fileId) {
-            return handOver(accessToken, fileId);
+            return handOver(accessToken, fileId, false);
         }
 
         /** Google rebuilds the archive on every call: what it hands back is programmed export by export. */
         @Override
         public byte[] export(DriveAccessToken accessToken, String fileId) {
-            return handOver(accessToken, fileId);
+            return handOver(accessToken, fileId, true);
         }
 
-        private byte[] handOver(DriveAccessToken accessToken, String fileId) {
+        private byte[] handOver(DriveAccessToken accessToken, String fileId, boolean exporting) {
             if (downloads.incrementAndGet() > unavailableAfterDownloads) {
                 unavailable = true;
             }
@@ -154,9 +155,11 @@ public class FakeGoogleDriveConfiguration {
             if (vanished.contains(fileId)) {
                 throw new DriveContentUnreachableException();
             }
-            return stored(fileId)
-                    .orElseThrow(DriveContentUnreachableException::new)
-                    .next();
+            StoredFile file = stored(fileId).orElseThrow(DriveContentUnreachableException::new);
+            if (file.isExported() != exporting) {
+                throw new DriveContentUnreachableException();
+            }
+            return file.next();
         }
 
         private Optional<StoredFile> stored(String fileId) {
@@ -310,6 +313,10 @@ public class FakeGoogleDriveConfiguration {
 
             String id() {
                 return id;
+            }
+
+            boolean isExported() {
+                return workspaceType != null;
             }
 
             /** The last programmed export sticks: a file handed back twice is the rule, not the exception. */

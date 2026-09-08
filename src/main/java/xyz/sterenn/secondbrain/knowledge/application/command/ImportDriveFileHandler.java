@@ -1,16 +1,21 @@
 package xyz.sterenn.secondbrain.knowledge.application.command;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDriveContentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveProvenance;
 import xyz.sterenn.secondbrain.shared.bus.CommandHandler;
 import xyz.sterenn.secondbrain.shared.event.DomainEventPublisher;
 
@@ -19,16 +24,22 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
 
     private final DocumentRepository documentRepository;
     private final DocumentStorage documentStorage;
+    private final TextExtractionRepository textExtractionRepository;
+    private final TextChunkRepository textChunkRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final Clock clock;
 
     public ImportDriveFileHandler(
             DocumentRepository documentRepository,
             DocumentStorage documentStorage,
+            TextExtractionRepository textExtractionRepository,
+            TextChunkRepository textChunkRepository,
             DomainEventPublisher domainEventPublisher,
             Clock clock) {
         this.documentRepository = documentRepository;
         this.documentStorage = documentStorage;
+        this.textExtractionRepository = textExtractionRepository;
+        this.textChunkRepository = textChunkRepository;
         this.domainEventPublisher = domainEventPublisher;
         this.clock = clock;
     }
@@ -44,7 +55,7 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         Optional<Document> alreadyImported =
                 documentRepository.findByOwnerIdAndDriveFileId(command.ownerId(), file.id());
         if (alreadyImported.isPresent()) {
-            handOver(alreadyImported.get(), command.watchedFolderId());
+            handOver(alreadyImported.get(), command);
             return;
         }
 
@@ -71,15 +82,58 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
     }
 
     /**
-     * The only writing a second import does, and it announces nothing: the content has not moved,
-     * only the folder it now comes through, which a folder unwatched then watched again renames.
+     * A second import of the same file announces nothing as long as Drive says it has not moved:
+     * only the folder it now comes through is written, which a folder unwatched then watched
+     * again renames.
      */
-    private void handOver(Document document, UUID watchedFolderId) {
-        if (watchedFolderId.equals(document.getWatchedFolderId())) {
+    private void handOver(Document document, ImportDriveFile command) {
+        if (!command.watchedFolderId().equals(document.getWatchedFolderId())) {
+            document.cameThrough(command.watchedFolderId());
+            documentRepository.save(document);
+        }
+        if (hasMovedSinceTheImport(document, command.file())) {
+            reingest(document, command);
+        }
+    }
+
+    /**
+     * Never the checksum: a Google Doc is exported into an archive rebuilt on every call, so two
+     * exports of an untouched document differ, and comparing them would re-ingest the whole Drive
+     * at every import.
+     */
+    private static boolean hasMovedSinceTheImport(Document document, DriveFile file) {
+        Instant imported =
+                document.getDriveProvenance().map(DriveProvenance::modifiedTime).orElse(null);
+        return file.modifiedTime() != null
+                && imported != null
+                && file.modifiedTime().isAfter(imported);
+    }
+
+    /** Exactly what {@code ReplaceDocumentContent} does of an upload, from the Drive file instead. */
+    private void reingest(Document document, ImportDriveFile command) {
+        DriveFile file = command.file();
+        Checksum checksum = Checksum.of(command.content());
+        if (checksum.equals(document.getChecksum())) {
             return;
         }
-        document.cameThrough(watchedFolderId);
+
+        document.reimported(
+                file.name(),
+                file.format(),
+                checksum,
+                command.content().length,
+                file.provenance(),
+                command.watchedFolderId());
         documentRepository.save(document);
+
+        textExtractionRepository.deleteByDocumentId(document.getId());
+        textChunkRepository.deleteByDocumentId(document.getId());
+
+        // The file after the row: see ADR-0020.
+        documentStorage.replace(document.getId(), command.content());
+
+        domainEventPublisher.publish(
+                new DocumentContentReplaced(document.getId(), document.getOwnerId(), clock.instant()));
     }
 
     /**
