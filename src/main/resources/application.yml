@@ -187,6 +187,10 @@ secondbrain:
     # key would be a public key, and a dump would give back every connected Drive.
     # 32 bytes encoded in Base64 — AES-256.
     token-encryption-key: ${SECONDBRAIN_DRIVE_TOKEN_KEY}
+    # How long the worker waits between two synchronisation rounds of the watched Drives. ISO-8601
+    # and never "15m": @Scheduled reads a bare string as milliseconds unless it parses as a
+    # Duration. It is a delay, not a rate — see DriveSynchronisationScheduler.
+    synchronisation-interval: ${SECONDBRAIN_DRIVE_SYNC_INTERVAL:PT15M}
   jwt:
     # Deliberately without a default value: a default signing secret would be
     # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —

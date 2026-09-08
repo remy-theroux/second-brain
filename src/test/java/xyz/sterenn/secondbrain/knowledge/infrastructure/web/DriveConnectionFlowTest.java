@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfigurati
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfiguration.FakeGoogleDriveAuthorization;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDriveConnectionExpired;
+import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAuthorizationState;
@@ -145,6 +147,27 @@ class DriveConnectionFlowTest {
         mockMvc.perform(get("/api/drive/connection").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.googleEmail").value("alice-pro@gmail.com"));
+    }
+
+    /**
+     * The row is reused, and a change position belongs to the Drive that handed it out: kept
+     * across a reconnection on another Google account, it is one Google refuses in 400 rather
+     * than in 410, so no round would ever fall back on the full scan a dead position is owed.
+     */
+    @Test
+    void forgets_the_change_position_of_the_drive_it_replaces() throws Exception {
+        connect("alice@gmail.com", "1//jeton-alice");
+        DriveConnection connection =
+                driveConnectionRepository.findByOwnerId(alice).orElseThrow();
+        connection.keepChangesPageToken("1789");
+        driveConnectionRepository.save(connection);
+
+        connect("alice-pro@gmail.com", "1//jeton-alice-pro");
+
+        assertThat(driveConnectionRepository.findByOwnerId(alice))
+                .get()
+                .extracting(DriveConnection::getChangesPageToken)
+                .isEqualTo(Optional.empty());
     }
 
     @Test

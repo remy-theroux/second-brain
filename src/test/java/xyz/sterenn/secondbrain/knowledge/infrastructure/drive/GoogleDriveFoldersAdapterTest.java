@@ -30,6 +30,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenReject
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 
 class GoogleDriveFoldersAdapterTest {
 
@@ -103,7 +104,8 @@ class GoogleDriveFoldersAdapterTest {
     void asks_google_nothing_for_an_identifier_no_drive_could_hand_back() {
         assertThat(adapter.children(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
         assertThat(adapter.folder(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
-        assertThat(adapter.ancestors(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
+        assertThat(adapter.ancestors(ACCESS_TOKEN, "a1' or '1'='1"))
+                .isEqualTo(DriveFolderChain.stoppedShort(List.of()));
         server.verify();
     }
 
@@ -196,8 +198,23 @@ class GoogleDriveFoldersAdapterTest {
         server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
                 .andRespond(record("{}"));
 
-        assertThat(adapter.ancestors(ACCESS_TOKEN, "c1")).containsExactly("b1", "a1");
+        assertThat(adapter.ancestors(ACCESS_TOKEN, "c1")).isEqualTo(DriveFolderChain.upToTheTop(List.of("b1", "a1")));
         assertThat(query(0)).contains("fields=parents");
+        server.verify();
+    }
+
+    /**
+     * The gravest reading of the mirror: a chain that broke, handed back as a complete one, says
+     * "under no watched folder" — and that is a removal.
+     */
+    @Test
+    void tells_a_chain_it_could_not_climb_apart_from_one_that_reached_the_top() {
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(record("{\"parents\":[\"b1\"]}"));
+        server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
+                .andRespond(withResourceNotFound());
+
+        assertThat(adapter.ancestors(ACCESS_TOKEN, "c1")).isEqualTo(DriveFolderChain.stoppedShort(List.of("b1")));
         server.verify();
     }
 

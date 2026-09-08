@@ -17,15 +17,20 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentTooLargeToExportException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveChangeTokenExpiredException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleAccessTokens;
+import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveChanges;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFolders;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChange;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveChangePage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolderChain;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.GoogleWorkspaceType;
 
 // The bean is shared by the whole context and the test transaction rollback does not
@@ -39,8 +44,12 @@ public class FakeGoogleDriveConfiguration {
         return new FakeGoogleDrive();
     }
 
-    /** One stub for the three ports of the context: the token exchange, then the folders and their files. */
-    public static class FakeGoogleDrive implements GoogleAccessTokens, GoogleDriveFolders, GoogleDriveFiles {
+    /**
+     * One stub for the four ports of the context: the token exchange, the folders, their files,
+     * and the feed of what moved.
+     */
+    public static class FakeGoogleDrive
+            implements GoogleAccessTokens, GoogleDriveFolders, GoogleDriveFiles, GoogleDriveChanges {
 
         public static final String ACCESS_TOKEN = "ya29.jeton-d-acces-de-test";
 
@@ -61,6 +70,18 @@ public class FakeGoogleDriveConfiguration {
         private final Map<String, List<StoredFile>> filesByParent = new ConcurrentHashMap<>();
 
         private final Set<String> vanished = ConcurrentHashMap.newKeySet();
+
+        private final List<DriveChange> changes = new CopyOnWriteArrayList<>();
+
+        private final List<String> readPageTokens = new CopyOnWriteArrayList<>();
+
+        private volatile String startPageToken = "1789";
+
+        private volatile String newStartPageToken = "4242";
+
+        private volatile boolean changeTokenExpired = false;
+
+        private volatile boolean ancestorsUnavailable = false;
 
         private final AtomicInteger downloads = new AtomicInteger();
 
@@ -108,20 +129,52 @@ public class FakeGoogleDriveConfiguration {
                     .findFirst();
         }
 
+        /** A folder this Drive describes nowhere is not the top of it: the climb stops short, as it does in the adapter. */
         @Override
-        public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+        public DriveFolderChain ancestors(DriveAccessToken accessToken, String folderId) {
             refuseIfUnusable(accessToken);
+            if (ancestorsUnavailable) {
+                throw new GoogleDriveUnavailableException();
+            }
             List<String> ancestors = new ArrayList<>();
             String current = folderId;
             for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
                 Optional<String> parent = parentOf(current);
-                if (parent.isEmpty() || DriveFolder.ROOT.equals(parent.get())) {
-                    return ancestors;
+                if (parent.isEmpty()) {
+                    return isKnownFolder(current)
+                            ? DriveFolderChain.upToTheTop(ancestors)
+                            : DriveFolderChain.stoppedShort(ancestors);
+                }
+                if (DriveFolder.ROOT.equals(parent.get())) {
+                    return DriveFolderChain.upToTheTop(ancestors);
                 }
                 ancestors.add(parent.get());
                 current = parent.get();
             }
             throw new GoogleDriveUnavailableException();
+        }
+
+        private boolean isKnownFolder(String folderId) {
+            return DriveFolder.ROOT.equals(folderId)
+                    || foldersByParent.containsKey(folderId)
+                    || foldersByParent.values().stream().flatMap(List::stream).anyMatch(folder -> folder.id()
+                            .equals(folderId));
+        }
+
+        @Override
+        public String startPageToken(DriveAccessToken accessToken) {
+            refuseIfUnusable(accessToken);
+            return startPageToken;
+        }
+
+        @Override
+        public DriveChangePage changesSince(DriveAccessToken accessToken, String pageToken) {
+            refuseIfUnusable(accessToken);
+            readPageTokens.add(pageToken);
+            if (changeTokenExpired) {
+                throw new DriveChangeTokenExpiredException();
+            }
+            return new DriveChangePage(List.copyOf(changes), newStartPageToken);
         }
 
         /** The stub drops what it cannot read exactly where the adapter does: in the walk, silently. */
@@ -265,7 +318,52 @@ public class FakeGoogleDriveConfiguration {
             this.unavailableAfterDownloads = downloads;
         }
 
+        /** The change Drive would report for a programmed file: its name, its format, its time. */
+        public DriveChange changeOn(String fileId, String... parents) {
+            StoredFile file = stored(fileId).orElseThrow();
+            return DriveChange.of(fileId, file.toDriveFile().orElse(null), List.of(parents));
+        }
+
+        public void willReportChanges(DriveChange... reported) {
+            changes.clear();
+            changes.addAll(List.of(reported));
+        }
+
+        /** Google no longer knows the kept token: what is owed is a full scan, never a fresh start. */
+        public void willRefuseTheChangeToken() {
+            this.changeTokenExpired = true;
+        }
+
+        /**
+         * The Drive falls over exactly when the folders above a file are read, and nowhere else:
+         * read as a file that left every watched folder, the hiccup would erase the base.
+         */
+        public void willBeUnavailableWhileResolvingParents() {
+            this.ancestorsUnavailable = true;
+        }
+
+        public String newStartPageToken() {
+            return newStartPageToken;
+        }
+
+        public String startPageToken() {
+            return startPageToken;
+        }
+
+        /** How many files were handed over: a Doc re-exported for nothing shows up here. */
+        public int handedOverFiles() {
+            return downloads.get();
+        }
+
+        public List<String> readPageTokens() {
+            return List.copyOf(readPageTokens);
+        }
+
         public void clear() {
+            changes.clear();
+            readPageTokens.clear();
+            changeTokenExpired = false;
+            ancestorsUnavailable = false;
             foldersByParent.clear();
             filesByParent.clear();
             vanished.clear();

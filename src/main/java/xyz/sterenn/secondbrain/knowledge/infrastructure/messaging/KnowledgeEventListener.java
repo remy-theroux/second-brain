@@ -11,11 +11,13 @@ import xyz.sterenn.secondbrain.knowledge.application.command.ExtractDocumentText
 import xyz.sterenn.secondbrain.knowledge.application.command.IndexDocumentText;
 import xyz.sterenn.secondbrain.knowledge.application.command.MarkDocumentProcessingFailed;
 import xyz.sterenn.secondbrain.knowledge.application.drive.DriveFolderImporter;
+import xyz.sterenn.secondbrain.knowledge.application.drive.DriveSynchroniser;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentContentReplaced;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextExtracted;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentTextIndexed;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
+import xyz.sterenn.secondbrain.knowledge.domain.event.DriveSynchronisationRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentProcessingException;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
 
@@ -30,10 +32,13 @@ public class KnowledgeEventListener {
 
     private final CommandBus commandBus;
     private final DriveFolderImporter driveFolderImporter;
+    private final DriveSynchroniser driveSynchroniser;
 
-    public KnowledgeEventListener(CommandBus commandBus, DriveFolderImporter driveFolderImporter) {
+    public KnowledgeEventListener(
+            CommandBus commandBus, DriveFolderImporter driveFolderImporter, DriveSynchroniser driveSynchroniser) {
         this.commandBus = commandBus;
         this.driveFolderImporter = driveFolderImporter;
+        this.driveSynchroniser = driveSynchroniser;
     }
 
     @RabbitHandler
@@ -78,6 +83,16 @@ public class KnowledgeEventListener {
     @RabbitHandler
     public void on(DriveFolderImportRequested event) {
         driveFolderImporter.importFolder(event.ownerId(), event.watchedFolderId());
+    }
+
+    /**
+     * Same shape as the import above, and the same reason: the round holds the delivery, and it
+     * is the one place where two rounds are kept from overlapping — the container consumes one
+     * message at a time.
+     */
+    @RabbitHandler
+    public void on(DriveSynchronisationRequested event) {
+        driveSynchroniser.synchronise(event.ownerId());
     }
 
     /**

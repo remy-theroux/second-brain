@@ -75,6 +75,39 @@ class JpaDriveConnectionRepositoryAdapterTest {
     }
 
     @Test
+    void keeps_the_page_token_the_next_run_starts_from() {
+        UUID owner = anAccount("drive-jeton-de-page@exemple.fr");
+        DriveConnection connection =
+                driveConnectionRepository.save(DriveConnection.connect(owner, "compte@gmail.com", TOKEN, CONNECTED_AT));
+        assertThat(connection.getChangesPageToken()).isEmpty();
+
+        connection.keepChangesPageToken("1900");
+        driveConnectionRepository.save(connection);
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT changes_page_token FROM knowledge_drive_connections WHERE owner_id = ?",
+                        String.class,
+                        owner))
+                .isEqualTo("1900");
+    }
+
+    @Test
+    void forgets_the_page_token_google_no_longer_knows() {
+        UUID owner = anAccount("drive-jeton-perime@exemple.fr");
+        DriveConnection connection =
+                driveConnectionRepository.save(DriveConnection.connect(owner, "compte@gmail.com", TOKEN, CONNECTED_AT));
+        connection.keepChangesPageToken("1900");
+        driveConnectionRepository.save(connection);
+
+        connection.forgetChangesPageToken();
+        driveConnectionRepository.save(connection);
+
+        assertThat(driveConnectionRepository.findByOwnerId(owner)).get().satisfies(reloaded -> assertThat(
+                        reloaded.getChangesPageToken())
+                .isEmpty());
+    }
+
+    @Test
     void forgets_a_connection() {
         UUID owner = anAccount("drive-oubli@exemple.fr");
         DriveConnection connection =

@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveConnectionStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
@@ -47,6 +48,11 @@ public class DriveConnection {
     @Column(name = "connected_at", nullable = false)
     private Instant connectedAt;
 
+    // columnDefinition: Google documents no length for this token, and a silent truncation would
+    // hand back a token Google refuses, hence a full scan.
+    @Column(name = "changes_page_token", columnDefinition = "text")
+    private String changesPageToken;
+
     protected DriveConnection() {}
 
     private DriveConnection(UUID ownerId, String googleEmail, RefreshToken refreshToken, Instant connectedAt) {
@@ -65,16 +71,38 @@ public class DriveConnection {
         return new DriveConnection(ownerId, requireGoogleEmail(googleEmail), requireToken(refreshToken), connectedAt);
     }
 
-    /** Reconnecting replaces: one account holds one Drive connection, never a second. */
+    /**
+     * Reconnecting replaces: one account holds one Drive connection, never a second. The change
+     * position goes with the Drive that handed it out — kept across a reconnection on another
+     * Google account, it is one Google refuses in 400 rather than in 410, so no round would ever
+     * fall back on the full scan that a dead position is owed.
+     */
     public void refresh(String googleEmail, RefreshToken refreshToken, Instant connectedAt) {
         this.googleEmail = requireGoogleEmail(googleEmail);
         this.refreshToken = requireToken(refreshToken);
         this.status = DriveConnectionStatus.ACTIVE;
         this.connectedAt = connectedAt;
+        this.changesPageToken = null;
     }
 
     public void markNeedsReconnection() {
         this.status = DriveConnectionStatus.NEEDS_RECONNECTION;
+    }
+
+    /** Only after a whole run went through: kept page by page, it would lose a failed page's changes. */
+    public void keepChangesPageToken(String changesPageToken) {
+        if (changesPageToken == null || changesPageToken.isBlank()) {
+            throw new IllegalArgumentException("A change feed without its page token cannot be resumed");
+        }
+        this.changesPageToken = changesPageToken.trim();
+    }
+
+    /**
+     * What is owed after a token Google no longer knows: a full scan, so the next run asks for a
+     * starting point again rather than resuming from a dead one.
+     */
+    public void forgetChangesPageToken() {
+        this.changesPageToken = null;
     }
 
     private static String requireGoogleEmail(String googleEmail) {
@@ -118,5 +146,10 @@ public class DriveConnection {
 
     public Instant getConnectedAt() {
         return connectedAt;
+    }
+
+    /** Empty until a run went through: nothing tells where a connection that never read stands. */
+    public Optional<String> getChangesPageToken() {
+        return Optional.ofNullable(changesPageToken);
     }
 }

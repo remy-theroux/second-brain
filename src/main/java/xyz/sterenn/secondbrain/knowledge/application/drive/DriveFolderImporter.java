@@ -63,9 +63,10 @@ public class DriveFolderImporter {
         this.clock = clock;
     }
 
-    public void importFolder(UUID ownerId, UUID watchedFolderId) {
+    /** The outcome it has just written: a caller that chains folders — the mirror's full scan — must know. */
+    public DriveImportStatus importFolder(UUID ownerId, UUID watchedFolderId) {
         try {
-            walkAndRecord(ownerId, watchedFolderId);
+            return walkAndRecord(ownerId, watchedFolderId);
         } catch (RuntimeException unrecorded) {
             // Nothing can be written onto a folder or a connection that has gone between the
             // request and the walk; what would otherwise be missing is the trace, the message
@@ -75,7 +76,7 @@ public class DriveFolderImporter {
         }
     }
 
-    private void walkAndRecord(UUID ownerId, UUID watchedFolderId) {
+    private DriveImportStatus walkAndRecord(UUID ownerId, UUID watchedFolderId) {
         DriveConnection connection =
                 driveConnectionRepository.findByOwnerId(ownerId).orElseThrow(DriveNotConnectedException::new);
         WatchedFolder watchedFolder = watchedFolderRepository
@@ -90,15 +91,13 @@ public class DriveFolderImporter {
             // Two second transactions, the walk having rolled its own back: see ADR-0028. The
             // outcome alone would leave the owner with a failed import and no idea to reconnect.
             commandBus.dispatch(new MarkDriveConnectionExpired(ownerId));
-            record(ownerId, watchedFolderId, DriveImportStatus.FAILED, revoked.getMessage(), rejections);
-            return;
+            return record(ownerId, watchedFolderId, DriveImportStatus.FAILED, revoked.getMessage(), rejections);
         } catch (RuntimeException failure) {
             LOG.error("Import of the watched folder {} failed", watchedFolderId, failure);
             // A second transaction, the walk having rolled its own back: see ADR-0028.
-            record(ownerId, watchedFolderId, DriveImportStatus.FAILED, reason(failure), rejections);
-            return;
+            return record(ownerId, watchedFolderId, DriveImportStatus.FAILED, reason(failure), rejections);
         }
-        record(ownerId, watchedFolderId, DriveImportStatus.SUCCEEDED, null, rejections);
+        return record(ownerId, watchedFolderId, DriveImportStatus.SUCCEEDED, null, rejections);
     }
 
     /**
@@ -146,13 +145,14 @@ public class DriveFolderImporter {
         }
     }
 
-    private void record(
+    private DriveImportStatus record(
             UUID ownerId,
             UUID watchedFolderId,
             DriveImportStatus status,
             String error,
             List<DriveImportRejection> rejections) {
         commandBus.dispatch(new RecordDriveImportOutcome(ownerId, watchedFolderId, status, error, rejections));
+        return status;
     }
 
     private static String reason(RuntimeException failure) {
