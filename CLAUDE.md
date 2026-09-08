@@ -551,9 +551,9 @@ comportements sous un seul nom ; une commande distincte est plus honnête.
 **La provenance entre dans le document lui-même** — `source` (`MANUAL` ou `GOOGLE_DRIVE`),
 l'identifiant Drive, le lien d'ouverture — et un document ne vient jamais de deux fichiers
 Drive : `attachTo` refuse d'écraser une provenance existante. La quatrième colonne,
-`drive_modified_time`, **ne sert à rien avant DRIVE-5** et est posée maintenant : c'est par elle
-qu'un Google Doc natif se comparera, jamais par son empreinte, et l'ajouter plus tard obligerait
-à rebalayer tout le Drive pour les documents déjà importés.
+`drive_modified_time`, porte l'instant de modification que Drive annonce : c'est par elle qu'un
+Google Doc natif se compare, jamais par son empreinte — les six paragraphes qui suivent le
+plafond disent pourquoi.
 
 **Le plafond se contrôle avant le téléchargement.** `files.list` rend déjà `size` ; payer le
 transfert d'un fichier qu'on va refuser n'a aucun sens. `ImportPolicy.MAX_FILE_SIZE` vaut
@@ -561,6 +561,49 @@ exactement ce que vaut le dépôt manuel (20 Mo, `spring.servlet.multipart.max-f
 chemins d'entrée dans la même base ne doivent pas avoir deux plafonds. `size` arrive en
 **chaîne** dans le JSON de Drive et **manque** aux Google Docs natifs — l'adapter le lit comme
 tel plutôt que de laisser Jackson échouer.
+
+**Un Google Doc n'a aucun binaire à télécharger** : il s'exporte, par `files.export`. L'import
+choisit donc son appel sur ce que le balayage a rendu (`DriveFile.isExported()`), et pour tout
+l'aval le résultat est un DOCX ordinaire — même extracteur, même découpage, même typologie
+(ADR-0029). `knowledge/infrastructure/extraction/` n'a pas bougé d'une ligne.
+
+**DOCX et non PDF, et ce n'est pas un détail** : le DOCX porte les styles `Heading`, donc
+l'extracteur en tire de vraies sections, là où un export PDF ferait deviner les titres à la
+taille de police (ADR-0027). C'est ce que vérifie
+`GoogleDocImportTest.keeps_the_headings_of_the_google_document`, sur le texte réellement extrait.
+
+**Le nom du document est celui du Doc suivi de `.docx`.** Un Doc n'a pas d'extension dans son
+nom Drive, et `DocumentFormat.fromFilename` refuserait « Compte rendu du 3 mars » ; le nom se
+complète donc au balayage, dans `GoogleWorkspaceType.exportedName`, qui **ne double pas** une
+extension déjà présente — un Doc nommé `contrat.docx` est légal côté Drive.
+
+**Le plafond de 10 Mo est celui de Google, pas celui du projet** — d'où deux constantes
+distinctes dans `ImportPolicy`, `MAX_FILE_SIZE` (le dépôt, 20 Mo) et `MAX_GOOGLE_EXPORT_SIZE`
+(subi). Et il **ne s'anticipe pas** : `files.list` ne rend aucun `size` pour un Doc natif, donc
+le contrôle avant téléchargement ci-dessus ne peut pas jouer. Il se lit sur le refus lui-même,
+un `403` portant `exportSizeLimitExceeded`, que le mécanisme de `error.errors[].reason` déjà en
+place départage d'un `403` de droits : un rejet consultable dans un cas, un fichier écarté dans
+l'autre. Les confondre enverrait l'utilisateur chercher un problème de partage là où il n'a
+qu'un document trop gros.
+
+**Sheets, Slides, Drawings et Forms sont ignorés en silence**, comme une image : chacun
+demanderait sa typologie et ses tables (ADR-0030). Ils ne figurent donc pas dans les rejets.
+
+**L'export n'est pas déterministe, et c'est le piège central de ce flux.** L'archive ZIP que
+Google fabrique embarque des métadonnées et des horodatages : deux exports d'un Doc **inchangé**
+donnent deux empreintes différentes. Un Google Doc se compare donc par son `modifiedTime`,
+**jamais par son empreinte**. Le court-circuit du cas 1 précède tout calcul d'empreinte, et
+`does_not_re_ingest_a_google_document_whose_modified_time_has_not_changed` le prouve avec un
+bouchon qui rend deux exports différents pour un `modifiedTime` immobile. Sans cette précaution,
+chaque synchronisation revectoriserait **tout le Drive**, et rien ne le signalerait qu'une
+charge inexpliquée sur le worker.
+
+**Un fichier dont Drive dit qu'il a bougé est ré-ingéré**, en revanche : le cas 1 remplace alors
+le contenu, efface texte et extraits, écrase l'original et annonce `DocumentContentReplaced` —
+exactement ce que fait `ReplaceDocumentContent` d'un dépôt manuel, et le worker le traite
+pareil. Le contrôle d'empreinte reste, en garde-fou : un binaire dont seule la date a bougé ne
+coûte rien. Ce que ce ticket ne fait toujours pas, et qui reste à DRIVE-5 : le miroir, donc le
+sort des fichiers **disparus** du dossier.
 
 **Trois sorts pour un fichier, et un seul est muet.** Il est *ignoré sans trace* quand son
 format n'est pas pris en charge — un Drive est plein d'images et de vidéos, les faire figurer
