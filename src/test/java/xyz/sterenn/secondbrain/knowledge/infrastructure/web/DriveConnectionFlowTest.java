@@ -29,7 +29,7 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfiguration;
 import xyz.sterenn.secondbrain.knowledge.FakeGoogleDriveAuthorizationConfiguration.FakeGoogleDriveAuthorization;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
-import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
+import xyz.sterenn.secondbrain.knowledge.application.command.MarkDriveConnectionExpired;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAuthorizationState;
@@ -151,12 +151,7 @@ class DriveConnectionFlowTest {
     void reports_a_connection_whose_access_was_revoked_as_needing_a_reconnection() throws Exception {
         connect("alice@gmail.com", "1//jeton-alice");
 
-        // No real trigger before DRIVE-2: nothing reads the Drive yet, so the revocation is
-        // played through the domain.
-        DriveConnection connection =
-                driveConnectionRepository.findByOwnerId(alice).orElseThrow();
-        connection.markNeedsReconnection();
-        driveConnectionRepository.save(connection);
+        commandBus.dispatch(new MarkDriveConnectionExpired(alice));
 
         mockMvc.perform(get("/api/drive/connection").header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken))
                 .andExpect(status().isOk())

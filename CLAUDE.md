@@ -405,13 +405,104 @@ d'Ollama : le point de jeton est un POST de formulaire et `about.get` un GET JSO
 l'application chez Google. En statut « Testing », les jetons de rafraîchissement expirent au bout
 de sept jours et la connexion meurt en silence.
 
-**Ce qui n'a pas encore de déclencheur :** une connexion dont l'accès a été retiré depuis le compte
-Google sait se marquer « à renouveler », mais rien ne lit le Drive avant DRIVE-2 — c'est
-`invalid_grant` au rafraîchissement qui l'armera.
+**Ce qui arme le « à renouveler » :** `invalid_grant` au rafraîchissement du jeton d'accès, et
+rien d'autre. Le déclencheur qui manquait à DRIVE-1 est arrivé avec les routes de la section
+suivante ; le détail y est.
 
 **Ce que le front ne fait pas encore :** aucun écran n'appelle `POST /api/drive/authorizations` ni
 ne lit le `?drive=<code>` du retour. L'utilisateur revenant de Google atterrit donc sur un écran
 muet, quel que soit le code — c'est DRIVE-7.
+
+### Le flux du choix des dossiers surveillés
+
+Quatre routes, et aucune ne lit le contenu d'un fichier. `GET /api/drive/folders` et
+`GET /api/drive/folders?parent=<id>` parcourent **les dossiers seulement** — sans `parent`,
+c'est la racine qui est parcourue, le handler traduisant l'absence en `root`, mot-clé par
+lequel l'API Google désigne le haut d'un Drive. Un `parent` hors de `[A-Za-z0-9_-]`, qui est
+l'alphabet réel d'un identifiant Drive, ne part pas chez Google : il rend une liste vide,
+comme le ferait un dossier inconnu. `POST /api/drive/watched-folders`
+met un dossier sous surveillance, `GET /api/drive/watched-folders` les liste,
+`DELETE /api/drive/watched-folders/{id}` en retire un **sans toucher aux documents qu'il a
+apportés** — le miroir est l'affaire de DRIVE-5, et le retrait ne fait rien d'autre que
+retirer.
+
+**Un dossier se désigne par son identifiant Drive, jamais par son chemin.** Le renommer ou le
+déplacer ne casse pas la surveillance, exactement comme l'identité d'un document est son
+contenu et non son nom. La colonne `name` n'est qu'une recopie prise au moment de la mise sous
+surveillance : elle sert à l'écran, elle peut vieillir, et rien ne la rafraîchit.
+
+**Sans connexion Drive, le parcours et la mise sous surveillance refusent — la liste, non.**
+Les deux premiers rendent `409` (« Connectez un compte Google… ») ; `GET
+/api/drive/watched-folders` rend une **liste vide**. C'est une lecture, et l'écran de DRIVE-7
+doit pouvoir l'appeler avant qu'un Drive soit connecté.
+
+**Le refus du dossier déjà couvert** remonte les ancêtres du candidat par
+`files.get?fields=parents`, un appel par niveau, jusqu'à la racine ou jusqu'à un dossier déjà
+surveillé. C'est N appels pour N niveaux, et c'est acceptable : ça n'arrive qu'à la mise sous
+surveillance, un geste rare — et pas du tout tant que rien n'est surveillé, le handler ne
+partant en escalade que si la connexion a déjà des dossiers. Le message **nomme le dossier
+couvrant** — « Ce dossier est déjà couvert par « Notes ». » : dire seulement « déjà
+couvert » obligerait l'utilisateur à chercher lequel. Le même refus couvre le dossier
+redéposé tel quel, qui est alors son propre couvrant, et l'`UNIQUE (connection_id,
+drive_folder_id)` reste le filet sous le contrôle applicatif.
+
+**L'escalade est bornée à cinquante niveaux et lève plutôt que de boucler.** Drive a
+supprimé le multi-parentage en septembre 2020 — un fichier n'a plus qu'un parent, les cas
+anciens ayant été migrés en raccourcis —, et l'adapter ne suit donc que ce parent-là : un
+cycle ne devrait pas exister. La borne n'est pas une défense contre un cycle attendu, c'est
+de la défiance envers une réponse tierce, qu'on ne veut pas voir boucler dans une
+transaction. C'est la même forme que la borne de cent pages du parcours, et pour la même
+raison.
+
+**Ce que ce contrôle ne fait pas, et qui est assumé :** surveiller un dossier qui est
+l'**ancêtre** d'un dossier déjà surveillé n'est pas refusé. Le ticket ne le demande pas, mais
+son motif — « pour qu'aucun fichier ne soit balayé deux fois » — vaut symétriquement. Le
+corriger demanderait de décider quoi faire du dossier devenu redondant (le retirer ? le
+laisser ?), ce qui est une décision de produit, pas une correction.
+
+**`files.list` se pagine.** Elle rend cent entrées par défaut et un `nextPageToken` ; un Drive
+personnel a des dossiers de plus de cent sous-dossiers, et ne pas suivre le jeton en perd la
+moitié **en silence** — le pire mode d'échec possible pour un sélecteur. L'adapter suit le
+jeton, borné à cent pages.
+
+**Le jeton d'accès est échangé une fois et gardé jusqu'à sa mort.** `CachingGoogleAccessTokens`
+garde un jeton par connexion dans une `ConcurrentHashMap` : sans lui, un aller-retour vers
+Google précéderait chaque `files.list`. Une marge de soixante secondes
+(`DriveAccessToken.EXPIRY_MARGIN`) écarte le jeton qui expire pendant l'appel qu'il autorise.
+Ce cache est **en mémoire de processus** : il n'est donc **pas partagé entre l'app et le
+worker**, et **ne survit pas à un redémarrage**. Sans conséquence — le pire cas est un échange
+de plus —, mais à savoir avant de chercher pourquoi deux processus parlent deux fois au point
+de jeton. Il se vide à la déconnexion explicite, et à chaque jeton que Google refuse.
+
+**`invalid_grant` est le seul chemin vers une révocation.** C'est le seul signal que Google
+donne d'un accès retiré depuis le compte, et c'est le seul qui fasse passer la connexion en
+`NEEDS_RECONNECTION` : un `500`, un délai dépassé ou une panne réseau rendent `503` et
+**laissent la connexion intacte**. Une connexion valide marquée « à renouveler » sur un
+incident passager enverrait l'utilisateur refaire un consentement dont il n'a pas besoin.
+L'exception héritant de `RuntimeException`, elle annule la transaction du bus : le statut
+s'écrit donc dans une **seconde** transaction, `MarkDriveConnectionExpired` dispatchée par le
+contrôleur qui a rattrapé le refus, avant de rendre sa réponse. C'est exactement la situation
+d'ADR-0028, et la même réponse.
+
+**Mais rien ne rafraîchit un jeton d'accès encore valide à l'horloge : c'est le `401` de
+Google qui déclenche le rafraîchissement, donc la révocation.** Un accès retiré tue le jeton
+d'accès **immédiatement**, alors que le cache le croit bon pour une heure encore : sans ce
+chemin, le `files.list` prenait un `401` traité comme une panne quelconque, l'utilisateur
+recevait `503` « réessayez plus tard » — un message qui invite à attendre là où il faut
+reconnecter — et la connexion restait `ACTIVE` jusqu'à cinquante-neuf minutes.
+`GoogleDriveFoldersAdapter` distingue donc le `401` (`DriveAccessTokenRejectedException`), et
+`DriveAccess` — par où passe **tout** appel Drive du contexte — purge le jeton et rejoue
+l'appel **une seule fois**. C'est ce rafraîchissement forcé qui produit l'`invalid_grant`.
+Jamais de boucle : un `401` qui survit à un jeton neuf est une vraie anomalie, il rend `503`
+comme le reste — l'exception est fille de `GoogleDriveUnavailableException` pour ça — et
+réessayer sans fin en ferait une tempête d'appels.
+
+Les appels à Google ont lieu **dans la transaction du bus**, `readOnly` pour le parcours : une
+connexion PostgreSQL est tenue le temps des allers-retours, comme elle l'est pour Ollama à
+l'indexation et à la recherche. Une application mono-utilisateur le supporte.
+
+**Ce que le front ne fait pas encore :** aucun écran n'appelle ces quatre routes — c'est
+DRIVE-7.
 
 ### Le flux du dépôt d'un document
 
@@ -915,6 +1006,13 @@ La connexion à un Drive vit dans `knowledge_drive_connections` — `owner_id` *
 pose la règle « une connexion par compte » là où elle ne se contourne pas — et la demande
 d'autorisation en cours dans `knowledge_drive_authorization_requests`. Les deux cascadent à la
 suppression du compte.
+
+Les dossiers mis sous surveillance vivent dans `knowledge_drive_watched_folders`, rattachés à la
+**connexion** et non au propriétaire : `UNIQUE (connection_id, drive_folder_id)`, et deux cascades
+en enfilade — déconnecter un compte Google emporte ses dossiers surveillés, supprimer le compte
+emporte la connexion, donc les dossiers avec elle. **Ni l'une ni l'autre n'emporte les documents
+que ces dossiers ont apportés**, c'est la promesse de DRIVE-1 et elle tient parce que rien ne relie
+un document à un dossier surveillé.
 
 Le texte extrait d'un document vit dans **deux tables**, `knowledge_text_extractions` (une
 ligne par document, `document_id` `UNIQUE`) et `knowledge_text_blocks` (ses blocs, une
