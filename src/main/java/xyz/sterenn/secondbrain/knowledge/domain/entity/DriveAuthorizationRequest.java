@@ -42,11 +42,18 @@ public class DriveAuthorizationRequest {
         this.createdAt = createdAt;
     }
 
-    public static DriveAuthorizationRequest open(UUID ownerId, Instant now) {
+    /**
+     * The nonce is drawn by the caller and not here: a command returns nothing, so the route
+     * would have no way of building the consent URL without re-reading what it just wrote.
+     */
+    public static DriveAuthorizationRequest open(UUID ownerId, DriveAuthorizationState state, Instant now) {
         if (ownerId == null) {
             throw new IllegalArgumentException("The requester of the authorization is required");
         }
-        return new DriveAuthorizationRequest(ownerId, DriveAuthorizationState.random(), now);
+        if (state == null) {
+            throw new IllegalArgumentException("The authorization state is required");
+        }
+        return new DriveAuthorizationRequest(ownerId, state, now);
     }
 
     public boolean isConsumed() {

@@ -17,12 +17,15 @@ class DriveAuthorizationRequestTest {
     private static final UUID ACCOUNT = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     private DriveAuthorizationRequest opened() {
-        return DriveAuthorizationRequest.open(ACCOUNT, OPENED_AT);
+        return DriveAuthorizationRequest.open(ACCOUNT, DriveAuthorizationState.random(), OPENED_AT);
     }
 
     @Test
-    void draws_a_state_that_differs_from_one_request_to_the_next() {
-        assertThat(opened().getState()).isNotEqualTo(opened().getState());
+    void keeps_the_state_it_was_opened_with() {
+        DriveAuthorizationState state = DriveAuthorizationState.random();
+
+        assertThat(DriveAuthorizationRequest.open(ACCOUNT, state, OPENED_AT).getState())
+                .isEqualTo(state);
     }
 
     @Test

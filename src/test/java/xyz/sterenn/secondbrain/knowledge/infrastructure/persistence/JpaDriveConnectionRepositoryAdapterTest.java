@@ -15,6 +15,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveAuthorizationRequest
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveAuthorizationRequestRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAuthorizationState;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveConnectionStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.RefreshToken;
 import xyz.sterenn.secondbrain.users.domain.entity.User;
@@ -87,8 +88,8 @@ class JpaDriveConnectionRepositoryAdapterTest {
     @Test
     void finds_an_authorization_request_by_its_state() {
         UUID owner = anAccount("drive-demande@exemple.fr");
-        DriveAuthorizationRequest request =
-                driveAuthorizationRequestRepository.save(DriveAuthorizationRequest.open(owner, CONNECTED_AT));
+        DriveAuthorizationRequest request = driveAuthorizationRequestRepository.save(
+                DriveAuthorizationRequest.open(owner, DriveAuthorizationState.random(), CONNECTED_AT));
 
         assertThat(driveAuthorizationRequestRepository.findByState(request.getState()))
                 .get()
