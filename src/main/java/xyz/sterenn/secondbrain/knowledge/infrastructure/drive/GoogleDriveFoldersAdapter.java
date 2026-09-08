@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -30,6 +31,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
     /** Drive allows several parents per file, so a cycle is conceivable: bounded for the same reason. */
     static final int MAX_ANCESTOR_DEPTH = 50;
 
+    /** The whole alphabet of a Drive identifier: anything else designates no folder of any Drive. */
+    private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
+
     private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveFoldersAdapter.class);
 
     private final RestClient restClient;
@@ -40,6 +44,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
 
     @Override
     public List<DriveFolder> children(DriveAccessToken accessToken, String parentId) {
+        if (!isDriveIdentifier(parentId)) {
+            return List.of();
+        }
         List<DriveFolder> folders = new ArrayList<>();
         String pageToken = null;
         for (int page = 0; page < MAX_PAGES; page++) {
@@ -64,6 +71,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
 
     @Override
     public Optional<DriveFolder> folder(DriveAccessToken accessToken, String folderId) {
+        if (!isDriveIdentifier(folderId)) {
+            return Optional.empty();
+        }
         return get(accessToken, folderId, "id,name,mimeType,trashed")
                 .filter(file -> FOLDER_MIME_TYPE.equals(file.mimeType()))
                 .filter(file -> !Boolean.TRUE.equals(file.trashed()))
@@ -72,6 +82,9 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
 
     @Override
     public List<String> ancestors(DriveAccessToken accessToken, String folderId) {
+        if (!isDriveIdentifier(folderId)) {
+            return List.of();
+        }
         List<String> ancestors = new ArrayList<>();
         String current = folderId;
         for (int depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
@@ -126,7 +139,7 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
         }
     }
 
-    private static URI pageUri(String parentId, String pageToken) {
+    static URI pageUri(String parentId, String pageToken) {
         UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(FILES_ENDPOINT)
                 .queryParam(
                         "q",
@@ -146,6 +159,10 @@ class GoogleDriveFoldersAdapter implements GoogleDriveFolders {
                 .build()
                 .encode()
                 .toUri();
+    }
+
+    private static boolean isDriveIdentifier(String folderId) {
+        return folderId != null && IDENTIFIER.matcher(folderId).matches();
     }
 
     /** The parent comes from the request, and the Drive query language reads a quote as a delimiter. */

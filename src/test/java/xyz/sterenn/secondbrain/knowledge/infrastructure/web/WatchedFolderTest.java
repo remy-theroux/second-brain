@@ -94,8 +94,12 @@ class WatchedFolderTest {
     }
 
     private DriveConnection connectADrive() {
+        return connectADriveFor(alice, "alice@gmail.com", "1//jeton-alice");
+    }
+
+    private DriveConnection connectADriveFor(UUID owner, String googleEmail, String refreshToken) {
         return driveConnectionRepository.save(
-                DriveConnection.connect(alice, "alice@gmail.com", new RefreshToken("1//jeton-alice"), Instant.now()));
+                DriveConnection.connect(owner, googleEmail, new RefreshToken(refreshToken), Instant.now()));
     }
 
     private void aDriveHolding(DriveFolder... topLevelFolders) {
@@ -208,6 +212,9 @@ class WatchedFolderTest {
         watch("a1");
         UUID watchedFolderId = onlyWatchedFolderOf(connection).getId();
         UUID bob = AccountFixture.registerVerified(commandBus, recordingNotificationSender, "bob@exemple.fr", PASSWORD);
+        // Bob has his own Drive: without it the refusal would come from the missing connection,
+        // and the test would stay green even if the folder were looked up unscoped.
+        connectADriveFor(bob, "bob@gmail.com", "1//jeton-bob");
 
         mockMvc.perform(delete(WATCHED_FOLDERS + "/" + watchedFolderId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + KnowledgeFixture.token(accessTokenIssuer, bob)))

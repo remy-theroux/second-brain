@@ -92,6 +92,22 @@ class GoogleDriveFoldersAdapterTest {
     }
 
     @Test
+    void carries_a_parent_holding_a_quote_as_one_escaped_literal_of_the_query() {
+        String query = URLDecoder.decode(
+                GoogleDriveFoldersAdapter.pageUri("a1' or name != '", null).getRawQuery(), StandardCharsets.UTF_8);
+
+        assertThat(query).contains("'a1\\' or name != \\'' in parents").doesNotContain("'a1' or");
+    }
+
+    @Test
+    void asks_google_nothing_for_an_identifier_no_drive_could_hand_back() {
+        assertThat(adapter.children(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
+        assertThat(adapter.folder(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
+        assertThat(adapter.ancestors(ACCESS_TOKEN, "a1' or '1'='1")).isEmpty();
+        server.verify();
+    }
+
+    @Test
     void reports_google_as_unavailable_when_the_listing_fails() {
         server.expect(requestTo(startsWith(GoogleDriveFoldersAdapter.FILES_ENDPOINT)))
                 .andRespond(withServerError());
