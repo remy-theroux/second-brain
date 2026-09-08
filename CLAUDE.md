@@ -1064,10 +1064,12 @@ le montre. Et cette seconde absence est la seule query du contexte qui **lève l
 d'invariant qu'aucun chemin nominal ne produit (voir la spec du téléchargement, décision 6).
 Le stockage injoignable, lui, rend `503`, comme la recherche pour Ollama.
 
-Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) porte
-les trois gestes sur un seul écran : un `FileUpload` PrimeVue en mode avancé et
-`custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`, jamais par
-l'URL du composant —, la liste dans un `DataTable`, et la suppression derrière un
+Côté front, `DocumentsView` (`/documents`, entrée « Documents » de la barre latérale) est
+l'écran **« Sources et documents »** : les deux sources en haut — le dépôt manuel et les
+dossiers Drive — et **une seule liste** dessous. Deux écrans séparés diraient faussement qu'il
+s'agit de deux bases, alors que c'est la même. Le dépôt manuel est un `FileUpload` PrimeVue en
+mode avancé et `custom-upload` — l'envoi passe par `uploadDocument` dans `src/api/client.js`,
+jamais par l'URL du composant —, la liste est un `DataTable`, et la suppression est derrière un
 `ConfirmPopup` (d'où `ConfirmationService` dans `main.js`). Le `201` n'ayant pas de corps,
 chaque dépôt et chaque suppression relisent `GET /api/documents`. Aucun plafond de taille n'est
 posé côté navigateur : le `413` et son message viennent du serveur, seule source des refus.
@@ -1101,6 +1103,47 @@ ne s'arrête jamais ne se voit pas à l'écran, elle se voit dans les journaux d
 plus tard, et c'est exactement le genre de logique que ce projet sort d'un composant pour la
 tester — comme `sse.js` et `answerSegments.js`. `DocumentStatusTag` y a suivi ses deux tables de
 libellés : les statuts n'étaient pas énumérés à deux endroits, ils ne le seront pas.
+
+**L'état sans Drive connecté n'est pas une erreur** : c'est celui de tout nouveau compte, et
+c'est pourquoi `fetchDriveConnection` traduit le `404` de `GET /api/drive/connection` en `null`
+plutôt qu'en refus — le traiter comme un échec accueillerait chaque nouvel arrivant par un
+message d'erreur. La source Drive y affiche une invitation à connecter un compte, **et le dépôt
+manuel reste disponible** juste au-dessus.
+
+Le retour de Google arrive par une redirection portant un **code**, pas un message (ADR-0017) :
+la vue le lit au montage, affiche le libellé français que porte `driveMessages.js`, puis
+**retire le paramètre de l'URL** par un `router.replace`. Sans cet effacement, un F5 rejouerait
+le message d'une connexion faite dix minutes plus tôt, et le code resterait dans l'historique du
+navigateur — exactement le reproche fait au jeton de vérification (ADR-0007). La table des
+libellés vit **hors du `.vue`**, pour la même raison que `documentStatus.js` : un code inconnu
+qui n'afficherait rien ne se verrait pas, et c'est pourquoi elle rend un message générique
+plutôt que du silence.
+
+**Le sélecteur de dossier est un fil d'Ariane, pas un arbre.** `DriveFolderPicker` descend d'un
+niveau par appel à `GET /api/drive/folders` et remonte par ses miettes ; reconstruire un arbre
+complet demanderait de balayer tout le Drive. Il affiche ses propres refus — le `409` d'un Drive
+absent ou d'une autorisation qui ne tient plus, le `503` de Google injoignable — et **émet**
+l'erreur pour que la vue déconnecte sur un `401` : un composant partagé ne pousse pas de route,
+comme `DownloadDocumentButton`.
+
+`DriveSourceCard` porte un dossier surveillé : son nom, le nombre de documents apportés, le
+bilan de sa dernière synchronisation et, le cas échéant, son motif d'échec et les fichiers
+écartés. **Un dossier jamais synchronisé se reconnaît à l'absence des trois champs de bilan**,
+pas à une valeur nulle : `WatchedFolderView` les omet, et c'est cette omission qui fait foi.
+
+Une demande d'import rend `202` et **rien n'est encore en cours** : aucun document n'est
+instable à cet instant, donc l'horloge de rafraîchissement ne s'armerait pas d'elle-même. La vue
+l'arme alors pour un nombre borné de cycles (15 × 2 s), et la lecture périodique relit **aussi**
+les dossiers surveillés tant qu'un Drive est connecté — le compte et le bilan avancent au même
+pas que la liste.
+
+Enfin, chaque ligne dit d'où elle vient : `DocumentSourceTag`, sur les champs `source` et
+`driveLink` de `DocumentView`. Un document importé porte un lien vers son fichier Drive, en
+`target="_blank" rel="noopener"` parce que c'est une URL tierce — et ce lien peut manquer,
+l'identifiant Drive du fichier n'étant jamais exposé. **Supprimer un document importé avertit
+qu'il reviendra à la prochaine synchronisation** : c'est le `ConfirmPopup` existant, dont le
+message dépend de la provenance. Sans cet avertissement, l'utilisateur croit avoir retiré
+quelque chose de sa base et le voit réapparaître sans comprendre.
 
 
 `DocumentDetailView` (`/documents/:id`, atteint par l'œil de chaque ligne) montre ce qui a
