@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, useTemplateRef } from 'vue'
+import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
@@ -10,6 +10,7 @@ import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import PageTitle from '@/components/PageTitle.vue'
 import DocumentStatusTag from '@/components/DocumentStatusTag.vue'
+import { hasUnsettled } from '@/components/documentStatus'
 import DownloadDocumentButton from '@/components/DownloadDocumentButton.vue'
 import {
   deleteDocument,
@@ -32,8 +33,17 @@ const router = useRouter()
 const confirm = useConfirm()
 const uploader = useTemplateRef('uploader')
 
+// Two seconds, and only while something is still moving: a list that has settled must not keep
+// asking. The clock is a `setTimeout` rearmed after each read, never a `setInterval` — a read
+// slower than the interval would otherwise pile requests up.
+const REFRESH_DELAY = 2000
+
+let refreshTimer = null
+
 const documents = ref([])
-const loading = ref(false)
+// Only the first read draws the table's veil: a refresh every two seconds must not make the
+// list flicker.
+const loading = ref(true)
 const busy = ref(false)
 // One entry per file the server refused, so that a rejection names its file: a global message
 // would lie as soon as one upload out of three is refused.
@@ -53,10 +63,18 @@ async function handle(error) {
   rejections.value.push({ filename: null, message: error.message })
 }
 
+function scheduleRefresh() {
+  clearTimeout(refreshTimer)
+  if (!hasUnsettled(documents.value)) {
+    return
+  }
+  refreshTimer = setTimeout(load, REFRESH_DELAY)
+}
+
 async function load() {
-  loading.value = true
   try {
     documents.value = await listDocuments(auth.token)
+    scheduleRefresh()
   } catch (error) {
     await handle(error)
   } finally {
@@ -139,6 +157,7 @@ function formatDate(isoInstant) {
 }
 
 onMounted(load)
+onUnmounted(() => clearTimeout(refreshTimer))
 </script>
 
 <template>
