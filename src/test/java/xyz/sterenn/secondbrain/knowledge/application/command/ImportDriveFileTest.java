@@ -1,6 +1,7 @@
 package xyz.sterenn.secondbrain.knowledge.application.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -24,6 +25,7 @@ import xyz.sterenn.secondbrain.TestcontainersConfiguration;
 import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDriveContentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
@@ -163,11 +165,13 @@ class ImportDriveFileTest {
     }
 
     @Test
-    void leaves_alone_a_document_that_already_carries_another_drive_file() {
+    void refuses_a_content_a_document_already_carries_from_another_drive_file() {
         commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f1", "rapport.txt", REPORT), REPORT));
         assertThat(announcement()).isNotNull();
 
-        commandBus.dispatch(new ImportDriveFile(alice, NOTES, aDriveFile("f2", "copie.txt", REPORT), REPORT));
+        assertThatExceptionOfType(DuplicateDriveContentException.class)
+                .isThrownBy(() -> commandBus.dispatch(
+                        new ImportDriveFile(alice, NOTES, aDriveFile("f2", "copie.txt", REPORT), REPORT)));
 
         assertThat(onlyDocument().getDriveProvenance())
                 .map(DriveProvenance::fileId)

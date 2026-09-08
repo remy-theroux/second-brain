@@ -31,6 +31,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.entity.WatchedFolder;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DriveFolderImportRequested;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDriveContentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.WatchedFolderRepository;
@@ -197,6 +198,21 @@ class DriveFolderImportTest {
         assertThat(reloadTheFolder().getRejections()).singleElement().satisfies(rejection -> {
             assertThat(rejection.getFilename()).isEqualTo("disparu.md");
             assertThat(rejection.getReason()).isEqualTo(DriveContentUnreachableException.MESSAGE);
+        });
+    }
+
+    @Test
+    void records_a_content_a_previous_file_of_the_same_import_already_brought() {
+        fakeGoogleDrive.putFile("a1", "f1", "rapport.md", Fixtures.read(Fixtures.STRUCTURED_MD));
+        fakeGoogleDrive.putFile("a1", "f2", "rapport (1).md", Fixtures.read(Fixtures.STRUCTURED_MD));
+
+        requestTheImport();
+
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(outcome()).isEqualTo(DriveImportStatus.SUCCEEDED));
+        assertThat(documents()).extracting(Document::getFilename).containsExactly("rapport.md");
+        assertThat(reloadTheFolder().getRejections()).singleElement().satisfies(rejection -> {
+            assertThat(rejection.getFilename()).isEqualTo("rapport (1).md");
+            assertThat(rejection.getReason()).isEqualTo(DuplicateDriveContentException.MESSAGE);
         });
     }
 

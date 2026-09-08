@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DuplicateDriveContentException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
@@ -68,10 +69,14 @@ public class ImportDriveFileHandler implements CommandHandler<ImportDriveFile> {
         domainEventPublisher.publish(new DocumentUploaded(document.getId(), document.getOwnerId(), clock.instant()));
     }
 
-    /** Two Drive files can hold the same bytes: the document keeps the first origin rather than refusing. */
+    /**
+     * Two Drive files can hold the same bytes, and the document keeps the first origin. The second
+     * file has to be refused out loud: dropped in silence, it would be missing from the base, from
+     * the rejections and from every later import, with nothing to explain the count.
+     */
     private void attach(Document document, DriveFile file, UUID watchedFolderId) {
         if (document.getDriveProvenance().isPresent()) {
-            return;
+            throw new DuplicateDriveContentException();
         }
         document.attachTo(file.provenance(), watchedFolderId);
         documentRepository.save(document);
