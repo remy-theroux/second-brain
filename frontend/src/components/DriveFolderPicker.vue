@@ -6,7 +6,7 @@ import Message from 'primevue/message'
 import { browseDriveFolders } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
-defineProps({
+const props = defineProps({
   busy: { type: Boolean, default: false },
 })
 
@@ -24,18 +24,43 @@ const folders = ref([])
 const loading = ref(true)
 const failure = ref(null)
 
-const home = { icon: 'pi pi-home', command: () => openAt(0) }
+// `Breadcrumb` renders every crumb as an `<a href="#">` and calls its `command` without
+// preventing the default: without this, each click scrolls the page back to the top and pushes
+// `/documents#` into the browser history.
+function walkTo(depth) {
+  return ({ originalEvent }) => {
+    originalEvent.preventDefault()
+    openAt(depth)
+  }
+}
+
+const home = { icon: 'pi pi-home', command: walkTo(0) }
 
 const crumbs = computed(() =>
-  trail.value.map((folder, index) => ({ label: folder.name, command: () => openAt(index + 1) })),
+  trail.value.map((folder, index) => ({ label: folder.name, command: walkTo(index + 1) })),
 )
 
+// Entering a folder then clicking a crumb, or a plain double click, launches two walks at once,
+// and the last one resolved would write the list while the trail shows the last one clicked. A
+// walk that is no longer the one asked for writes nothing.
+let lastWalk = 0
+
+const disabled = computed(() => props.busy || loading.value)
+
 async function browse() {
+  const walk = (lastWalk += 1)
   loading.value = true
   failure.value = null
   try {
-    folders.value = await browseDriveFolders(auth.token, trail.value.at(-1)?.id ?? '')
+    const found = await browseDriveFolders(auth.token, trail.value.at(-1)?.id ?? '')
+    if (walk !== lastWalk) {
+      return
+    }
+    folders.value = found
   } catch (error) {
+    if (walk !== lastWalk) {
+      return
+    }
     folders.value = []
     // The 409 (no Drive connected, or an authorization that no longer holds) and the 503
     // (Google unreachable) belong to this panel and are shown in it; the 401 belongs to the
@@ -43,7 +68,9 @@ async function browse() {
     failure.value = error.message
     emit('error', error)
   } finally {
-    loading.value = false
+    if (walk === lastWalk) {
+      loading.value = false
+    }
   }
 }
 
@@ -91,14 +118,14 @@ onMounted(browse)
           text
           icon="pi pi-folder"
           :label="folder.name"
-          :disabled="busy"
+          :disabled="disabled"
           @click="enter(folder)"
         />
         <Button
           type="button"
           label="Surveiller"
           size="small"
-          :disabled="busy"
+          :disabled="disabled"
           :aria-label="`Surveiller ${folder.name}`"
           @click="$emit('select', folder)"
         />
