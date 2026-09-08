@@ -142,6 +142,8 @@ tasks.withType<Test> {
     // file, without depending on the precedence between application.properties and
     // application.yml.
     environment("SECONDBRAIN_JWT_SECRET", "secret-de-test-second-brain-32-octets-minimum")
+    // Same status for the key that enciphers the Google refresh tokens: 32 bytes in Base64.
+    environment("SECONDBRAIN_DRIVE_TOKEN_KEY", "Y2xlLWRlLXRlc3QtZHJpdmUtc2Vjb25kLWJyYWluMzI=")
 }
 
 // Builds the binary extraction fixtures (docx, pdf) into src/test/resources/fixtures/.

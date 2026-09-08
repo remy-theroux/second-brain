@@ -170,6 +170,9 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-second_brain}
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
+      SECONDBRAIN_DRIVE_TOKEN_KEY: ${SECONDBRAIN_DRIVE_TOKEN_KEY:-Y2xlLWRlLWRldmVsb3BwZW1lbnQtZHJpdmUtYnJhaW4=}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
@@ -182,10 +185,13 @@ services:
       SECONDBRAIN_S3_SECRET_KEY: ${S3_SECRET_KEY:-secret-de-developpement-second-brain}
     labels:
       - "traefik.enable=true"
-      # /verification is outside /api on purpose: it is a navigation, not an XHR call.
+      # /verification and /drive are outside /api on purpose: both are navigations, not XHR
+      # calls — the first arrives from a mail client, the second from Google. Forgetting
+      # /drive here sends the OAuth callback to the front, which answers its index.html and
+      # the connection fails without a word.
       # Swagger and actuator are routed here because this file describes a development
       # environment; in production the proxy only exposes /api and /verification.
-      - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/verification`) || PathPrefix(`/swagger-ui`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/actuator`)"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/verification`) || PathPrefix(`/drive`) || PathPrefix(`/swagger-ui`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/actuator`)"
       - "traefik.http.routers.backend.entrypoints=web"
       # Explicit priority: do not depend on Traefik's rule-length computation.
       - "traefik.http.routers.backend.priority=100"
@@ -244,6 +250,9 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-second_brain}
       SECONDBRAIN_BASE_URL: http://localhost:${HTTP_PORT:-8080}
       SECONDBRAIN_JWT_SECRET: ${JWT_SECRET:-secret-de-developpement-second-brain-32-octets}
+      SECONDBRAIN_DRIVE_TOKEN_KEY: ${SECONDBRAIN_DRIVE_TOKEN_KEY:-Y2xlLWRlLWRldmVsb3BwZW1lbnQtZHJpdmUtYnJhaW4=}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}

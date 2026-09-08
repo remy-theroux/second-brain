@@ -56,8 +56,9 @@ spring:
 
   http:
     clients:
-      # The only RestClient of the project (OllamaEmbeddingAdapter), hence a global setting rather
-      # than a named client. Same status as the Jakarta Mail timeouts and the RabbitMQ
+      # Governs every RestClient of the project — OllamaEmbeddingAdapter and the two Google calls
+      # of GoogleDriveAuthorizationAdapter — hence a global setting rather than a named client
+      # each. Same status as the Jakarta Mail timeouts and the RabbitMQ
       # connection-timeout below: without it, an Ollama that accepts the
       # TCP connection then stops answering freezes the worker thread forever — the
       # only thread that consumes domain.knowledge.events — without a log, without FAILED, without
@@ -175,6 +176,17 @@ secondbrain:
     model: ${SECONDBRAIN_LLM_MODEL:qwen3:4b}
   notification:
     from: ${SECONDBRAIN_NOTIFICATION_FROM:no-reply@second-brain.localhost}
+  drive:
+    # The OAuth client of the Google Cloud project, and the redirect URI it must declare is
+    # `base-url` + /drive/callback. Empty by default, unlike the key below: without them only
+    # the Drive connection fails, and it fails loudly at the first consent.
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    # Enciphers the Google refresh token at rest, through RefreshTokenAttributeConverter.
+    # Deliberately without a default value, the same status as `jwt.secret` below: a default
+    # key would be a public key, and a dump would give back every connected Drive.
+    # 32 bytes encoded in Base64 — AES-256.
+    token-encryption-key: ${SECONDBRAIN_DRIVE_TOKEN_KEY}
   jwt:
     # Deliberately without a default value: a default signing secret would be
     # a public secret. Without SECONDBRAIN_JWT_SECRET, the application refuses to start —
