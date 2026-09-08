@@ -1,5 +1,6 @@
 package xyz.sterenn.secondbrain.knowledge.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Component;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.InvalidDriveAuthorizationException;
 import xyz.sterenn.secondbrain.knowledge.domain.port.DriveConnectionRepository;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveConnectionStatus;
 
 @Component
 public class JpaDriveConnectionRepositoryAdapter implements DriveConnectionRepository {
@@ -33,6 +35,11 @@ public class JpaDriveConnectionRepositoryAdapter implements DriveConnectionRepos
     @Override
     public Optional<DriveConnection> findByOwnerId(UUID ownerId) {
         return springDataDriveConnectionRepository.findByOwnerId(ownerId);
+    }
+
+    @Override
+    public List<DriveConnection> findAllActive() {
+        return springDataDriveConnectionRepository.findAllByStatus(DriveConnectionStatus.ACTIVE);
     }
 
     @Override

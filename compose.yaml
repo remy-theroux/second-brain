@@ -253,6 +253,9 @@ services:
       SECONDBRAIN_DRIVE_TOKEN_KEY: ${SECONDBRAIN_DRIVE_TOKEN_KEY:-Y2xlLWRlLWRldmVsb3BwZW1lbnQtZHJpdmUtYnJhaW4=}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # The worker alone carries the clock of the Drive synchronisation: `app` has no scheduled
+      # task, so the variable would designate nothing there.
+      SECONDBRAIN_DRIVE_SYNC_INTERVAL: ${SECONDBRAIN_DRIVE_SYNC_INTERVAL:-PT15M}
       OLLAMA_BASE_URL: http://ollama:11434
       SECONDBRAIN_EMBEDDING_MODEL: ${SECONDBRAIN_EMBEDDING_MODEL:-bge-m3}
       SECONDBRAIN_LLM_MODEL: ${SECONDBRAIN_LLM_MODEL:-qwen3:4b}
