@@ -362,6 +362,23 @@ un retour inexploitable (nonce illisible, demande inconnue, nonce faux) partagen
 message**, pour la même raison qu'à la vérification d'email : les distinguer ferait de la route un
 oracle.
 
+**Mais « usage unique » est plus faible que ce que la table laisse croire.** Tout le callback tient
+dans la transaction du bus, consommation du nonce comprise : si l'échange du code échoue, le
+rollback efface le `consumed_at` et la demande **redevient consommable** pour le reste de ses dix
+minutes. C'est commode — un Google momentanément à terre laisse relancer sans repartir du
+consentement — mais c'est bien la fenêtre de dix minutes, et non le `consumed_at`, qui borne
+réellement une demande.
+
+**Deux allers-retours vers Google se font dans cette transaction** — le point de jeton puis
+`about.get` —, chacun avec le `read-timeout` de 120 s de `spring.http.clients` : jusqu'à quatre
+minutes de connexion PostgreSQL tenue par un callback. Le dépôt paie déjà ce prix pour Ollama, à
+l'indexation comme à la recherche ; il se paie ici aussi, et pour la même raison — une application
+mono-utilisateur le supporte.
+
+**Les demandes d'autorisation ne se purgent jamais.** Aucune tâche ne ramasse les lignes de
+`knowledge_drive_authorization_requests`, consommées ou non, expirées ou non. La croissance est
+lente et bornée par le nombre de comptes, mais rien ne la nettoie.
+
 **Le jeton de rafraîchissement est chiffré au repos** par `RefreshTokenAttributeConverter`
 (AES-256-GCM, IV aléatoire préfixé au chiffré). C'est le chemin d'`Email` et de `Checksum` : un
 value object du domaine, un converter `autoApply` dans `infrastructure/persistence/`, et **aucune
@@ -369,7 +386,9 @@ classe du domaine ne nomme le chiffrement**. Un écart assumé aux règles backe
 porte `@Component`, parce qu'il a besoin de la clé par injection — Hibernate le résout par le
 `SpringBeanContainer` que `spring-orm` installe, ce qu'un test d'intégration vérifie en relisant la
 colonne au `JdbcTemplate`. La clé n'a **aucun défaut** : sans elle, l'application refuse de
-démarrer.
+démarrer. Elle doit faire **exactement 32 octets une fois décodée**, et c'est **toute**
+l'application qui refuse alors de démarrer, pas seulement Drive : le converter étant un singleton,
+l'échec a lieu au `refresh()` du contexte.
 
 `access_type=offline` et `prompt=consent` ne sont pas décoratifs : sans le premier Google ne
 délivre aucun jeton de rafraîchissement, sans le second il n'en redélivre pas à une seconde
@@ -389,6 +408,10 @@ de sept jours et la connexion meurt en silence.
 **Ce qui n'a pas encore de déclencheur :** une connexion dont l'accès a été retiré depuis le compte
 Google sait se marquer « à renouveler », mais rien ne lit le Drive avant DRIVE-2 — c'est
 `invalid_grant` au rafraîchissement qui l'armera.
+
+**Ce que le front ne fait pas encore :** aucun écran n'appelle `POST /api/drive/authorizations` ni
+ne lit le `?drive=<code>` du retour. L'utilisateur revenant de Google atterrit donc sur un écran
+muet, quel que soit le code — c'est DRIVE-7.
 
 ### Le flux du dépôt d'un document
 
