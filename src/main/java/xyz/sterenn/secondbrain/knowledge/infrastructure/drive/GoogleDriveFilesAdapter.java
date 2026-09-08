@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentTooLargeToExportException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.GoogleDriveUnavailableException;
@@ -24,6 +25,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.GoogleDriveFiles;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.GoogleWorkspaceType;
 
 class GoogleDriveFilesAdapter implements GoogleDriveFiles {
 
@@ -49,6 +51,9 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
             "dailyLimitExceeded",
             "backendError",
             "sharingRateLimitExceeded");
+
+    /** The reason Google gives the 403 of an export it refuses on size: see {@code ImportPolicy}. */
+    private static final String EXPORT_TOO_LARGE_REASON = "exportSizeLimitExceeded";
 
     private static final Logger LOG = LoggerFactory.getLogger(GoogleDriveFilesAdapter.class);
 
@@ -87,6 +92,29 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
             throw translate(refusal);
         } catch (RestClientException failure) {
             LOG.error("Google refused a file download: {}", describe(failure));
+            throw new GoogleDriveUnavailableException(failure);
+        }
+    }
+
+    @Override
+    public byte[] export(DriveAccessToken accessToken, String fileId) {
+        try {
+            byte[] content = restClient
+                    .get()
+                    .uri(exportUri(fileId))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken.value())
+                    .retrieve()
+                    .body(byte[].class);
+            if (content == null) {
+                LOG.error("Google answered an empty body to a document export");
+                throw new GoogleDriveUnavailableException();
+            }
+            return content;
+        } catch (RestClientResponseException refusal) {
+            LOG.error("Google refused a document export: {}", describe(refusal));
+            throw translateExport(refusal);
+        } catch (RestClientException failure) {
+            LOG.error("Google refused a document export: {}", describe(failure));
             throw new GoogleDriveUnavailableException(failure);
         }
     }
@@ -133,13 +161,26 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
             LOG.warn("Google handed back a file without an identifier or a name: dropped");
             return Optional.empty();
         }
+        Optional<GoogleWorkspaceType> workspaceType = GoogleWorkspaceType.forMimeType(entry.mimeType());
+        if (workspaceType.isPresent()) {
+            return toExportedFile(entry, workspaceType.get());
+        }
         Optional<DocumentFormat> format = DocumentFormat.forFilename(entry.name());
         if (format.isEmpty()) {
             return Optional.empty();
         }
         return sizeOf(entry)
-                .map(size -> new DriveFile(
+                .map(size -> DriveFile.downloaded(
                         entry.id(), entry.name(), format.get(), size, entry.webViewLink(), modifiedTimeOf(entry)));
+    }
+
+    /** A sheet, a slide deck or a drawing drops out like an image: each would want its own typology. */
+    private static Optional<DriveFile> toExportedFile(GoogleFileResponse entry, GoogleWorkspaceType workspaceType) {
+        if (workspaceType.exportedFormat().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(DriveFile.exported(
+                workspaceType, entry.id(), entry.name(), entry.webViewLink(), modifiedTimeOf(entry)));
     }
 
     /** Drive hands the size back as a string, and hands none at all back for a native Google Doc. */
@@ -201,6 +242,15 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
         return uri.build().encode().toUri();
     }
 
+    private static URI exportUri(String fileId) {
+        return UriComponentsBuilder.fromUriString(FILES_ENDPOINT)
+                .pathSegment(fileId, "export")
+                .queryParam("mimeType", GoogleWorkspaceType.DOCUMENT.exportMimeType())
+                .build()
+                .encode()
+                .toUri();
+    }
+
     private static URI mediaUri(String fileId) {
         return UriComponentsBuilder.fromUriString(FILES_ENDPOINT)
                 .pathSegment(fileId)
@@ -244,18 +294,38 @@ class GoogleDriveFilesAdapter implements GoogleDriveFiles {
         return new GoogleDriveUnavailableException(refusal);
     }
 
-    /** A body that will not parse leans towards setting one file aside rather than stopping the import. */
+    /**
+     * A 403 on an export means one more thing, and it is neither an outage nor a withdrawn
+     * permission: the Doc is past the ten megabytes Google agrees to export.
+     */
+    private static RuntimeException translateExport(RestClientResponseException refusal) {
+        if (refusal.getStatusCode().isSameCodeAs(HttpStatus.FORBIDDEN) && hasReason(refusal, EXPORT_TOO_LARGE_REASON)) {
+            return new DocumentTooLargeToExportException(refusal);
+        }
+        return translate(refusal);
+    }
+
     private static boolean isCapped(RestClientResponseException refusal) {
+        return reasonsOf(refusal).stream().anyMatch(CAPPED_REASONS::contains);
+    }
+
+    private static boolean hasReason(RestClientResponseException refusal, String reason) {
+        return reasonsOf(refusal).contains(reason);
+    }
+
+    /** A body that will not parse leans towards setting one file aside rather than stopping the import. */
+    private static List<String> reasonsOf(RestClientResponseException refusal) {
         try {
             GoogleApiErrorResponse body = refusal.getResponseBodyAs(GoogleApiErrorResponse.class);
             if (body == null || body.error() == null || body.error().errors() == null) {
-                return false;
+                return List.of();
             }
             return body.error().errors().stream()
                     .map(GoogleApiErrorResponse.ErrorDetail::reason)
-                    .anyMatch(CAPPED_REASONS::contains);
+                    .filter(reason -> reason != null)
+                    .toList();
         } catch (RestClientException unreadableBody) {
-            return false;
+            return List.of();
         }
     }
 

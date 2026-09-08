@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.DriveConnection;
+import xyz.sterenn.secondbrain.knowledge.domain.exception.DocumentTooLargeToExportException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAccessTokenRejectedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveAuthorizationRevokedException;
 import xyz.sterenn.secondbrain.knowledge.domain.exception.DriveContentUnreachableException;
@@ -25,6 +26,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveAccessToken;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFile;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DriveFolder;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.GoogleWorkspaceType;
 
 // The bean is shared by the whole context and the test transaction rollback does not
 // clear it: call FakeGoogleDrive.clear() in @BeforeEach.
@@ -135,6 +137,16 @@ public class FakeGoogleDriveConfiguration {
 
         @Override
         public byte[] download(DriveAccessToken accessToken, String fileId) {
+            return handOver(accessToken, fileId);
+        }
+
+        /** Google rebuilds the archive on every call: what it hands back is programmed export by export. */
+        @Override
+        public byte[] export(DriveAccessToken accessToken, String fileId) {
+            return handOver(accessToken, fileId);
+        }
+
+        private byte[] handOver(DriveAccessToken accessToken, String fileId) {
             if (downloads.incrementAndGet() > unavailableAfterDownloads) {
                 unavailable = true;
             }
@@ -142,12 +154,16 @@ public class FakeGoogleDriveConfiguration {
             if (vanished.contains(fileId)) {
                 throw new DriveContentUnreachableException();
             }
+            return stored(fileId)
+                    .orElseThrow(DriveContentUnreachableException::new)
+                    .next();
+        }
+
+        private Optional<StoredFile> stored(String fileId) {
             return filesByParent.values().stream()
                     .flatMap(List::stream)
                     .filter(file -> file.id().equals(fileId))
-                    .findFirst()
-                    .map(StoredFile::content)
-                    .orElseThrow(DriveContentUnreachableException::new);
+                    .findFirst();
         }
 
         private Optional<String> parentOf(String folderId) {
@@ -172,12 +188,36 @@ public class FakeGoogleDriveConfiguration {
         }
 
         public void putFile(String parentId, String fileId, String filename, byte[] content) {
-            put(parentId, new StoredFile(fileId, filename, content, content.length));
+            put(parentId, new StoredFile(fileId, filename, List.of(content), content.length, null));
         }
 
         /** A file Drive reports as huge: the ceiling is judged on the listing, before any download. */
         public void putOversizedFile(String parentId, String fileId, String filename, long sizeBytes) {
-            put(parentId, new StoredFile(fileId, filename, new byte[] {0}, sizeBytes));
+            put(parentId, new StoredFile(fileId, filename, List.of(new byte[] {0}), sizeBytes, null));
+        }
+
+        /**
+         * A native Doc, whose name carries no extension and whose size Drive tells nothing about.
+         * More than one export means an export that drifts: the archive Google builds embeds
+         * metadata and timestamps, so two exports of an untouched Doc never carry the same bytes.
+         */
+        public void putGoogleDoc(String parentId, String fileId, String name, byte[]... exports) {
+            put(parentId, new StoredFile(fileId, name, List.of(exports), 0, GoogleWorkspaceType.DOCUMENT));
+        }
+
+        /** A Doc past the ten megabytes Google agrees to export: no listing announces it. */
+        public void putGoogleDocTooLargeToExport(String parentId, String fileId, String name) {
+            put(parentId, StoredFile.refusingItsExport(fileId, name));
+        }
+
+        /** A sheet, a slide deck, a drawing: nothing downstream could read what they would export. */
+        public void putWorkspaceFile(String parentId, String fileId, String name, GoogleWorkspaceType workspaceType) {
+            put(parentId, new StoredFile(fileId, name, List.of(new byte[] {0}), 0, workspaceType));
+        }
+
+        /** The document was edited in Google: its modification time moves, its export follows. */
+        public void willHaveBeenModifiedAt(String fileId, Instant modifiedTime) {
+            stored(fileId).orElseThrow().modifiedTime = modifiedTime;
         }
 
         private void put(String parentId, StoredFile file) {
@@ -232,17 +272,63 @@ public class FakeGoogleDriveConfiguration {
             purged = false;
         }
 
-        private record StoredFile(String id, String name, byte[] content, long sizeBytes) {
+        private static final class StoredFile {
+
+            private final String id;
+            private final String name;
+            private final List<byte[]> exports;
+            private final long sizeBytes;
+            private final GoogleWorkspaceType workspaceType;
+            private final AtomicInteger handedOver = new AtomicInteger();
+            private final boolean refusesItsExport;
+
+            private volatile Instant modifiedTime = MODIFIED_TIME;
+
+            private StoredFile(
+                    String id, String name, List<byte[]> exports, long sizeBytes, GoogleWorkspaceType workspaceType) {
+                this(id, name, exports, sizeBytes, workspaceType, false);
+            }
+
+            private StoredFile(
+                    String id,
+                    String name,
+                    List<byte[]> exports,
+                    long sizeBytes,
+                    GoogleWorkspaceType workspaceType,
+                    boolean refusesItsExport) {
+                this.id = id;
+                this.name = name;
+                this.exports = exports;
+                this.sizeBytes = sizeBytes;
+                this.workspaceType = workspaceType;
+                this.refusesItsExport = refusesItsExport;
+            }
+
+            static StoredFile refusingItsExport(String id, String name) {
+                return new StoredFile(id, name, List.of(new byte[] {0}), 0, GoogleWorkspaceType.DOCUMENT, true);
+            }
+
+            String id() {
+                return id;
+            }
+
+            /** The last programmed export sticks: a file handed back twice is the rule, not the exception. */
+            byte[] next() {
+                if (refusesItsExport) {
+                    throw new DocumentTooLargeToExportException(new IllegalStateException("HTTP 403"));
+                }
+                return exports.get(Math.min(handedOver.getAndIncrement(), exports.size() - 1));
+            }
 
             Optional<DriveFile> toDriveFile() {
+                String link = "https://drive.google.com/file/d/" + id + "/view";
+                if (workspaceType != null) {
+                    return workspaceType.exportedFormat().isEmpty()
+                            ? Optional.empty()
+                            : Optional.of(DriveFile.exported(workspaceType, id, name, link, modifiedTime));
+                }
                 return DocumentFormat.forFilename(name)
-                        .map(format -> new DriveFile(
-                                id,
-                                name,
-                                format,
-                                sizeBytes,
-                                "https://drive.google.com/file/d/" + id + "/view",
-                                MODIFIED_TIME));
+                        .map(format -> DriveFile.downloaded(id, name, format, sizeBytes, link, modifiedTime));
             }
         }
     }

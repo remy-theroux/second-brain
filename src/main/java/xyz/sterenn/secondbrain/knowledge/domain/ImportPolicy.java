@@ -8,6 +8,12 @@ public final class ImportPolicy {
      */
     public static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
 
+    /**
+     * Google's ceiling on an export, not this project's: it is suffered, not chosen, and it
+     * cannot be anticipated either — {@code files.list} tells no size for a native Doc.
+     */
+    public static final long MAX_GOOGLE_EXPORT_SIZE = 10L * 1024 * 1024;
+
     private static final long MEGABYTE = 1024L * 1024;
 
     private ImportPolicy() {}
@@ -19,5 +25,9 @@ public final class ImportPolicy {
     /** Displayable as it stands: it is what the owner reads next to the file left out. */
     public static String tooLargeReason() {
         return "Ce fichier dépasse " + MAX_FILE_SIZE / MEGABYTE + " Mo.";
+    }
+
+    public static String exportRefusedReason() {
+        return "Google refuse d'exporter ce document, qui dépasse " + MAX_GOOGLE_EXPORT_SIZE / MEGABYTE + " Mo.";
     }
 }

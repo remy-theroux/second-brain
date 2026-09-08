@@ -95,7 +95,8 @@ class JpaWatchedFolderRepositoryAdapterTest {
 
     private static DriveImportRejection rejectionOf(String fileId, String filename) {
         return DriveImportRejection.of(
-                new DriveFile(fileId, filename, DocumentFormat.PDF, 1024L, "https://drive.google.com", WATCHED_AT),
+                DriveFile.downloaded(
+                        fileId, filename, DocumentFormat.PDF, 1024L, "https://drive.google.com", WATCHED_AT),
                 TOO_LARGE);
     }
 

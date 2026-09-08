@@ -194,7 +194,7 @@ class ImportDriveFileTest {
     }
 
     private static DriveFile aDriveFile(String fileId, String filename, byte[] content) {
-        return new DriveFile(
+        return DriveFile.downloaded(
                 fileId,
                 filename,
                 DocumentFormat.fromFilename(filename),
