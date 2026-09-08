@@ -34,7 +34,6 @@ import xyz.sterenn.secondbrain.knowledge.KnowledgeFixture;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration;
 import xyz.sterenn.secondbrain.knowledge.RecordingEmbeddingPortConfiguration.RecordingEmbeddingPort;
 import xyz.sterenn.secondbrain.knowledge.application.command.ReplaceDocumentContent;
-import xyz.sterenn.secondbrain.knowledge.application.command.UploadDocument;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.Document;
 import xyz.sterenn.secondbrain.knowledge.domain.entity.TextExtraction;
 import xyz.sterenn.secondbrain.knowledge.domain.event.DocumentUploaded;
@@ -43,6 +42,7 @@ import xyz.sterenn.secondbrain.knowledge.domain.port.DocumentStorage;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextChunkRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.port.TextExtractionRepository;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.Checksum;
+import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentFormat;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.DocumentStatus;
 import xyz.sterenn.secondbrain.knowledge.domain.valueobject.TextBlock;
 import xyz.sterenn.secondbrain.shared.bus.CommandBus;
@@ -270,6 +270,12 @@ class KnowledgeEventListenerTest {
                 new DocumentUploaded(document.getId(), document.getOwnerId(), Instant.now()));
     }
 
+    /**
+     * Built through the ports, never by dispatching {@code UploadDocument}: the real command
+     * publishes {@code DocumentUploaded} on commit, so the worker would start processing the
+     * document before the test has said anything — and every test here would run the pipeline
+     * twice, racing the manual publication that is its actual subject.
+     */
     private Document anUploadedDocument(String filename, String fixture) {
         String email = UUID.randomUUID() + "@exemple.fr";
         UUID ownerId = userRepository
@@ -277,10 +283,10 @@ class KnowledgeEventListenerTest {
                 .getId();
         createdAccounts.add(email);
         byte[] content = Fixtures.read(fixture);
-        commandBus.dispatch(new UploadDocument(ownerId, filename, content));
-        return documentRepository
-                .findByOwnerIdAndChecksum(ownerId, Checksum.of(content))
-                .orElseThrow();
+        Document document = documentRepository.save(Document.upload(
+                ownerId, filename, DocumentFormat.fromFilename(filename), Checksum.of(content), content.length));
+        documentStorage.store(document.getId(), content);
+        return document;
     }
 
     private DocumentStatus statusOf(Document document) {
