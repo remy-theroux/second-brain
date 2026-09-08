@@ -334,6 +334,62 @@ par défaut** : sans lui, l'application refuse de démarrer. `compose.yaml` et
 `src/test/resources/application.properties` en fournissent un, chacun pour son
 environnement — le confort est rendu là où il ne peut pas fuir en production.
 
+### Le flux de la connexion à Google Drive
+
+Le flux « code d'autorisation » d'OAuth 2.0, en deux routes et deux tables.
+`POST /api/drive/authorizations` ouvre une **demande** : un nonce aléatoire est persisté avec son
+propriétaire, et l'URL de consentement Google est rendue au front, qui y envoie le navigateur.
+`GET /drive/callback` retrouve la demande par son nonce, la consomme, échange le code contre un
+jeton de rafraîchissement, lit l'adresse Google du compte, **remplace** la connexion précédente
+s'il y en avait une, et redirige. `DELETE /api/drive/connection` révoque, `GET /api/drive/connection`
+rend l'état — jamais le jeton.
+
+**Le callback vit hors de `/api`, et c'est la seule route du contexte dans ce cas** : le lien vient
+de Google, il n'a aucun jeton en en-tête, exactement comme `GET /verification`. Il redirige en
+`302` **relatif** vers `/documents?drive=<code>`, avec `ok`, `refus`, `lien-invalide` ou `echec` —
+un **code**, pas un message (ADR-0017), et une URL relative que le navigateur résout contre
+l'origine, donc aucune URL de front à connaître côté serveur.
+
+**Vivre hors de `/api` a un prix, payé une fois :** la règle Traefik de `compose.yaml` énumère les
+préfixes routés vers l'application Java. Sans `PathPrefix(`/drive`)`, le retour de Google atterrit
+sur le front, qui répond son `index.html`, et la connexion échoue **sans un mot**. En production,
+c'est Coolify qui tient ce rôle, hors du dépôt (ADR-0013) : la même règle y est à poser.
+
+**Le nonce est la seule protection du flux**, le projet n'ayant ni CSRF ni session (ADR-0003). Il
+est persisté, **à usage unique** et il expire — le cycle de vie de `VerificationToken`, sans son
+empreinte salée : ce n'est pas un secret, le connaître ne donne rien. Les trois façons de présenter
+un retour inexploitable (nonce illisible, demande inconnue, nonce faux) partagent **un seul
+message**, pour la même raison qu'à la vérification d'email : les distinguer ferait de la route un
+oracle.
+
+**Le jeton de rafraîchissement est chiffré au repos** par `RefreshTokenAttributeConverter`
+(AES-256-GCM, IV aléatoire préfixé au chiffré). C'est le chemin d'`Email` et de `Checksum` : un
+value object du domaine, un converter `autoApply` dans `infrastructure/persistence/`, et **aucune
+classe du domaine ne nomme le chiffrement**. Un écart assumé aux règles backend : ce converter-là
+porte `@Component`, parce qu'il a besoin de la clé par injection — Hibernate le résout par le
+`SpringBeanContainer` que `spring-orm` installe, ce qu'un test d'intégration vérifie en relisant la
+colonne au `JdbcTemplate`. La clé n'a **aucun défaut** : sans elle, l'application refuse de
+démarrer.
+
+`access_type=offline` et `prompt=consent` ne sont pas décoratifs : sans le premier Google ne
+délivre aucun jeton de rafraîchissement, sans le second il n'en redélivre pas à une seconde
+autorisation du même compte. Une réponse sans `refresh_token` est donc un **échec explicite** —
+laisser passer une connexion sans jeton la ferait mourir au premier redémarrage. L'adresse Google
+vient d'`about.get?fields=user`, que `drive.readonly` couvre déjà : demander `userinfo.email`
+élargirait le consentement pour rien.
+
+**Aucun SDK Google.** L'adapter est écrit à la main sur le `RestClient` de Spring, comme celui
+d'Ollama : le point de jeton est un POST de formulaire et `about.get` un GET JSON, là où
+`google-api-client` amènerait Guava, protobuf et sa propre couche HTTP pour deux appels.
+
+**Ce qui reste hors du dépôt :** les identifiants OAuth, et le **statut « In production »** de
+l'application chez Google. En statut « Testing », les jetons de rafraîchissement expirent au bout
+de sept jours et la connexion meurt en silence.
+
+**Ce qui n'a pas encore de déclencheur :** une connexion dont l'accès a été retiré depuis le compte
+Google sait se marquer « à renouveler », mais rien ne lit le Drive avant DRIVE-2 — c'est
+`invalid_grant` au rafraîchissement qui l'armera.
+
 ### Le flux du dépôt d'un document
 
 `POST /api/documents` reçoit un multipart (`file`), dispatche `UploadDocument` et répond
@@ -827,6 +883,16 @@ détail dans les règles backend, section « Adapters ».
 `knowledge/infrastructure/persistence/`. Les deux converters sont invisibles au code et ne
 tiennent qu'au scan de packages : la même mise en garde vaut pour l'un comme pour l'autre.
 
+`DriveAuthorizationState` et `RefreshToken` en ont un chacun, sur le même modèle — mais celui du
+jeton **chiffre** au passage, et porte donc `@Component` en plus de `@Converter(autoApply = true)` :
+il lui faut la clé par injection, que Hibernate seul ne saurait pas lui donner. C'est le seul de la
+famille dans ce cas.
+
+La connexion à un Drive vit dans `knowledge_drive_connections` — `owner_id` **`UNIQUE`**, ce qui
+pose la règle « une connexion par compte » là où elle ne se contourne pas — et la demande
+d'autorisation en cours dans `knowledge_drive_authorization_requests`. Les deux cascadent à la
+suppression du compte.
+
 Le texte extrait d'un document vit dans **deux tables**, `knowledge_text_extractions` (une
 ligne par document, `document_id` `UNIQUE`) et `knowledge_text_blocks` (ses blocs, une
 `@ElementCollection` ordonnée par `block_position`, rattachés par `text_extraction_id`).
@@ -924,6 +990,8 @@ version catalog (`gradle/libs.versions.toml`).
 Versions gérées par `frontend/package-lock.json`, hors du version catalog Gradle.
 
 **Développement** — Traefik v3 en reverse proxy devant l'app et le front, dans `compose.yaml`.
+Sa règle de routage énumère les préfixes servis par Java : `/api`, `/verification` et `/drive` en
+font partie, et **oublier le dernier envoie le retour d'autorisation Google sur le front**.
 En production, c'est Coolify qui tient ce rôle, avec une configuration qui vit hors du dépôt.
 RabbitMQ 4 avec sa console de gestion sur <http://localhost:15672> (`RABBITMQ_USER` /
 `RABBITMQ_PASSWORD` du `.env`, `second_brain`/`second_brain` par défaut — pas de `guest`), un
