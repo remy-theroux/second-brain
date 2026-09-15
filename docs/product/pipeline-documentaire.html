@@ -1,0 +1,913 @@
+<title>Du fichier à l'extrait</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root {
+    --ground: #f2f5f4;
+    --surface: #ffffff;
+    --surface-2: #e7edeb;
+    --ink: #131d1c;
+    --ink-2: #4d615e;
+    --rule: #d3dcd9;
+    --rule-soft: #e3eae8;
+    --accent: #0e6b70;
+    --accent-soft: #dceceb;
+    --warm: #a5432a;
+    --warm-soft: #f3e3dd;
+
+    --display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
+    --body: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --ground: #0d1413;
+      --surface: #141d1c;
+      --surface-2: #1b2524;
+      --ink: #e3ece9;
+      --ink-2: #8fa5a1;
+      --rule: #293836;
+      --rule-soft: #1f2b2a;
+      --accent: #56c0c1;
+      --accent-soft: #10332f;
+      --warm: #e08560;
+      --warm-soft: #35211a;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --ground: #0d1413;
+    --surface: #141d1c;
+    --surface-2: #1b2524;
+    --ink: #e3ece9;
+    --ink-2: #8fa5a1;
+    --rule: #293836;
+    --rule-soft: #1f2b2a;
+    --accent: #56c0c1;
+    --accent-soft: #10332f;
+    --warm: #e08560;
+    --warm-soft: #35211a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+    padding-inline: clamp(16px, 4vw, 48px);
+    padding-block: clamp(32px, 6vw, 72px) 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(40px, 5vw, 72px);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead { display: flex; flex-direction: column; gap: 18px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(2.3rem, 6vw, 3.7rem);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    margin: 0;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+
+  .lede {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 1.12rem;
+    color: var(--ink-2);
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .keyline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-block: 1px solid var(--rule);
+    margin-top: 6px;
+  }
+
+  .keyline div {
+    flex: 1 1 150px;
+    padding: 14px 18px 14px 0;
+    border-right: 1px solid var(--rule-soft);
+  }
+
+  .keyline div:last-child { border-right: 0; }
+
+  .keyline dt {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .keyline dd {
+    margin: 2px 0 0;
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 1.22rem;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- figures ---------- */
+
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: clamp(16px, 2.5vw, 28px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .scroller { overflow-x: auto; }
+
+  .scroller svg { width: 100%; height: auto; display: block; color: var(--ink); }
+
+  .scroller.wide svg { min-width: 760px; }
+  .scroller.narrow svg { min-width: 380px; max-width: 420px; margin: 0 auto; }
+
+  figcaption {
+    font-size: 0.92rem;
+    color: var(--ink-2);
+    max-width: 72ch;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 12px;
+  }
+
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- stages ---------- */
+
+  .stage {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: clamp(24px, 4vw, 56px);
+    padding-top: 28px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .rail { display: flex; flex-direction: column; gap: 14px; }
+
+  .num {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 2.6rem;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rail h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .io { margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 0.88rem; }
+
+  .io > div { display: flex; flex-direction: column; gap: 1px; }
+
+  .io dt {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .io dd { margin: 0; color: var(--ink-2); line-height: 1.45; }
+
+  .body > * + * { margin-top: 16px; }
+
+  .body p { margin: 0; max-width: 68ch; }
+
+  .notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+
+  .notes li {
+    max-width: 70ch;
+    padding-left: 18px;
+    border-left: 2px solid var(--rule);
+    line-height: 1.55;
+  }
+
+  .notes li.pin { border-left-color: var(--accent); }
+  .notes li.trap { border-left-color: var(--warm); }
+
+  .notes b { font-weight: 600; }
+
+  code, .m {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .params {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .params > div {
+    padding: 12px 16px;
+    border-right: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .params dt {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .params dd {
+    margin: 3px 0 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: normal;
+  }
+
+  /* ---------- closing panel ---------- */
+
+  .silent {
+    border: 1px solid var(--warm);
+    border-radius: 3px;
+    background: var(--warm-soft);
+    padding: clamp(20px, 3vw, 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .silent h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.45rem;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .silent ol {
+    margin: 0;
+    padding-left: 1.1em;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 78ch;
+  }
+
+  .silent code, .silent .m { background: rgba(0, 0, 0, 0.07); }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .silent code,
+    :root:not([data-theme='light']) .silent .m { background: rgba(255, 255, 255, 0.09); }
+  }
+
+  :root[data-theme='dark'] .silent code,
+  :root[data-theme='dark'] .silent .m { background: rgba(255, 255, 255, 0.09); }
+
+  @media (max-width: 820px) {
+    .stage { grid-template-columns: 1fr; gap: 22px; }
+    .rail { flex-direction: column; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Second Brain — chaîne documentaire</p>
+    <h1>Du fichier à l'extrait</h1>
+    <p class="lede">
+      Ce qu'il advient d'un document entre le moment où il est déposé et celui où l'un de ses
+      passages remonte en réponse à une question. Sept étapes, dont <strong>quatre sont
+      irréversibles sans tout revectoriser</strong> : le découpage, le préfixe de
+      contextualisation, le modèle d'embedding et sa dimension.
+    </p>
+    <dl class="keyline">
+      <div><dt>Plafond d'un extrait</dt><dd>800 tokens</dd></div>
+      <div><dt>Cible</dt><dd>600 tokens</dd></div>
+      <div><dt>Recouvrement</dt><dd>≈ 90 tokens</dd></div>
+      <div><dt>Vecteur</dt><dd>1024 dimensions</dd></div>
+      <div><dt>Rendus par recherche</dt><dd>8 extraits</dd></div>
+    </dl>
+  </header>
+
+  <figure>
+    <div class="scroller wide">
+      <svg viewBox="0 0 1120 440" role="img" aria-label="Deux chaînes se rejoignent sur la table des extraits vectorisés : l'indexation, qui va de l'original à l'écriture des vecteurs, et l'interrogation, qui vectorise la question et en rapporte les huit extraits les plus proches.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path>
+          </marker>
+        </defs>
+
+        <text x="16" y="24" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="var(--ink-2)">INDEXATION — ASYNCHRONE, UN DOCUMENT À LA FOIS</text>
+
+        <rect x="16" y="44" width="176" height="64" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+        <text x="104" y="70" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Original déposé</text>
+        <text x="104" y="89" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">.pdf .docx .md .txt</text>
+
+        <rect x="268" y="44" width="176" height="64" rx="2" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"></rect>
+        <text x="356" y="70" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Extraction</text>
+        <text x="356" y="89" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">1 extracteur / format</text>
+
+        <rect x="520" y="44" width="176" height="64" rx="2" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"></rect>
+        <text x="608" y="70" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Découpage</text>
+        <text x="608" y="89" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">récursif, 4 replis</text>
+
+        <rect x="772" y="44" width="176" height="64" rx="2" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"></rect>
+        <text x="860" y="70" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Vectorisation</text>
+        <text x="860" y="89" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">bge-m3, lots de 32</text>
+
+        <line x1="192" y1="76" x2="262" y2="76" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+        <text x="227" y="67" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">octets</text>
+
+        <line x1="444" y1="76" x2="514" y2="76" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+        <text x="479" y="67" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">blocs titrés</text>
+
+        <line x1="696" y1="76" x2="766" y2="76" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+        <text x="731" y="67" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">extraits</text>
+
+        <line x1="860" y1="108" x2="860" y2="170" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"></line>
+        <text x="870" y="145" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">corps nu + vecteur</text>
+
+        <rect x="16" y="176" width="1088" height="96" rx="2" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"></rect>
+        <text x="40" y="208" font-family="Bricolage Grotesque, sans-serif" font-size="16" font-weight="700" fill="currentColor">Table des extraits vectorisés</text>
+        <text x="40" y="232" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">une ligne par extrait — document, position, titre de section, texte, vector(1024)</text>
+        <text x="40" y="252" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">cloisonnée par propriétaire — unicité (document, position)</text>
+
+        <rect x="852" y="200" width="228" height="46" rx="2" fill="var(--surface)" stroke="var(--accent)" stroke-width="1"></rect>
+        <text x="966" y="220" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="13" font-weight="700" fill="var(--accent)">Index HNSW</text>
+        <text x="966" y="237" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">vector_cosine_ops</text>
+
+        <text x="16" y="314" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="var(--accent)">INTERROGATION — SYNCHRONE, À CHAQUE QUESTION</text>
+
+        <rect x="16" y="334" width="176" height="64" rx="2" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1"></rect>
+        <text x="104" y="360" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Question</text>
+        <text x="104" y="379" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">telle quelle, sans préfixe</text>
+
+        <rect x="268" y="334" width="216" height="64" rx="2" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.4"></rect>
+        <text x="376" y="360" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Vectorisation</text>
+        <text x="376" y="379" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">le même modèle, obligatoirement</text>
+
+        <line x1="192" y1="366" x2="262" y2="366" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#ar-a)"></line>
+
+        <polyline points="484,366 556,366 556,278" fill="none" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#ar-a)"></polyline>
+        <text x="566" y="322" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">vecteur</text>
+
+        <polyline points="676,272 676,366 734,366" fill="none" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#ar-a)"></polyline>
+        <text x="686" y="322" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">8 plus proches</text>
+
+        <rect x="740" y="334" width="180" height="64" rx="2" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.4"></rect>
+        <text x="830" y="360" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Extraits rendus</text>
+        <text x="830" y="379" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">score = 1 − distance</text>
+
+        <line x1="920" y1="366" x2="970" y2="366" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#ar-a)"></line>
+
+        <rect x="976" y="334" width="128" height="64" rx="2" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1"></rect>
+        <text x="1040" y="360" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="14" font-weight="700" fill="currentColor">Réponse</text>
+        <text x="1040" y="379" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">citée [1] [2]</text>
+      </svg>
+    </div>
+    <figcaption>
+      Les deux chaînes ne se parlent que par la table des vecteurs. C'est ce qui rend
+      <b>l'indexation rejouable</b> — supprimer les extraits et les refaire ne touche à rien
+      d'autre — et ce qui rend <b>le modèle d'embedding non substituable</b> : les deux
+      vectorisations doivent être faites par le même modèle, sans quoi les distances calculées
+      ne comparent plus rien.
+    </figcaption>
+  </figure>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">1</span>
+      <h2>Le dépôt</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>un fichier, par glisser-déposer ou par un dossier Drive surveillé</dd></div>
+        <div><dt>sort</dt><dd>une ligne en base, un original conservé, une annonce sur le broker</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        Rien n'est encore lu. L'étape décide seulement si ce fichier est <em>un document de plus</em>
+        ou <em>le même document</em>.
+      </p>
+      <ul class="notes">
+        <li class="pin">
+          <b>L'identité d'un document est l'empreinte SHA-256 de son contenu, jamais son nom.</b>
+          Le même contenu redéposé sous un autre nom est refusé et renvoie vers le document
+          existant ; deux contenus différents portant le même nom sont deux documents. Le nom se
+          change d'un clic, le contenu non.
+        </li>
+        <li>
+          L'unicité porte sur le couple <b>(propriétaire, empreinte)</b>. Deux comptes qui déposent
+          le même PDF déposent deux documents : tout le reste de la chaîne est cloisonné de la même
+          façon, jusqu'au filtre de la recherche.
+        </li>
+        <li>
+          L'original part dans un <b>stockage objet</b>, un objet par document, et non dans la base.
+          Il ne participe à aucune transaction : il est écrit avant l'annonce, jamais après.
+        </li>
+        <li class="trap">
+          Le fichier transite <b>entièrement en mémoire</b>. C'est ce qui fixe le plafond à 20 Mo,
+          des deux côtés : le dépôt manuel et l'import Drive partagent la même limite, deux portes
+          dans la même base ne pouvant pas avoir deux plafonds.
+        </li>
+      </ul>
+      <dl class="params">
+        <div><dt>Formats acceptés</dt><dd>.pdf · .docx · .md · .txt</dd></div>
+        <div><dt>Empreinte</dt><dd>SHA-256 du contenu</dd></div>
+        <div><dt>Plafond</dt><dd>20 Mo</dd></div>
+        <div><dt>Statut posé</dt><dd>PENDING</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">2</span>
+      <h2>L'extraction</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>les octets de l'original</dd></div>
+        <div><dt>sort</dt><dd>une suite plate de blocs, chacun portant un titre, un niveau et un corps</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        Un extracteur par format, et non un analyseur universel : ce qu'on vient chercher dans un
+        DOCX ou un Markdown, ce sont précisément <em>les titres</em>, qui sont le livrable et non
+        du balisage à traverser. La structure obtenue ici décide de tout le découpage en aval.
+      </p>
+      <ul class="notes">
+        <li>
+          <b>DOCX</b> — les styles <span class="m">Heading 1..9</span> donnent les niveaux, ramenés
+          à 6. C'est la source la plus fiable de la chaîne : le titre est déclaré, pas deviné.
+        </li>
+        <li>
+          <b>Markdown</b> — les titres du balisage, sans ambiguïté non plus.
+        </li>
+        <li class="trap">
+          <b>PDF</b> — deux chemins. Le <b>sommaire</b> (les signets du document) d'abord, quand il
+          existe. À défaut, les titres se <b>devinent à la taille de police</b> : une ligne est un
+          titre si elle dépasse d'au moins <span class="m">1,15×</span> la taille dominante du corps
+          et fait <span class="m">≤ 120 caractères</span> ; son niveau vient du rang de sa taille
+          parmi les tailles de titre rencontrées.
+        </li>
+        <li class="trap">
+          Conséquence du même chemin : <b>les frontières de paragraphe d'un PDF sont perdues</b>.
+          L'analyseur ne les distingue pas, une section de PDF arrive donc au découpage comme un
+          seul paragraphe — ce qui lui retire un niveau de repli, voir l'étape suivante.
+        </li>
+        <li>
+          <b>Texte brut</b> — aucun titre, un unique bloc. Les corps sont normalisés de sorte que
+          <b>deux paragraphes soient toujours séparés par une ligne vide double</b> : c'est cette
+          garantie, et rien d'autre, que le découpage exploitera pour couper proprement.
+        </li>
+        <li class="pin">
+          <b>Plancher : 50 caractères utiles.</b> En dessous, le document échoue explicitement,
+          avec un motif affiché. C'est le cas du PDF scanné, qui n'est qu'une image : sans ce
+          plancher il entrerait vide, serait déclaré prêt, et son silence ne se verrait qu'à la
+          première question restée sans réponse.
+        </li>
+      </ul>
+      <dl class="params">
+        <div><dt>Titre PDF, seuil</dt><dd>≥ 1,15 × la taille du corps</dd></div>
+        <div><dt>Titre PDF, longueur</dt><dd>≤ 120 caractères</dd></div>
+        <div><dt>Niveaux de titre</dt><dd>1 à 6</dd></div>
+        <div><dt>Plancher d'exploitabilité</dt><dd>50 caractères</dd></div>
+        <div><dt>Statut posé</dt><dd>EXTRACTED</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">3</span>
+      <h2>Le découpage</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>les blocs titrés</dd></div>
+        <div><dt>sort</dt><dd>des extraits de taille bornée, chacun rattaché au titre de sa section</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        Découpage <b>récursif par séparateurs</b> : on garde l'unité la plus grande qui tient sous
+        le plafond, et on ne descend d'un cran que lorsqu'elle n'y tient pas. Une section qui
+        rentre d'un bloc n'est jamais découpée — c'est le cas le plus fréquent et le meilleur.
+      </p>
+
+      <figure>
+        <div class="scroller wide">
+          <svg viewBox="0 0 1120 340" role="img" aria-label="À gauche, les quatre replis du découpage : la section entière, puis les paragraphes, puis les phrases, puis la coupe nette. À droite, deux extraits consécutifs se recouvrant d'environ quatre-vingt-dix tokens repris en phrases entières.">
+            <text x="24" y="34" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="var(--accent)">LES QUATRE REPLIS</text>
+
+            <text x="24" y="109" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">section</text>
+            <rect x="140" y="92" width="460" height="26" rx="2" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"></rect>
+            <text x="140" y="136" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">tient sous 800 tokens → un seul extrait · sinon ↓</text>
+
+            <text x="24" y="163" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">paragraphes</text>
+            <rect x="140" y="146" width="150" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="300" y="146" width="150" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="460" y="146" width="140" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <text x="140" y="190" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">coupe sur la ligne vide double · un paragraphe trop long ↓</text>
+
+            <text x="24" y="217" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">phrases</text>
+            <rect x="140" y="200" width="66" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="215" y="200" width="66" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="290" y="200" width="66" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="365" y="200" width="66" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="440" y="200" width="66" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <rect x="515" y="200" width="85" height="26" rx="2" fill="var(--surface-2)" stroke="currentColor" stroke-width="1"></rect>
+            <text x="140" y="244" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">segmenteur du JDK réglé sur le français · une phrase trop longue ↓</text>
+
+            <text x="24" y="271" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--warm)">coupe nette</text>
+            <rect x="140" y="254" width="460" height="26" rx="2" fill="var(--surface)" stroke="var(--warm)" stroke-width="1"></rect>
+            <line x1="255" y1="254" x2="255" y2="280" stroke="var(--warm)" stroke-width="1" stroke-dasharray="3 3"></line>
+            <line x1="370" y1="254" x2="370" y2="280" stroke="var(--warm)" stroke-width="1" stroke-dasharray="3 3"></line>
+            <line x1="485" y1="254" x2="485" y2="280" stroke="var(--warm)" stroke-width="1" stroke-dasharray="3 3"></line>
+            <text x="140" y="298" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">jamais au milieu d'une paire de substituts UTF-16</text>
+
+            <line x1="640" y1="20" x2="640" y2="320" stroke="var(--rule)" stroke-width="1"></line>
+
+            <text x="676" y="34" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="var(--accent)">LE RECOUVREMENT</text>
+
+            <rect x="800" y="96" width="176" height="112" fill="var(--accent-soft)"></rect>
+            <rect x="676" y="100" width="300" height="36" rx="2" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"></rect>
+            <rect x="800" y="168" width="300" height="36" rx="2" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"></rect>
+            <text x="676" y="90" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">extrait n</text>
+            <text x="1100" y="222" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">extrait n+1</text>
+            <text x="888" y="157" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">≈ 90 tokens repris</text>
+            <text x="888" y="252" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">en phrases entières, jamais un fragment</text>
+            <text x="888" y="272" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">et jamais au travers d'une frontière de section</text>
+          </svg>
+        </div>
+        <figcaption>
+          Le repli ne s'exerce que sous contrainte : chaque flèche vers le bas est un échec du
+          niveau précédent à tenir sous le plafond. <b>Un PDF saute le deuxième repli</b>, ses
+          paragraphes ayant été perdus à l'extraction — ses longues sections tombent directement
+          au découpage par phrases.
+        </figcaption>
+      </figure>
+
+      <ul class="notes">
+        <li class="pin">
+          <b>Deux seuils, deux natures.</b> <span class="m">600</span> est une <em>cible</em> : elle
+          ferme un extrait dès qu'il l'atteint. <span class="m">800</span> est un <em>plafond</em> :
+          il n'est jamais franchi. Le recouvrement lui-même cède devant le plafond — c'est un
+          confort, le plafond est un invariant.
+        </li>
+        <li>
+          Le <b>recouvrement se reprend en phrases entières</b>, prises par la fin de l'extrait
+          précédent et rajoutées tant qu'elles tiennent dans le budget de 90 tokens. Un contexte
+          coupé au milieu d'une phrase vaudrait moins que pas de contexte du tout.
+        </li>
+        <li class="pin">
+          <b>Le recouvrement ne franchit jamais une frontière de section.</b> Deux sections voisines
+          ne se contaminent pas : chacune est découpée pour elle-même, et le titre reste vrai pour
+          tout l'extrait.
+        </li>
+        <li class="trap">
+          <b>Le comptage de tokens est la toise d'un autre modèle.</b> On compte en
+          <span class="m">BPE cl100k_base</span>, alors que bge-m3 s'appuie sur un SentencePiece
+          XLM-RoBERTa. Sans danger, parce que cl100k <em>sur-compte</em> le français : le plafond
+          est donc conservateur. Mais 600 et 800 sont des <b>approximations</b>, pas des mesures —
+          le vrai nombre de tokens vus par le modèle est plus bas.
+        </li>
+        <li>
+          La coupe nette n'existe que pour les monstres — un « mot » de plusieurs milliers de
+          caractères, base64 ou séquence ADN. Elle ne coupe jamais une paire de substituts UTF-16 :
+          la moitié orpheline n'est plus de l'UTF-8 valide et la base la refuserait.
+        </li>
+      </ul>
+
+      <dl class="params">
+        <div><dt>Cible</dt><dd>600 tokens</dd></div>
+        <div><dt>Plafond dur</dt><dd>800 tokens</dd></div>
+        <div><dt>Recouvrement</dt><dd>90 tokens max</dd></div>
+        <div><dt>Unité de comptage</dt><dd>BPE cl100k_base</dd></div>
+        <div><dt>Séparateurs, dans l'ordre</dt><dd>section → ligne vide double → phrase → caractère</dd></div>
+        <div><dt>Segmenteur de phrases</dt><dd>règles Unicode, locale française</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">4</span>
+      <h2>La vectorisation</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>les extraits, plus le nom du document et le titre de leur section</dd></div>
+        <div><dt>sort</dt><dd>un vecteur de 1024 flottants par extrait</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        C'est ici que se joue l'asymétrie la plus importante de toute la chaîne, et la seule qui ne
+        se voit nulle part à l'écran.
+      </p>
+      <ul class="notes">
+        <li class="pin">
+          <b>Ce qui part au modèle est préfixé ; ce qui est stocké ne l'est pas.</b> Le texte
+          vectorisé est <span class="m">Document: rapport.pdf — Section: Introduction</span> suivi
+          d'une ligne vide et du corps ; la colonne, elle, ne porte que le corps nu. Le vecteur
+          embarque donc le contexte que l'extrait a perdu en étant découpé — un passage qui dit
+          « il » sait de qui il parle — pendant que l'écran reste lisible.
+        </li>
+        <li>
+          Contrepartie utile : changer la forme du préfixe ne demande pas de réécrire la base,
+          seulement de revectoriser. Contrepartie subie : <b>renommer un document laisse ses
+          vecteurs calculés sous l'ancien nom</b>, puisque rien ne les recalcule tant que le
+          contenu n'a pas bougé.
+        </li>
+        <li>
+          Modèle <b>bge-m3</b>, servi localement, <b>1024 dimensions</b>, vecteurs
+          <b>normalisés</b> — ce qui rend le cosinus équivalent au produit scalaire à l'étape
+          suivante.
+        </li>
+        <li>
+          Envoi par <b>lots de 32</b> : assez grand pour amortir la latence d'un aller-retour,
+          assez petit pour qu'un échec ne coûte pas tout le document et que le modèle tienne en
+          mémoire sur un processeur. Trois tentatives, 200 ms d'attente entre elles, pour couvrir
+          un hoquet réseau et rien de plus.
+        </li>
+        <li class="pin">
+          <b>Tout ou rien.</b> La vectorisation d'un document entier tient dans une seule
+          transaction : un modèle à terre ne laisse aucun extrait à moitié écrit. Le document passe
+          en échec <em>en gardant son texte extrait</em>, et le motif nomme la vectorisation.
+        </li>
+        <li class="trap">
+          Avant d'écrire, les extraits précédents du document sont <b>effacés</b>. Le broker livre
+          <em>au moins une fois</em> : sans cet effacement, une redélivrance du même message
+          doublerait silencieusement les extraits, et la recherche rendrait deux fois le même
+          passage.
+        </li>
+      </ul>
+      <dl class="params">
+        <div><dt>Modèle</dt><dd>bge-m3 (multilingue)</dd></div>
+        <div><dt>Dimensions</dt><dd>1024, normalisées</dd></div>
+        <div><dt>Lot</dt><dd>32 extraits par appel</dd></div>
+        <div><dt>Tentatives</dt><dd>3 × 200 ms</dd></div>
+        <div><dt>Préfixe envoyé</dt><dd>Document: … — Section: …</dd></div>
+        <div><dt>Statut posé</dt><dd>READY — cherchable</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">5</span>
+      <h2>Le rangement</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>les extraits et leurs vecteurs</dd></div>
+        <div><dt>sort</dt><dd>une table interrogeable au voisinage</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <ul class="notes">
+        <li>
+          Une ligne par extrait : le document, sa position dans le document, le titre de sa
+          section, son texte nu, son vecteur. Unicité sur <b>(document, position)</b>, et tout
+          disparaît avec le document.
+        </li>
+        <li class="pin">
+          <b>Index HNSW en cosinus.</b> Un graphe de navigation à plusieurs couches : la recherche
+          descend de couche en couche par sauts de plus en plus courts, ce qui donne un voisinage
+          <em>approché</em> en temps quasi logarithmique, là où le parcours exhaustif est linéaire
+          en nombre d'extraits. L'approximation est le prix : le vrai plus proche voisin peut
+          manquer à l'appel.
+        </li>
+        <li class="trap">
+          <b>Aux volumes actuels, le planificateur préfère encore le parcours séquentiel.</b> Ce
+          n'est pas une anomalie et l'index n'est pas invalide : sur quelques milliers de lignes,
+          tout lire coûte moins cher que naviguer le graphe. Il prendra le relais quand le volume
+          le justifiera — ne pas conclure qu'il est cassé au vu d'un plan d'exécution.
+        </li>
+        <li>
+          La dimension est figée dans le type de la colonne. Un modèle qui rendrait autre chose que
+          1024 valeurs ferait échouer l'écriture, immédiatement — c'est voulu.
+        </li>
+      </ul>
+      <dl class="params">
+        <div><dt>Type de colonne</dt><dd>vector(1024)</dd></div>
+        <div><dt>Index</dt><dd>HNSW · vector_cosine_ops</dd></div>
+        <div><dt>Unicité</dt><dd>(document, position)</dd></div>
+        <div><dt>Suppression</dt><dd>en cascade avec le document</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">6</span>
+      <h2>La recherche</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>une question en langue naturelle</dd></div>
+        <div><dt>sort</dt><dd>8 extraits, avec leur document, leur section et leur score</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        La préparation de la requête tient en une phrase : <b>la question part nue</b>. Pas de
+        préfixe <span class="m">Document: … — Section: …</span>, pas de <span class="m">query:</span>
+        devant. bge-m3 est entraîné sans instruction de rôle — contrairement aux modèles de la
+        famille e5, qui exigent de distinguer explicitement une requête d'un passage. L'asymétrie
+        avec l'indexation est donc <em>délibérée</em>, pas un oubli.
+      </p>
+
+      <figure>
+        <div class="scroller narrow">
+          <svg viewBox="0 0 420 330" role="img" aria-label="Le vecteur de la question et trois vecteurs d'extraits partant du même point ; plus l'angle avec la question est petit, plus le score de similarité est élevé.">
+            <defs>
+              <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+              </marker>
+              <marker id="ar2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path>
+              </marker>
+            </defs>
+
+            <circle cx="170" cy="190" r="120" fill="none" stroke="var(--rule)" stroke-width="1" stroke-dasharray="4 4"></circle>
+            <circle cx="170" cy="190" r="3" fill="currentColor"></circle>
+
+            <line x1="170" y1="190" x2="282" y2="149" stroke="var(--accent)" stroke-width="2.4" marker-end="url(#ar2-a)"></line>
+            <text x="292" y="146" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="500" fill="var(--accent)">question</text>
+
+            <line x1="170" y1="190" x2="272" y2="126" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"></line>
+            <text x="280" y="118" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">extrait A · 0,98</text>
+
+            <line x1="170" y1="190" x2="239" y2="92" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"></line>
+            <text x="247" y="86" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">extrait B · 0,82</text>
+
+            <line x1="170" y1="190" x2="274" y2="250" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"></line>
+            <text x="282" y="256" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">extrait C · 0,64</text>
+
+            <path d="M 207 176 A 40 40 0 0 0 204 169" fill="none" stroke="var(--accent)" stroke-width="1.2"></path>
+            <text x="214" y="168" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">θ</text>
+
+            <text x="24" y="300" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">score = cos θ = 1 − distance</text>
+            <text x="24" y="318" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)">vecteurs normalisés → cos θ ≡ produit scalaire</text>
+          </svg>
+        </div>
+        <figcaption>
+          Seul l'<b>angle</b> compte, jamais la longueur : les vecteurs sont normalisés, un passage
+          long n'est donc pas favorisé face à un passage court. Le score affiché est
+          <span class="m">1 − distance</span>, donc 1 pour un texte identique.
+        </figcaption>
+      </figure>
+
+      <ul class="notes">
+        <li class="pin">
+          <b>Le filtre du propriétaire est dans la même requête que le classement</b>, pas appliqué
+          après coup sur la liste rendue : on ne classe que ce que le compte possède. À noter tout
+          de même — un index vectoriel ne connaît pas ce filtre, il classe puis laisse filtrer, ce
+          qui peut rendre moins de 8 résultats sur une base très partagée.
+        </li>
+        <li>
+          Tri par <b>distance cosinus croissante</b>, <b>8 extraits</b> rendus. Huit est une règle
+          du produit, pas un réglage : c'est le budget de contexte que l'agent consommera derrière.
+        </li>
+        <li class="trap">
+          <b>Aucun plancher de score ne filtre le résultat.</b> Une liste faible est précisément ce
+          qu'on vient regarder quand on diagnostique la pertinence — la masquer rendrait le défaut
+          invisible. Corollaire : une liste vide ne signifie jamais « rien de pertinent », elle
+          signifie <em>base vide</em>.
+        </li>
+        <li>
+          L'extrait rendu porte son texte, le nom de son document, sa section et sa position. C'est
+          ce qui permet de citer un passage sans jamais relire le fichier d'origine.
+        </li>
+      </ul>
+
+      <dl class="params">
+        <div><dt>Préparation de la question</dt><dd>aucune — texte brut</dd></div>
+        <div><dt>Vectorisation</dt><dd>bge-m3, le même qu'à l'indexation</dd></div>
+        <div><dt>Mesure</dt><dd>distance cosinus</dd></div>
+        <div><dt>Tri</dt><dd>distance croissante</dd></div>
+        <div><dt>Rendus</dt><dd>8</dd></div>
+        <div><dt>Plancher de score</dt><dd>aucun</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div class="rail">
+      <span class="num">7</span>
+      <h2>La citation</h2>
+      <dl class="io">
+        <div><dt>entre</dt><dd>la question, et les extraits que l'agent a bien voulu demander</dd></div>
+        <div><dt>sort</dt><dd>une réponse dont chaque affirmation porte un numéro de source</dd></div>
+      </dl>
+    </div>
+    <div class="body">
+      <p>
+        Ce n'est pas une recherche en un coup suivie d'une génération. <b>L'agent décide s'il
+        cherche</b> : une question conversationnelle n'ouvre aucune recherche, une question
+        documentaire peut en enchaîner plusieurs, avec des reformulations différentes, avant de
+        répondre.
+      </p>
+      <ul class="notes">
+        <li>
+          Bornes du dispositif : <b>4 tours</b>, <b>120 s</b> de budget. Un nom d'outil inventé ou
+          un argument manquant sont rendus au modèle comme des erreurs ordinaires et consomment un
+          tour — ce n'est pas une panne.
+        </li>
+        <li>
+          Le catalogue des sources est <b>cumulatif et dédoublonné</b> sur (document, position) :
+          un extrait déjà cité garde son numéro pour toute la réponse, même retrouvé par une
+          recherche ultérieure.
+        </li>
+        <li class="pin">
+          <b>Le texte est retenu jusqu'à la première citation valide.</b> Une réponse qui a cherché
+          sans rien citer n'atteint jamais l'écran : elle est remplacée par un aveu d'ignorance.
+          C'est le garde-fou qui interdit qu'une invention parte sourcée par erreur — et il ne
+          joue que <em>si</em> une recherche a eu lieu.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="silent">
+    <h2>Les quatre choses qui cassent sans bruit</h2>
+    <p style="margin:0;max-width:72ch">
+      Aucune de ces quatre-là ne lève d'erreur, ne marque un document en échec, ni n'apparaît dans
+      un journal. Elles se constatent à des réponses devenues mauvaises, des semaines plus tard.
+    </p>
+    <ol>
+      <li>
+        <b>Changer le modèle d'embedding sans revectoriser toute la base.</b> Les anciens vecteurs
+        et le nouveau vecteur de question vivent dans deux espaces sans rapport : les distances se
+        calculent quand même, et ne veulent plus rien dire. C'est le seul cas où le système ment
+        avec assurance.
+      </li>
+      <li>
+        <b>Modifier la forme du préfixe de contextualisation</b> sans repasser sur tous les
+        extraits : les anciens vecteurs ont été calculés avec l'ancien préfixe, les nouveaux avec
+        le nouveau, et les deux populations ne se comparent plus à armes égales.
+      </li>
+      <li>
+        <b>Renommer un document.</b> Le nom entre dans le préfixe vectorisé mais pas dans le texte
+        stocké ; renommer ne déclenche aucun recalcul, donc les vecteurs restent ceux de l'ancien
+        nom. Écart connu et assumé, pas un défaut à corriger dans l'urgence.
+      </li>
+      <li>
+        <b>Prendre 600 et 800 pour des mesures exactes.</b> Le compteur et le modèle ne parlent pas
+        le même tokenizer. Le plafond est un proxy conservateur : pour juger de la vraie taille des
+        extraits, il faut mesurer, pas lire la constante.
+      </li>
+    </ol>
+  </section>
+
+</div>
